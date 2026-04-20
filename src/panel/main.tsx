@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { ChevronRight, Database, Search, Table2 } from "lucide-react";
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  useReactTable,
+  type ColumnDef
+} from "@tanstack/react-table";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { parseSelectQuery, serializedPreview } from "../shared/query";
 import type {
   IndexedDbDatabaseInfo,
@@ -23,6 +36,12 @@ type SelectedNode =
 
 type Notice = { tone: "success" | "error" | "info"; message: string } | null;
 
+type WorkspaceTab =
+  | { id: "overview"; title: string; node: { kind: "overview" } }
+  | { id: string; title: string; node: { kind: "indexeddb"; dbName: string; storeName: string } }
+  | { id: string; title: string; node: { kind: "kv"; surface: "localStorage" | "sessionStorage" } }
+  | { id: "sql"; title: string; node: { kind: "sql" } };
+
 const extensionRuntime =
   typeof chrome !== "undefined" &&
   Boolean(chrome.runtime?.connect) &&
@@ -43,6 +62,12 @@ function App() {
   const [editDraft, setEditDraft] = useState("");
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("{\n  \n}");
+  const [tabs, setTabs] = useState<WorkspaceTab[]>([
+    { id: "overview", title: "Origin", node: { kind: "overview" } },
+    { id: "sql", title: "SQL Query", node: { kind: "sql" } }
+  ]);
+  const [activeTabId, setActiveTabId] = useState("overview");
+  const [filterText, setFilterText] = useState("");
 
   const refreshDiscovery = useCallback(async () => {
     setBusy(true);
@@ -108,6 +133,10 @@ function App() {
 
   const chooseNode = (node: SelectedNode) => {
     setSelected(node);
+    const tab = tabForNode(node);
+    setTabs((current) => (current.some((item) => item.id === tab.id) ? current : [...current, tab]));
+    setActiveTabId(tab.id);
+    setFilterText("");
     if (node.kind === "indexeddb") void loadIndexedStore(node.dbName, node.storeName);
     if (node.kind === "kv") void loadKv(node.surface);
     if (node.kind === "overview") {
@@ -115,6 +144,30 @@ function App() {
       setKvResult(null);
       setQueryResult(null);
       setSelectedRecord(null);
+    }
+  };
+
+  const chooseTab = (tab: WorkspaceTab) => {
+    setActiveTabId(tab.id);
+    setFilterText("");
+    if (tab.node.kind === "sql") return;
+    setSelected(tab.node);
+    if (tab.node.kind === "indexeddb") void loadIndexedStore(tab.node.dbName, tab.node.storeName);
+    if (tab.node.kind === "kv") void loadKv(tab.node.surface);
+    if (tab.node.kind === "overview") {
+      setTableResult(null);
+      setKvResult(null);
+      setQueryResult(null);
+      setSelectedRecord(null);
+    }
+  };
+
+  const closeTab = (tabId: string) => {
+    if (tabId === "overview" || tabId === "sql") return;
+    setTabs((current) => current.filter((tab) => tab.id !== tabId));
+    if (activeTabId === tabId) {
+      const fallback = tabs.find((tab) => tab.id === "overview") ?? tabs[0];
+      if (fallback) chooseTab(fallback);
     }
   };
 
@@ -313,94 +366,222 @@ function App() {
   };
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">SS</span>
-          <div>
-            <h1>Storage Studio</h1>
-            <p>{discovery?.origin ?? "Inspecting current tab"}</p>
-          </div>
-        </div>
-        <button className="primary-action" onClick={refreshDiscovery} disabled={busy}>
-          {busy ? "Working..." : "Refresh storage"}
-        </button>
-        <StorageTree discovery={discovery} selected={selected} chooseNode={chooseNode} />
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">{selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "IndexedDB" : selected.surface}</p>
-            <h2>{titleForSelection(selected)}</h2>
-          </div>
-          <div className="actions">
-            <button onClick={() => exportVisible("json")} disabled={visibleExportRows.length === 0}>Export JSON</button>
-            <button onClick={() => exportVisible("csv")} disabled={visibleExportRows.length === 0}>Export CSV</button>
-          </div>
-        </header>
-
-        {notice && <div className={`notice ${notice.tone}`}>{notice.message}</div>}
-
-        {selected.kind === "overview" && <Overview discovery={discovery} />}
-
-        {selected.kind === "indexeddb" && (
-          <>
-            <section className="query-strip">
-              <textarea value={queryText} onChange={(event) => setQueryText(event.target.value)} spellCheck={false} />
-              <button className="run-button" onClick={runQuery} disabled={busy}>Run query</button>
-            </section>
-            {queryResult && <p className="plan-text">{queryResult.plan}</p>}
-            <DataGrid
-              columns={queryResult?.columns ?? tableResult?.columns ?? []}
-              indexedRows={queryResult ? queryResult.rows.map((row) => ({ key: row.key, value: row.value })) : tableResult?.rows ?? []}
-              onSelect={selectRecord}
-              onDelete={deleteIndexedRecord}
-            />
-            <section className="add-panel">
-              <h3>Add record</h3>
-              <input value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder="Optional key as JSON, e.g. 42 or &quot;id&quot;" />
-              <textarea value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
-              <button onClick={addIndexedRecord}>Add record</button>
-              {selectedStore && (
-                <p>
-                  Key path: <code>{JSON.stringify(selectedStore.keyPath)}</code> · Auto increment: {String(selectedStore.autoIncrement)}
-                </p>
-              )}
-            </section>
-          </>
-        )}
-
-        {selected.kind === "kv" && (
-          <>
-            <KvGrid rows={kvResult?.rows ?? []} onSelect={selectRecord} onDelete={deleteKv} />
-            <section className="add-panel">
-              <h3>Add key</h3>
-              <input value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder="Key" />
-              <textarea value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
-              <div className="actions">
-                <button onClick={addKv}>Save key</button>
-                <button className="danger" onClick={clearKv}>Clear {selected.surface}</button>
+    <main className="dark h-screen min-w-[1100px] bg-background text-foreground">
+      <ResizablePanelGroup orientation="horizontal">
+        <ResizablePanel defaultSize="21%" minSize="220px" maxSize="380px">
+          <aside className="h-full overflow-auto border-r border-slate-800 bg-slate-900/95 p-3">
+            <div className="mb-3 flex items-center gap-3">
+              <span className="grid h-8 w-8 place-items-center rounded-md border border-lime-200/40 bg-lime-300 text-xs font-black text-slate-950">
+                SS
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-sm font-bold leading-tight">Storage Studio</h1>
+                <p className="truncate text-xs text-slate-400">{discovery?.origin ?? "Inspecting current tab"}</p>
               </div>
-            </section>
-          </>
-        )}
-      </section>
+            </div>
+            <Button
+              size="sm"
+              className="mb-3 w-full font-black"
+              onClick={refreshDiscovery}
+              disabled={busy}
+            >
+              {busy ? "Working..." : "Refresh storage"}
+            </Button>
+            <StorageTree
+              discovery={discovery}
+              selected={selected}
+              chooseNode={chooseNode}
+              openSql={() => chooseTab(tabs.find((tab) => tab.id === "sql")!)}
+            />
+          </aside>
+        </ResizablePanel>
 
-      <aside className="inspector">
-        <h2>Inspector</h2>
-        {selectedRecord ? (
-          <>
-            <p className="eyebrow">Selected record</p>
-            <textarea value={editDraft} onChange={(event) => setEditDraft(event.target.value)} spellCheck={false} />
-            <button onClick={selected.kind === "kv" ? saveKv : saveIndexedRecord} disabled={busy}>Save changes</button>
-          </>
-        ) : (
-          <p className="empty-state">Select a row to inspect and edit its value.</p>
-        )}
-      </aside>
+        <ResizableHandle withHandle />
+
+        <ResizablePanel defaultSize="57%" minSize="520px">
+          <section className="flex h-full min-w-0 flex-col bg-slate-950">
+            <Tabs
+              value={activeTabId}
+              onValueChange={(value) => {
+                const tab = tabs.find((item) => item.id === value);
+                if (tab) chooseTab(tab);
+              }}
+              className="shrink-0 gap-0"
+            >
+              <TabsList variant="line" className="h-9 w-full justify-start rounded-none border-b border-border bg-card px-2">
+                {tabs.map((tab) => (
+                  <TabsTrigger key={tab.id} value={tab.id} className="min-w-28 flex-none px-4">
+                    {tab.title}
+                    {tab.id !== "overview" && tab.id !== "sql" && (
+                      <span
+                        className="text-base text-muted-foreground hover:text-foreground"
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          closeTab(tab.id);
+                        }}
+                      >
+                        ×
+                      </span>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-800 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-normal text-slate-400">
+                  {activeTabId === "sql" ? "Query editor" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "IndexedDB table" : selected.surface}
+                </p>
+                <h2 className="truncate text-xl font-black">{activeTabId === "sql" ? "SQL Query" : titleForSelection(selected)}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Input
+                    className="w-64 rounded-full pl-9"
+                    value={filterText}
+                    onChange={(event) => setFilterText(event.target.value)}
+                    placeholder="Search for field or value..."
+                  />
+                </label>
+                <Button size="sm" onClick={() => exportVisible("json")} disabled={visibleExportRows.length === 0}>
+                  Export JSON
+                </Button>
+                <Button size="sm" onClick={() => exportVisible("csv")} disabled={visibleExportRows.length === 0}>
+                  Export CSV
+                </Button>
+              </div>
+            </header>
+
+            {notice && (
+              <div
+                className={`shrink-0 border-b border-slate-800 px-4 py-2 text-sm ${
+                  notice.tone === "error" ? "bg-red-950/50 text-red-200" : notice.tone === "success" ? "bg-emerald-950/40 text-emerald-200" : "bg-sky-950/40 text-sky-200"
+                }`}
+              >
+                {notice.message}
+              </div>
+            )}
+
+            {activeTabId === "overview" && <Overview discovery={discovery} />}
+
+            {activeTabId !== "sql" && selected.kind === "indexeddb" && (
+              <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
+                <ResizablePanel defaultSize="70%" minSize="260px">
+                  <div className="flex h-full min-h-0 flex-col">
+                    <section className="grid shrink-0 grid-cols-[minmax(0,1fr)_150px] gap-3 border-b border-slate-800 p-3">
+                      <Textarea className="min-h-20" value={queryText} onChange={(event) => setQueryText(event.target.value)} spellCheck={false} />
+                      <Button variant="default" className="border-sky-300 bg-sky-300 font-black text-slate-950 hover:bg-sky-200" onClick={runQuery} disabled={busy}>
+                        Run query
+                      </Button>
+                    </section>
+                    {queryResult && <p className="border-b border-slate-800 px-4 py-2 text-sm text-slate-400">{queryResult.plan}</p>}
+                    <DataGrid
+                      columns={queryResult?.columns ?? tableResult?.columns ?? []}
+                      indexedRows={queryResult ? queryResult.rows.map((row) => ({ key: row.key, value: row.value })) : tableResult?.rows ?? []}
+                      filterText={filterText}
+                      onSelect={selectRecord}
+                      onDelete={deleteIndexedRecord}
+                    />
+                  </div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize="30%" minSize="130px">
+                  <section className="grid h-full gap-3 overflow-auto bg-slate-900/40 p-4">
+                    <h3 className="text-xs font-black uppercase tracking-normal text-slate-400">Add record</h3>
+                    <Input value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder="Optional key as JSON, e.g. 42 or &quot;id&quot;" />
+                    <Textarea className="min-h-24" value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
+                    <Button size="sm" onClick={addIndexedRecord}>Add record</Button>
+                    {selectedStore && (
+                      <p className="text-sm text-slate-400">
+                        Key path: <code className="text-lime-300">{JSON.stringify(selectedStore.keyPath)}</code> · Auto increment: {String(selectedStore.autoIncrement)}
+                      </p>
+                    )}
+                  </section>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            )}
+
+            {activeTabId !== "sql" && selected.kind === "kv" && (
+              <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
+                <ResizablePanel defaultSize="72%" minSize="260px">
+                  <KvGrid rows={kvResult?.rows ?? []} filterText={filterText} onSelect={selectRecord} onDelete={deleteKv} />
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize="28%" minSize="130px">
+                  <section className="grid h-full gap-3 overflow-auto bg-slate-900/40 p-4">
+                    <h3 className="text-xs font-black uppercase tracking-normal text-slate-400">Add key</h3>
+                    <Input value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder="Key" />
+                    <Textarea className="min-h-24" value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={addKv}>Save key</Button>
+                      <Button size="sm" variant="destructive" onClick={clearKv}>Clear {selected.surface}</Button>
+                    </div>
+                  </section>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            )}
+
+            {activeTabId === "sql" && (
+              <section className="flex min-h-0 flex-1 flex-col">
+                <div className="grid min-h-72 grid-cols-[42px_minmax(0,1fr)] border-b border-slate-800 bg-slate-950">
+                  <div className="border-r border-slate-800 p-4 text-right font-mono text-sm text-slate-500">1</div>
+                  <Textarea className="min-h-72 resize-none rounded-none border-0 p-4 focus:ring-0" value={queryText} onChange={(event) => setQueryText(event.target.value)} spellCheck={false} />
+                </div>
+                <div className="flex items-center justify-end gap-3 border-b border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-400">
+                  <span>{selected.kind === "indexeddb" ? `Context: ${selected.dbName}.${selected.storeName}` : "Select a table from the sidebar for query context"}</span>
+                  <Button size="sm" className="border-sky-300 bg-sky-300 font-black text-slate-950 hover:bg-sky-200" onClick={runQuery} disabled={busy || selected.kind !== "indexeddb"}>Run Current ⌘↵</Button>
+                </div>
+                {queryResult ? (
+                  <>
+                    <p className="border-b border-slate-800 px-4 py-2 text-sm text-slate-400">{queryResult.plan}</p>
+                    <DataGrid
+                      columns={queryResult.columns}
+                      indexedRows={queryResult.rows.map((row) => ({ key: row.key, value: row.value }))}
+                      filterText={filterText}
+                      onSelect={selectRecord}
+                      onDelete={deleteIndexedRecord}
+                    />
+                  </>
+                ) : (
+                  <p className="grid min-h-64 place-items-center text-slate-400">Write a SELECT query, pick a table for context, and run it.</p>
+                )}
+              </section>
+            )}
+          </section>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel defaultSize="22%" minSize="240px" maxSize="460px">
+          <aside className="h-full overflow-auto border-l border-slate-800 bg-slate-950 p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-2xl font-black">Inspector</h2>
+              {selectedRecord && <span className="text-[11px] font-black uppercase tracking-normal text-slate-500">{selected.kind === "kv" ? "Key value" : "Record"}</span>}
+            </div>
+            {selectedRecord ? (
+              <>
+                <p className="mb-2 text-[11px] font-black uppercase tracking-normal text-slate-400">Selected record</p>
+                <Textarea className="mb-3 min-h-[430px]" value={editDraft} onChange={(event) => setEditDraft(event.target.value)} spellCheck={false} />
+                <Button size="sm" onClick={selected.kind === "kv" ? saveKv : saveIndexedRecord} disabled={busy}>Save changes</Button>
+              </>
+            ) : (
+              <p className="text-sm text-slate-400">Select a row to inspect and edit its value.</p>
+            )}
+          </aside>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </main>
   );
+}
+
+function tabForNode(node: SelectedNode): WorkspaceTab {
+  if (node.kind === "overview") return { id: "overview", title: "Origin", node };
+  if (node.kind === "kv") return { id: node.surface, title: node.surface, node };
+  return { id: `${node.dbName}:${node.storeName}`, title: node.storeName, node };
 }
 
 function useStorageRpc() {
@@ -548,80 +729,130 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
 function StorageTree({
   discovery,
   selected,
-  chooseNode
+  chooseNode,
+  openSql
 }: {
   discovery: StorageDiscovery | null;
   selected: SelectedNode;
   chooseNode: (node: SelectedNode) => void;
+  openSql: () => void;
 }) {
-  if (!discovery) return <p className="empty-state">Open DevTools on a page and refresh storage.</p>;
+  const [expandedDbNames, setExpandedDbNames] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!discovery?.indexedDb.length) {
+      setExpandedDbNames(new Set());
+      return;
+    }
+    if (selected.kind === "indexeddb") {
+      setExpandedDbNames((current) => new Set([...current, selected.dbName]));
+      return;
+    }
+    setExpandedDbNames((current) => {
+      const existing = Array.from(current).filter((name) => discovery.indexedDb.some((db) => db.name === name));
+      return existing.length ? new Set(existing) : new Set([discovery.indexedDb[0].name]);
+    });
+  }, [discovery, selected]);
+
+  if (!discovery) return <p className="py-4 text-sm text-slate-400">Open DevTools on a page and refresh storage.</p>;
+
   return (
-    <nav className="tree">
-      <button className={selected.kind === "overview" ? "active" : ""} onClick={() => chooseNode({ kind: "overview" })}>
+    <nav className="flex flex-col gap-1">
+      <Button variant={selected.kind === "overview" ? "secondary" : "ghost"} className="justify-start" onClick={() => chooseNode({ kind: "overview" })}>
         Origin dashboard
-      </button>
-      <h3>IndexedDB</h3>
-      {discovery.indexedDb.length === 0 && <p className="tree-note">No IndexedDB databases.</p>}
+      </Button>
+      <Button variant="outline" className="justify-between" onClick={openSql}>
+        SQL Query <span className="text-muted-foreground">⌘↵</span>
+      </Button>
+      <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">IndexedDB</h3>
+      {discovery.indexedDb.length === 0 && <p className="text-sm text-slate-400">No IndexedDB databases.</p>}
       {discovery.indexedDb.map((db) => (
-        <DatabaseNode key={db.name} db={db} selected={selected} chooseNode={chooseNode} />
+        <div key={db.name} className="flex flex-col gap-1">
+          <Button
+            variant={selected.kind === "indexeddb" && selected.dbName === db.name ? "secondary" : "ghost"}
+            className="justify-between"
+            onClick={() => {
+              setExpandedDbNames((current) => {
+                const next = new Set(current);
+                if (next.has(db.name)) next.delete(db.name);
+                else next.add(db.name);
+                return next;
+              });
+            }}
+            aria-expanded={expandedDbNames.has(db.name)}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <ChevronRight
+                data-icon="inline-start"
+                className={expandedDbNames.has(db.name) ? "rotate-90 transition-transform" : "transition-transform"}
+              />
+              <Database data-icon="inline-start" />
+              <span className="truncate">{db.name}</span>
+            </span>
+            <span className="text-xs text-muted-foreground">v{db.version}</span>
+          </Button>
+          {expandedDbNames.has(db.name) && (
+            <div className="ml-4 flex flex-col gap-1 border-l border-border pl-2">
+              <p className="px-2 py-1 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Tables</p>
+              {db.stores.map((store) => (
+                <Button
+                  key={`${db.name}:${store.name}`}
+                  variant={selected.kind === "indexeddb" && selected.dbName === db.name && selected.storeName === store.name ? "secondary" : "ghost"}
+                  className="justify-between"
+                  onClick={() => chooseNode({ kind: "indexeddb", dbName: db.name, storeName: store.name })}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Table2 data-icon="inline-start" />
+                    <span className="truncate">{store.name}</span>
+                  </span>
+                  <span className="text-muted-foreground">{store.count ?? "?"}</span>
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
       ))}
-      <h3>Storage</h3>
-      <button className={selected.kind === "kv" && selected.surface === "localStorage" ? "active" : ""} onClick={() => chooseNode({ kind: "kv", surface: "localStorage" })}>
-        LocalStorage <span>{discovery.localStorage.count}</span>
-      </button>
-      <button className={selected.kind === "kv" && selected.surface === "sessionStorage" ? "active" : ""} onClick={() => chooseNode({ kind: "kv", surface: "sessionStorage" })}>
-        SessionStorage <span>{discovery.sessionStorage.count}</span>
-      </button>
+
+      <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Storage</h3>
+      <Button variant={selected.kind === "kv" && selected.surface === "localStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => chooseNode({ kind: "kv", surface: "localStorage" })}>
+        LocalStorage <span className="text-muted-foreground">{discovery.localStorage.count}</span>
+      </Button>
+      <Button variant={selected.kind === "kv" && selected.surface === "sessionStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => chooseNode({ kind: "kv", surface: "sessionStorage" })}>
+        SessionStorage <span className="text-muted-foreground">{discovery.sessionStorage.count}</span>
+      </Button>
     </nav>
   );
 }
 
-function DatabaseNode({ db, selected, chooseNode }: { db: IndexedDbDatabaseInfo; selected: SelectedNode; chooseNode: (node: SelectedNode) => void }) {
-  return (
-    <div className="db-node">
-      <p>{db.name} <span>v{db.version}</span></p>
-      {db.stores.map((store) => (
-        <button
-          key={store.name}
-          className={selected.kind === "indexeddb" && selected.dbName === db.name && selected.storeName === store.name ? "active child" : "child"}
-          onClick={() => chooseNode({ kind: "indexeddb", dbName: db.name, storeName: store.name })}
-        >
-          {store.name} <span>{store.count ?? "?"}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
-  if (!discovery) return <p className="empty-state">No storage metadata loaded yet.</p>;
+  if (!discovery) return <p className="p-4 text-sm text-slate-400">No storage metadata loaded yet.</p>;
   const stores = discovery.indexedDb.flatMap((db) => db.stores.map((store) => ({ db: db.name, ...store })));
   return (
-    <section className="overview-grid">
-      <article>
-        <p className="eyebrow">IndexedDB</p>
-        <strong>{discovery.indexedDb.length}</strong>
-        <span>databases</span>
+    <section className="grid grid-cols-4 gap-3 p-4">
+      <article className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-[11px] font-black uppercase tracking-normal text-slate-400">IndexedDB</p>
+        <strong className="mt-2 block text-3xl font-black">{discovery.indexedDb.length}</strong>
+        <span className="text-slate-400">databases</span>
       </article>
-      <article>
-        <p className="eyebrow">Object stores</p>
-        <strong>{stores.length}</strong>
-        <span>tables</span>
+      <article className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-[11px] font-black uppercase tracking-normal text-slate-400">Object stores</p>
+        <strong className="mt-2 block text-3xl font-black">{stores.length}</strong>
+        <span className="text-slate-400">tables</span>
       </article>
-      <article>
-        <p className="eyebrow">LocalStorage</p>
-        <strong>{discovery.localStorage.count}</strong>
-        <span>{formatBytes(discovery.localStorage.bytes)}</span>
+      <article className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-[11px] font-black uppercase tracking-normal text-slate-400">LocalStorage</p>
+        <strong className="mt-2 block text-3xl font-black">{discovery.localStorage.count}</strong>
+        <span className="text-slate-400">{formatBytes(discovery.localStorage.bytes)}</span>
       </article>
-      <article>
-        <p className="eyebrow">SessionStorage</p>
-        <strong>{discovery.sessionStorage.count}</strong>
-        <span>{formatBytes(discovery.sessionStorage.bytes)}</span>
+      <article className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-[11px] font-black uppercase tracking-normal text-slate-400">SessionStorage</p>
+        <strong className="mt-2 block text-3xl font-black">{discovery.sessionStorage.count}</strong>
+        <span className="text-slate-400">{formatBytes(discovery.sessionStorage.bytes)}</span>
       </article>
-      <section className="wide-panel">
-        <h3>Largest stores</h3>
+      <section className="col-span-4 rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+        <h3 className="mb-2 text-[11px] font-black uppercase tracking-normal text-slate-400">Largest stores</h3>
         {stores.length === 0 ? <p>No object stores found.</p> : stores.sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).slice(0, 8).map((store) => (
-          <div className="metric-row" key={`${store.db}:${store.name}`}>
+          <div className="flex justify-between border-t border-slate-800 py-3" key={`${store.db}:${store.name}`}>
             <span>{store.db}.{store.name}</span>
             <strong>{store.count ?? "?"} rows</strong>
           </div>
@@ -634,61 +865,161 @@ function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
 function DataGrid({
   columns,
   indexedRows,
+  filterText,
   onSelect,
   onDelete
 }: {
   columns: string[];
   indexedRows: IndexedDbRecord[];
+  filterText: string;
   onSelect: (record: IndexedDbRecord) => void;
   onDelete: (record: IndexedDbRecord) => void;
 }) {
-  if (indexedRows.length === 0) return <p className="empty-state">No records loaded.</p>;
   const visibleColumns = columns.length > 0 ? columns : ["value"];
+  const columnDefs = useMemo<ColumnDef<IndexedDbRecord>[]>(
+    () => [
+      {
+        id: "key",
+        header: "Key",
+        accessorFn: (row) => JSON.stringify(row.key),
+        cell: ({ getValue }) => <code className="text-lime-300">{String(getValue())}</code>
+      },
+      ...visibleColumns.map<ColumnDef<IndexedDbRecord>>((column) => ({
+        id: column,
+        header: column,
+        accessorFn: (row) => renderColumn(row, column),
+        cell: ({ getValue }) => String(getValue() ?? "")
+      })),
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => (
+          <button
+            className="border-0 bg-transparent p-0 text-red-300 hover:bg-transparent hover:text-red-200"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(row.original);
+            }}
+          >
+            Delete
+          </button>
+        )
+      }
+    ],
+    [onDelete, visibleColumns]
+  );
+  const table = useReactTable({
+    data: indexedRows,
+    columns: columnDefs,
+    state: { globalFilter: filterText },
+    globalFilterFn: (row, _columnId, filterValue) => JSON.stringify(row.original).toLowerCase().includes(String(filterValue).toLowerCase()),
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel()
+  });
+  if (indexedRows.length === 0) return <p className="p-4 text-sm text-slate-400">No records loaded.</p>;
   return (
-    <div className="grid-wrap">
-      <table>
+    <div className="min-h-0 flex-1 overflow-auto border-b border-slate-800 bg-slate-950">
+      <table className="w-full border-collapse text-xs">
         <thead>
-          <tr>
-            <th>Key</th>
-            {visibleColumns.map((column) => <th key={column}>{column}</th>)}
-            <th></th>
-          </tr>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <th key={header.id} className="sticky top-0 z-10 border-b border-r border-slate-800 bg-slate-900 px-3 py-2 text-left text-[11px] font-black uppercase tracking-normal text-slate-400">
+                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                </th>
+              ))}
+            </tr>
+          ))}
         </thead>
         <tbody>
-          {indexedRows.map((record, index) => (
-            <tr key={index} onClick={() => onSelect(record)}>
-              <td><code>{JSON.stringify(record.key)}</code></td>
-              {visibleColumns.map((column) => (
-                <td key={column}>{renderColumn(record, column)}</td>
+          {table.getRowModel().rows.map((row) => (
+            <tr key={row.id} className="cursor-pointer odd:bg-slate-950 even:bg-slate-900/35 hover:bg-sky-950/45" onClick={() => onSelect(row.original)}>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id} className="max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-slate-800 px-3 py-2">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
               ))}
-              <td><button className="link-danger" onClick={(event) => { event.stopPropagation(); onDelete(record); }}>Delete</button></td>
             </tr>
           ))}
         </tbody>
       </table>
+      {table.getRowModel().rows.length === 0 && <p className="p-4 text-sm text-slate-400">No rows match the filter.</p>}
     </div>
   );
 }
 
-function KvGrid({ rows, onSelect, onDelete }: { rows: KeyValueRecord[]; onSelect: (record: KeyValueRecord) => void; onDelete: (record: KeyValueRecord) => void }) {
-  if (rows.length === 0) return <p className="empty-state">No keys found.</p>;
+function KvGrid({ rows, filterText, onSelect, onDelete }: { rows: KeyValueRecord[]; filterText: string; onSelect: (record: KeyValueRecord) => void; onDelete: (record: KeyValueRecord) => void }) {
+  const columnDefs = useMemo<ColumnDef<KeyValueRecord>[]>(
+    () => [
+      {
+        accessorKey: "key",
+        header: "Key",
+        cell: ({ row }) => <code className="text-lime-300">{row.original.key}</code>
+      },
+      {
+        id: "value",
+        header: "Value",
+        accessorFn: (row) => row.parsed.preview
+      },
+      {
+        id: "type",
+        header: "Type",
+        accessorFn: (row) => row.parsed.type
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => (
+          <button
+            className="border-0 bg-transparent p-0 text-red-300 hover:bg-transparent hover:text-red-200"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(row.original);
+            }}
+          >
+            Delete
+          </button>
+        )
+      }
+    ],
+    [onDelete]
+  );
+  const table = useReactTable({
+    data: rows,
+    columns: columnDefs,
+    state: { globalFilter: filterText },
+    globalFilterFn: (row, _columnId, filterValue) => `${row.original.key} ${row.original.value} ${row.original.parsed.preview}`.toLowerCase().includes(String(filterValue).toLowerCase()),
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel()
+  });
+  if (rows.length === 0) return <p className="p-4 text-sm text-slate-400">No keys found.</p>;
   return (
-    <div className="grid-wrap">
-      <table>
+    <div className="h-full overflow-auto border-b border-slate-800 bg-slate-950">
+      <table className="w-full border-collapse text-xs">
         <thead>
-          <tr><th>Key</th><th>Value</th><th>Type</th><th></th></tr>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <th key={header.id} className="sticky top-0 z-10 border-b border-r border-slate-800 bg-slate-900 px-3 py-2 text-left text-[11px] font-black uppercase tracking-normal text-slate-400">
+                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                </th>
+              ))}
+            </tr>
+          ))}
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.key} onClick={() => onSelect(row)}>
-              <td><code>{row.key}</code></td>
-              <td>{row.parsed.preview}</td>
-              <td>{row.parsed.type}</td>
-              <td><button className="link-danger" onClick={(event) => { event.stopPropagation(); onDelete(row); }}>Delete</button></td>
+          {table.getRowModel().rows.map((row) => (
+            <tr key={row.id} className="cursor-pointer odd:bg-slate-950 even:bg-slate-900/35 hover:bg-sky-950/45" onClick={() => onSelect(row.original)}>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id} className="max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-slate-800 px-3 py-2">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
       </table>
+      {table.getRowModel().rows.length === 0 && <p className="p-4 text-sm text-slate-400">No keys match the filter.</p>}
     </div>
   );
 }
