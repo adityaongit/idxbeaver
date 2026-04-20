@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.playwright-mcp/
+.DS_Store
+*.log
+console-errors*.txt
+storage-panel-snapshot.yml
+storage-users-snapshot.yml
+storage-studio-*.png
