@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ChevronRight, Copy, Database, Moon, PanelBottom, PanelLeft, PanelRight, Plus, RefreshCw, Search, Sun, Table2, Trash2, X } from "lucide-react";
 import { JsonView, collapseAllNested } from "react-json-view-lite";
 import "react-json-view-lite/dist/index.css";
+import { cn } from "@/lib/utils";
 import {
   flexRender,
   getCoreRowModel,
@@ -16,13 +17,15 @@ import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from "../components/ui/command";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Textarea } from "../components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { parseSelectQuery } from "../shared/query";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../components/ui/context-menu";
+import { parseMongoQuery } from "../shared/query";
 import type {
+  IndexedDbDatabaseInfo,
   IndexedDbRecord,
   KeyValueRecord,
   KvReadResult,
@@ -36,9 +39,11 @@ import type {
 } from "../shared/types";
 import "./styles.css";
 
+const QueryEditor = lazy(async () => import("./QueryEditor").then((module) => ({ default: module.QueryEditor })));
+
 type SelectedNode =
   | { kind: "overview" }
-  | { kind: "indexeddb"; dbName: string; storeName: string }
+  | { kind: "indexeddb"; dbName: string; dbVersion: number; storeName: string; origin: string; frameId: number }
   | { kind: "kv"; surface: "localStorage" | "sessionStorage" };
 
 type Notice = { tone: "success" | "error" | "info"; message: string } | null;
@@ -46,16 +51,19 @@ type PendingAction =
   | { kind: "deleteIndexed"; label: string; execute: () => Promise<void> }
   | { kind: "deleteKv"; label: string; execute: () => Promise<void> }
   | { kind: "clearKv"; label: string; execute: () => Promise<void> }
+  | { kind: "deleteDatabase"; label: string; execute: () => Promise<void> }
+  | { kind: "deleteStore"; label: string; execute: () => Promise<void> }
+  | { kind: "clearStore"; label: string; execute: () => Promise<void> }
   | null;
 
 type WorkspaceTab =
-  | { id: string; title: string; node: { kind: "indexeddb"; dbName: string; storeName: string } }
+  | { id: string; title: string; node: { kind: "indexeddb"; dbName: string; dbVersion: number; storeName: string; origin: string; frameId: number } }
   | { id: string; title: string; node: { kind: "kv"; surface: "localStorage" | "sessionStorage" } };
 
-type SqlSuggestion = {
+type QuerySuggestion = {
   label: string;
   insertText: string;
-  kind: "keyword" | "table" | "column";
+  kind: "store" | "field" | "operator";
 };
 
 const extensionRuntime =
@@ -64,6 +72,26 @@ const extensionRuntime =
   Boolean(chrome.devtools?.inspectedWindow);
 const tabId = extensionRuntime ? chrome.devtools.inspectedWindow.tabId : 0;
 
+// Composite identity for a database — a tab can contain iframes of different
+// origins, and IndexedDB is partitioned per origin. Same-named DBs in different
+// frames are distinct, so we key on origin + name + version.
+function dbKey(info: { origin: string; name: string; version: number }): string {
+  return `${info.origin}::${info.name}::v${info.version}`;
+}
+
+function dbKeyFromSelected(node: Extract<SelectedNode, { kind: "indexeddb" }>): string {
+  return `${node.origin}::${node.dbName}::v${node.dbVersion}`;
+}
+
+function shortOrigin(origin: string): string {
+  try {
+    const url = new URL(origin);
+    return url.host || origin;
+  } catch {
+    return origin;
+  }
+}
+
 function App() {
   const rpc = useStorageRpc();
   const [discovery, setDiscovery] = useState<StorageDiscovery | null>(null);
@@ -71,7 +99,11 @@ function App() {
   const [tableResult, setTableResult] = useState<TableReadResult | null>(null);
   const [kvResult, setKvResult] = useState<KvReadResult | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [queryText, setQueryText] = useState("SELECT * FROM users LIMIT 100;");
+  const [queryText, setQueryText] = useState(`{
+  "store": "",
+  "filter": {},
+  "limit": 100
+}`);
   const [selectedRecord, setSelectedRecord] = useState<IndexedDbRecord | KeyValueRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -83,9 +115,8 @@ function App() {
   const [activeTabId, setActiveTabId] = useState("overview");
   const [filterText, setFilterText] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [visibleDbNames, setVisibleDbNames] = useState<string[]>([]);
+  const [visibleDbKeys, setVisibleDbKeys] = useState<string[]>([]);
   const [databasePickerOpen, setDatabasePickerOpen] = useState(false);
-  const [sqlCursor, setSqlCursor] = useState(queryText.length);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -93,7 +124,6 @@ function App() {
   const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
   const refreshDiscovery = useCallback(async () => {
     setBusy(true);
@@ -111,26 +141,33 @@ function App() {
     void refreshDiscovery();
   }, [refreshDiscovery]);
 
+  // Keep visible DBs consistent with discovery, but never auto-select — the user
+  // picks which databases to browse.
   useEffect(() => {
     if (!discovery) {
-      setVisibleDbNames([]);
+      setVisibleDbKeys([]);
       return;
     }
-
-    const availableDbNames = new Set(discovery.indexedDb.map((db) => db.name));
-    setVisibleDbNames((current) => {
-      const retained = current.filter((name) => availableDbNames.has(name));
-      if (selected.kind === "indexeddb" && availableDbNames.has(selected.dbName) && !retained.includes(selected.dbName)) {
-        return [...retained, selected.dbName];
+    const availableKeys = new Set(discovery.indexedDb.map(dbKey));
+    setVisibleDbKeys((current) => {
+      const retained = current.filter((key) => availableKeys.has(key));
+      if (selected.kind === "indexeddb") {
+        const selKey = dbKeyFromSelected(selected);
+        if (availableKeys.has(selKey) && !retained.includes(selKey)) {
+          return [...retained, selKey];
+        }
       }
-      if (retained.length > 0) return retained;
-      return discovery.indexedDb[0] ? [discovery.indexedDb[0].name] : [];
+      return retained;
     });
   }, [discovery, selected]);
 
   const selectedDb = useMemo(() => {
     if (selected.kind !== "indexeddb" || !discovery) return null;
-    return discovery.indexedDb.find((db) => db.name === selected.dbName) ?? null;
+    return discovery.indexedDb.find((db) =>
+      db.name === selected.dbName &&
+      db.version === selected.dbVersion &&
+      db.origin === selected.origin
+    ) ?? null;
   }, [discovery, selected]);
 
   const selectedStore = useMemo(() => {
@@ -139,38 +176,52 @@ function App() {
   }, [selected, selectedDb]);
 
   const visibleDbs = useMemo(
-    () => discovery?.indexedDb.filter((db) => visibleDbNames.includes(db.name)) ?? [],
-    [discovery, visibleDbNames]
+    () => discovery?.indexedDb.filter((db) => visibleDbKeys.includes(dbKey(db))) ?? [],
+    [discovery, visibleDbKeys]
   );
 
   const hiddenDbs = useMemo(
-    () => discovery?.indexedDb.filter((db) => !visibleDbNames.includes(db.name)) ?? [],
-    [discovery, visibleDbNames]
+    () => discovery?.indexedDb.filter((db) => !visibleDbKeys.includes(dbKey(db))) ?? [],
+    [discovery, visibleDbKeys]
   );
+
+  // Names that appear in more than one row (same name in multiple origins, or
+  // same origin at multiple versions). When this is true we show an extra tag.
+  const duplicateDbNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const db of discovery?.indexedDb ?? []) counts.set(db.name, (counts.get(db.name) ?? 0) + 1);
+    return new Set(Array.from(counts.entries()).filter(([, c]) => c > 1).map(([n]) => n));
+  }, [discovery]);
+
+  // Origins that host more than one DB — useful to show an origin badge even
+  // when the name isn't duplicated, so the user knows which frame it came from.
+  const multiOrigin = useMemo(() => {
+    const origins = new Set<string>();
+    for (const db of discovery?.indexedDb ?? []) origins.add(db.origin);
+    return origins.size > 1;
+  }, [discovery]);
 
   const renderedTabs = useMemo(() => {
     const all = [
       { value: "overview", title: "Origin", closable: false, preview: false },
-      { value: "sql", title: "SQL Query", closable: false, preview: false },
+      { value: "sql", title: "Query", closable: false, preview: false },
       ...tabs.map((tab) => ({ value: tab.id, title: tab.title, closable: true, preview: false }))
     ];
-
     if (previewTab && !tabs.some((tab) => tab.id === previewTab.id)) {
       all.push({ value: "preview", title: previewTab.title, closable: false, preview: true });
     }
-
     return all;
   }, [previewTab, tabs]);
 
   const canToggleBottomPanel = activeTabId !== "sql" && selected.kind !== "overview";
   const pendingActionTitle =
-    pendingAction?.kind === "clearKv"
-      ? "Clear all keys?"
-      : pendingAction?.kind === "deleteKv"
-        ? "Delete key?"
-        : pendingAction?.kind === "deleteIndexed"
-          ? "Delete record?"
-          : "Confirm action";
+    pendingAction?.kind === "clearKv" ? "Clear all keys?"
+    : pendingAction?.kind === "deleteKv" ? "Delete key?"
+    : pendingAction?.kind === "deleteIndexed" ? "Delete record?"
+    : pendingAction?.kind === "deleteDatabase" ? "Delete database?"
+    : pendingAction?.kind === "deleteStore" ? "Delete object store?"
+    : pendingAction?.kind === "clearStore" ? "Clear object store?"
+    : "Confirm action";
 
   useEffect(() => {
     if (canToggleBottomPanel) return;
@@ -181,7 +232,6 @@ function App() {
     const isDark = theme === "dark";
     document.documentElement.classList.toggle("dark", isDark);
     document.body.classList.toggle("dark", isDark);
-
     return () => {
       document.documentElement.classList.remove("dark");
       document.body.classList.remove("dark");
@@ -189,12 +239,12 @@ function App() {
   }, [theme]);
 
   const loadIndexedStore = useCallback(
-    async (dbName: string, storeName: string) => {
+    async (frameId: number, dbName: string, dbVersion: number, storeName: string) => {
       setBusy(true);
       setQueryResult(null);
       setKvResult(null);
       setSelectedRecord(null);
-      const response = await rpc({ type: "readIndexedDbStore", tabId, dbName, storeName, limit: 500 });
+      const response = await rpc({ type: "readIndexedDbStore", tabId, frameId, dbName, dbVersion, storeName, limit: 500 });
       setBusy(false);
       if (!response.ok) {
         setNotice({ tone: "error", message: response.error });
@@ -229,7 +279,7 @@ function App() {
     setSelected(node);
     setFilterText("");
 
-    if (node.kind === "indexeddb") void loadIndexedStore(node.dbName, node.storeName);
+    if (node.kind === "indexeddb") void loadIndexedStore(node.frameId, node.dbName, node.dbVersion, node.storeName);
     if (node.kind === "kv") void loadKv(node.surface);
 
     if (node.kind === "overview") {
@@ -291,9 +341,16 @@ function App() {
     }
 
     try {
-      const plan = parseSelectQuery(queryText);
+      const query = parseMongoQuery(queryText);
       setBusy(true);
-      const response = await rpc({ type: "runIndexedDbQuery", tabId, dbName: selected.dbName, plan });
+      const response = await rpc({
+        type: "runIndexedDbQuery",
+        tabId,
+        frameId: selected.frameId,
+        dbName: selected.dbName,
+        dbVersion: selected.dbVersion,
+        query
+      });
       setBusy(false);
       if (!response.ok) {
         setNotice({ tone: "error", message: response.error });
@@ -317,14 +374,16 @@ function App() {
       const response = await rpc({
         type: "putIndexedDbRecord",
         tabId,
+        frameId: selected.frameId,
         dbName: selected.dbName,
+        dbVersion: selected.dbVersion,
         storeName: selected.storeName,
         key: selectedRecord.key,
         value
       });
       setBusy(false);
       if (!response.ok) throw new Error(response.error);
-      await loadIndexedStore(selected.dbName, selected.storeName);
+      await loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName);
       setNotice({ tone: "success", message: "Record saved." });
     } catch (error) {
       setBusy(false);
@@ -341,7 +400,9 @@ function App() {
       const response = await rpc({
         type: "addIndexedDbRecord",
         tabId,
+        frameId: selected.frameId,
         dbName: selected.dbName,
+        dbVersion: selected.dbVersion,
         storeName: selected.storeName,
         key,
         value
@@ -350,7 +411,7 @@ function App() {
       if (!response.ok) throw new Error(response.error);
       setNewKey("");
       setNewValue("{\n  \n}");
-      await loadIndexedStore(selected.dbName, selected.storeName);
+      await loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName);
       await refreshDiscovery();
       setNotice({ tone: "success", message: "Record added." });
     } catch (error) {
@@ -361,16 +422,19 @@ function App() {
 
   const deleteIndexedRecord = async (record: IndexedDbRecord) => {
     if (selected.kind !== "indexeddb") return;
+    const sel = selected;
     setPendingAction({
       kind: "deleteIndexed",
-      label: `Delete record ${JSON.stringify(record.key)} from ${selected.storeName}`,
+      label: `Delete record ${JSON.stringify(record.key)} from ${sel.storeName}`,
       execute: async () => {
         setBusy(true);
         const response = await rpc({
           type: "deleteIndexedDbRecord",
           tabId,
-          dbName: selected.dbName,
-          storeName: selected.storeName,
+          frameId: sel.frameId,
+          dbName: sel.dbName,
+          dbVersion: sel.dbVersion,
+          storeName: sel.storeName,
           key: record.key
         });
         setBusy(false);
@@ -378,7 +442,7 @@ function App() {
           setNotice({ tone: "error", message: response.error });
           return;
         }
-        await loadIndexedStore(selected.dbName, selected.storeName);
+        await loadIndexedStore(sel.frameId, sel.dbName, sel.dbVersion, sel.storeName);
         await refreshDiscovery();
         setNotice({ tone: "success", message: "Record deleted." });
       }
@@ -467,6 +531,84 @@ function App() {
     });
   };
 
+  const requestDeleteDatabase = (db: IndexedDbDatabaseInfo) => {
+    setPendingAction({
+      kind: "deleteDatabase",
+      label: `Permanently delete the database "${db.name}" (v${db.version}) in ${shortOrigin(db.origin)}.`,
+      execute: async () => {
+        setBusy(true);
+        const response = await rpc({ type: "deleteIndexedDbDatabase", tabId, frameId: db.frameId, dbName: db.name });
+        setBusy(false);
+        if (!response.ok) {
+          setNotice({ tone: "error", message: response.error });
+          return;
+        }
+        if (selected.kind === "indexeddb" && selected.dbName === db.name && selected.origin === db.origin) {
+          openNode({ kind: "overview" });
+        }
+        setVisibleDbKeys((current) => current.filter((key) => key !== dbKey(db)));
+        await refreshDiscovery();
+        setNotice({ tone: "success", message: `Deleted database "${db.name}".` });
+      }
+    });
+  };
+
+  const requestDeleteStore = (db: IndexedDbDatabaseInfo, storeName: string) => {
+    setPendingAction({
+      kind: "deleteStore",
+      label: `Permanently delete object store "${storeName}" from "${db.name}" in ${shortOrigin(db.origin)}.`,
+      execute: async () => {
+        setBusy(true);
+        const response = await rpc({
+          type: "deleteIndexedDbStore",
+          tabId,
+          frameId: db.frameId,
+          dbName: db.name,
+          dbVersion: db.version,
+          storeName
+        });
+        setBusy(false);
+        if (!response.ok) {
+          setNotice({ tone: "error", message: response.error });
+          return;
+        }
+        if (selected.kind === "indexeddb" && selected.dbName === db.name && selected.storeName === storeName && selected.origin === db.origin) {
+          openNode({ kind: "overview" });
+        }
+        await refreshDiscovery();
+        setNotice({ tone: "success", message: `Deleted store "${storeName}".` });
+      }
+    });
+  };
+
+  const requestClearStore = (db: IndexedDbDatabaseInfo, storeName: string) => {
+    setPendingAction({
+      kind: "clearStore",
+      label: `Delete every record in "${storeName}" (keeps the store).`,
+      execute: async () => {
+        setBusy(true);
+        const response = await rpc({
+          type: "clearIndexedDbStore",
+          tabId,
+          frameId: db.frameId,
+          dbName: db.name,
+          dbVersion: db.version,
+          storeName
+        });
+        setBusy(false);
+        if (!response.ok) {
+          setNotice({ tone: "error", message: response.error });
+          return;
+        }
+        if (selected.kind === "indexeddb" && selected.dbName === db.name && selected.storeName === storeName && selected.origin === db.origin) {
+          await loadIndexedStore(db.frameId, db.name, db.version, storeName);
+        }
+        await refreshDiscovery();
+        setNotice({ tone: "success", message: `Cleared store "${storeName}".` });
+      }
+    });
+  };
+
   const visibleExportRows = useMemo(() => {
     if (queryResult) return queryResult.rows.map((row) => row.projected);
     if (tableResult) return tableResult.rows.map((row) => row.value.value);
@@ -505,32 +647,32 @@ function App() {
     await action.execute();
   };
 
-  const updateVisibleDbNames = useCallback(
+  const updateVisibleDbKeys = useCallback(
     (updater: (current: string[]) => string[]) => {
-      setVisibleDbNames((current) => {
+      setVisibleDbKeys((current) => {
         if (!discovery) return current;
-        const availableDbNames = new Set(discovery.indexedDb.map((db) => db.name));
-        return updater(current).filter((name) => availableDbNames.has(name));
+        const availableKeys = new Set(discovery.indexedDb.map(dbKey));
+        return updater(current).filter((key) => availableKeys.has(key));
       });
     },
     [discovery]
   );
 
   const showDatabaseInView = useCallback(
-    (dbName: string) => {
-      updateVisibleDbNames((current) => (current.includes(dbName) ? current : [...current, dbName]));
+    (key: string) => {
+      updateVisibleDbKeys((current) => (current.includes(key) ? current : [...current, key]));
     },
-    [updateVisibleDbNames]
+    [updateVisibleDbKeys]
   );
 
   const hideDatabaseFromView = useCallback(
-    (dbName: string) => {
-      updateVisibleDbNames((current) => current.filter((name) => name !== dbName));
-      if (selected.kind === "indexeddb" && selected.dbName === dbName) {
+    (key: string) => {
+      updateVisibleDbKeys((current) => current.filter((k) => k !== key));
+      if (selected.kind === "indexeddb" && dbKeyFromSelected(selected) === key) {
         openNode({ kind: "overview" });
       }
     },
-    [selected, updateVisibleDbNames]
+    [selected, updateVisibleDbKeys]
   );
 
   const togglePanel = (panel: "left" | "right" | "bottom") => {
@@ -542,76 +684,29 @@ function App() {
     else panelRef.collapse();
   };
 
-  const sqlSuggestionPool = useMemo<SqlSuggestion[]>(() => {
-    const keywordSuggestions = [
-      "SELECT",
-      "FROM",
-      "WHERE",
-      "ORDER BY",
-      "LIMIT",
-      "GROUP BY",
-      "COUNT(*)",
-      "DISTINCT"
-    ].map((keyword) => ({ label: keyword, insertText: keyword, kind: "keyword" as const }));
-
-    const tableSuggestions =
+  const querySuggestionPool = useMemo<QuerySuggestion[]>(() => {
+    const stores =
       discovery?.indexedDb.flatMap((db) =>
         db.stores.map((store) => ({
-          label: `${store.name}`,
-          insertText: store.name,
-          kind: "table" as const
+          label: store.name,
+          insertText: `"${store.name}"`,
+          kind: "store" as const
         }))
       ) ?? [];
-
-    const columnSuggestions =
+    const fields =
       tableResult?.columns.map((column) => ({
         label: column,
-        insertText: column,
-        kind: "column" as const
+        insertText: `"${column}"`,
+        kind: "field" as const
       })) ?? [];
+    const operators: QuerySuggestion[] = [
+      "$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin", "$regex", "$exists", "$and", "$or", "$not"
+    ].map((op) => ({ label: op, insertText: `"${op}"`, kind: "operator" as const }));
 
     return Array.from(
-      new Map([...tableSuggestions, ...columnSuggestions, ...keywordSuggestions].map((item) => [item.insertText, item])).values()
+      new Map([...stores, ...fields, ...operators].map((item) => [item.insertText, item])).values()
     );
   }, [discovery, tableResult?.columns]);
-
-  const sqlSuggestions = useMemo(() => {
-    const beforeCursor = queryText.slice(0, sqlCursor);
-    const tokenMatch = beforeCursor.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
-    const token = tokenMatch?.[1] ?? "";
-
-    const onlyTables = /\bFROM\s+$/i.test(beforeCursor) || /\bJOIN\s+$/i.test(beforeCursor);
-    const onlyColumns = /\bSELECT\s+$/i.test(beforeCursor) || /\bWHERE\s+$/i.test(beforeCursor);
-
-    const candidates = sqlSuggestionPool.filter((item) => {
-      if (onlyTables) return item.kind === "table";
-      if (onlyColumns) return item.kind === "column" || item.kind === "keyword";
-      return true;
-    });
-
-    if (!token) return candidates.slice(0, 6);
-
-    return candidates
-      .filter((item) => item.insertText.toLowerCase().startsWith(token.toLowerCase()) && item.insertText.toLowerCase() !== token.toLowerCase())
-      .slice(0, 6);
-  }, [queryText, sqlCursor, sqlSuggestionPool]);
-
-  const applySqlSuggestion = (suggestion: SqlSuggestion) => {
-    const cursor = sqlEditorRef.current?.selectionStart ?? sqlCursor;
-    const beforeCursor = queryText.slice(0, cursor);
-    const tokenMatch = beforeCursor.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
-    const replaceStart = tokenMatch ? cursor - tokenMatch[1].length : cursor;
-    const nextQuery = `${queryText.slice(0, replaceStart)}${suggestion.insertText}${queryText.slice(cursor)}`;
-    const nextCursor = replaceStart + suggestion.insertText.length;
-
-    setQueryText(nextQuery);
-    setSqlCursor(nextCursor);
-
-    requestAnimationFrame(() => {
-      sqlEditorRef.current?.focus();
-      sqlEditorRef.current?.setSelectionRange(nextCursor, nextCursor);
-    });
-  };
 
   return (
     <main className={`${theme} flex h-screen min-w-[1100px] flex-col bg-background text-foreground`}>
@@ -621,7 +716,7 @@ function App() {
             SS
           </span>
           <div className="min-w-0">
-            <h1 className="text-sm font-bold leading-tight">Storage Studio</h1>
+            <h1 className="text-sm font-bold leading-tight">IdxBeaver</h1>
             <p className="truncate text-xs text-muted-foreground">{discovery?.origin ?? "Inspecting current tab"}</p>
           </div>
         </div>
@@ -693,9 +788,15 @@ function App() {
             <StorageTree
               discovery={discovery}
               selected={selected}
-              visibleDbNames={visibleDbNames}
+              visibleDbKeys={visibleDbKeys}
+              duplicateDbNames={duplicateDbNames}
+              multiOrigin={multiOrigin}
               openNode={openNode}
               openSql={() => setActiveTabId("sql")}
+              onRequestDeleteDatabase={requestDeleteDatabase}
+              onRequestDeleteStore={requestDeleteStore}
+              onRequestClearStore={requestClearStore}
+              onHideDatabase={hideDatabaseFromView}
             />
           </aside>
         </ResizablePanel>
@@ -746,18 +847,26 @@ function App() {
               </TabsList>
             </Tabs>
 
-            <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3">
-              <div className="min-w-0">
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+              <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
                   {activeTabId === "sql" ? "Query editor" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "IndexedDB table" : selected.surface}
                 </p>
-                <h2 className="truncate text-xl font-black">{activeTabId === "sql" ? "SQL Query" : titleForSelection(selected)}</h2>
+                <h2 className="truncate text-xl font-black">{activeTabId === "sql" ? "Query" : titleForSelection(selected)}</h2>
+                {activeTabId !== "sql" && selected.kind === "indexeddb" && (
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                    <OriginBadge origin={selected.origin} />
+                    <span className="inline-flex items-center rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-tight text-muted-foreground">
+                      {selected.dbName} · v{selected.dbVersion}
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <label className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    className="w-64 rounded-full pl-9"
+                    className="h-10 w-64 rounded-xl pl-9"
                     value={filterText}
                     onChange={(event) => setFilterText(event.target.value)}
                     placeholder="Search for field or value..."
@@ -864,45 +973,28 @@ function App() {
 
             {activeTabId === "sql" && (
               <section className="flex min-h-0 flex-1 flex-col">
-                <div className="grid min-h-72 grid-cols-[42px_minmax(0,1fr)] border-b border-border bg-background">
-                  <div className="border-r border-border p-4 text-right font-mono text-sm text-muted-foreground">1</div>
-                  <Textarea
-                    ref={sqlEditorRef}
-                    className="min-h-72 resize-none rounded-none border-0 p-4 font-mono text-sm leading-6 focus:ring-0"
-                    value={queryText}
-                    onChange={(event) => {
-                      setQueryText(event.target.value);
-                      setSqlCursor(event.target.selectionStart);
-                    }}
-                    onClick={(event) => setSqlCursor(event.currentTarget.selectionStart)}
-                    onKeyUp={(event) => setSqlCursor(event.currentTarget.selectionStart)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Tab" && sqlSuggestions.length > 0) {
-                        event.preventDefault();
-                        applySqlSuggestion(sqlSuggestions[0]);
-                      }
-                    }}
-                    spellCheck={false}
-                  />
+                <div className="min-h-72 border-b border-border bg-background">
+                  <Suspense fallback={<div className="grid min-h-72 place-items-center text-sm text-muted-foreground">Loading query editor…</div>}>
+                    <QueryEditor
+                      value={queryText}
+                      onChange={setQueryText}
+                      onRun={() => void runQuery()}
+                      suggestions={querySuggestionPool}
+                      theme={theme}
+                    />
+                  </Suspense>
                 </div>
-                {sqlSuggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-2 border-b border-border bg-card px-4 py-2">
-                    {sqlSuggestions.map((suggestion) => (
-                      <button
-                        key={`${suggestion.kind}:${suggestion.insertText}`}
-                        type="button"
-                        onClick={() => applySqlSuggestion(suggestion)}
-                        className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1 font-mono text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                      >
-                        <span>{suggestion.insertText}</span>
-                        <span className="uppercase tracking-wide text-[10px]">{suggestion.kind}</span>
-                      </button>
-                    ))}
+                <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold uppercase tracking-wide">Examples</span>
+                    <QueryExampleButton onClick={() => setQueryText(exampleFindActive(selected))}>Active rows</QueryExampleButton>
+                    <QueryExampleButton onClick={() => setQueryText(exampleTopByCreated(selected))}>Top 10 by createdAt</QueryExampleButton>
+                    <QueryExampleButton onClick={() => setQueryText(exampleRegex(selected))}>Email regex</QueryExampleButton>
                   </div>
-                )}
-                <div className="flex items-center justify-end gap-3 border-b border-border bg-card px-4 py-2 text-sm text-muted-foreground">
-                  <span>{selected.kind === "indexeddb" ? `Context: ${selected.dbName}.${selected.storeName}` : "Select a table from the sidebar for query context"}</span>
-                  <PrimaryActionButton onClick={runQuery} disabled={busy || selected.kind !== "indexeddb"}>Run Current ⌘↵</PrimaryActionButton>
+                  <div className="flex items-center gap-3">
+                    <span>{selected.kind === "indexeddb" ? `Context: ${shortOrigin(selected.origin)} · ${selected.dbName} v${selected.dbVersion} · ${selected.storeName}` : "Select a store from the sidebar for query context"}</span>
+                    <PrimaryActionButton onClick={runQuery} disabled={busy || selected.kind !== "indexeddb"}>Run ⌘↵</PrimaryActionButton>
+                  </div>
                 </div>
                 {queryResult ? (
                   <>
@@ -917,7 +1009,17 @@ function App() {
                     />
                   </>
                 ) : (
-                  <p className="grid min-h-64 place-items-center text-muted-foreground">Write a SELECT query, pick a table for context, and run it.</p>
+                  <div className="grid min-h-64 place-items-center p-6 text-sm text-muted-foreground">
+                    <div className="max-w-md space-y-2 text-center">
+                      <p className="font-semibold text-foreground">Write a MongoDB-style query in JSON.</p>
+                      <p>
+                        Required: <code className="font-mono">"store"</code>. Optional: <code className="font-mono">"filter"</code>, <code className="font-mono">"sort"</code>, <code className="font-mono">"limit"</code>, <code className="font-mono">"project"</code>.
+                      </p>
+                      <p>
+                        Operators: <code className="font-mono">$eq $ne $gt $gte $lt $lte $in $nin $regex $exists $and $or $not</code>. Nested paths use dots, e.g. <code className="font-mono">"profile.country"</code>.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </section>
             )}
@@ -954,7 +1056,7 @@ function App() {
 
       <Dialog open={databasePickerOpen} onOpenChange={setDatabasePickerOpen}>
         <DialogContent
-          className="max-h-[min(80vh,40rem)] max-w-[min(640px,calc(100vw-2.5rem))] gap-0 overflow-hidden border-border bg-background p-0 text-foreground shadow-2xl"
+          className="max-h-[min(85vh,48rem)] max-w-[min(960px,calc(100vw-2.5rem))] gap-0 overflow-hidden border-border bg-background p-0 text-foreground shadow-2xl sm:max-w-[min(960px,calc(100vw-2.5rem))]"
           showCloseButton={false}
         >
           <DialogHeader className="border-b border-border px-5 py-4">
@@ -977,42 +1079,71 @@ function App() {
             <CommandList className="max-h-[min(52vh,24rem)] px-4 py-3">
               <CommandEmpty className="py-10 text-sm text-muted-foreground">No matching databases.</CommandEmpty>
               <CommandGroup heading="In view" className="px-0 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pb-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-black **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em]">
-                {visibleDbs.map((db) => (
-                  <CommandItem
-                    key={`visible:${db.name}`}
-                    value={`visible ${db.name}`}
-                    onSelect={() => hideDatabaseFromView(db.name)}
-                    className="min-h-11 rounded-lg px-4 text-sm"
-                  >
-                    <Database className="size-4" />
-                    <span className="truncate font-semibold">{db.name}</span>
-                    <CommandShortcut className="text-destructive group-data-selected/command-item:text-destructive">
-                      <X className="size-4" />
-                    </CommandShortcut>
-                  </CommandItem>
-                ))}
+                {visibleDbs.map((db) => {
+                  const key = dbKey(db);
+                  return (
+                    <CommandItem
+                      key={`visible:${key}`}
+                      value={`visible ${db.name} ${db.origin}`}
+                      onSelect={() => hideDatabaseFromView(key)}
+                      className="min-h-11 rounded-lg px-4 text-sm"
+                    >
+                      <Database className="size-4" />
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="truncate font-semibold">{db.name}</span>
+                        {(multiOrigin || duplicateDbNames.has(db.name)) && (
+                          <OriginBadge origin={db.origin} />
+                        )}
+                      </span>
+                      <CommandShortcut className="flex items-center gap-2 text-destructive group-data-selected/command-item:text-destructive">
+                        <span className="text-xs tracking-normal text-muted-foreground">v{db.version}</span>
+                        <X className="size-4" />
+                      </CommandShortcut>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
               <CommandSeparator className="my-3" />
               <CommandGroup heading="Available" className="px-0 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pb-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-black **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em]">
-                {hiddenDbs.map((db) => (
-                  <CommandItem
-                    key={`hidden:${db.name}`}
-                    value={`available ${db.name}`}
-                    onSelect={() => showDatabaseInView(db.name)}
-                    className="min-h-11 rounded-lg px-4 text-sm"
-                  >
-                    <Plus className="size-4" />
-                    <span className="truncate font-semibold">{db.name}</span>
-                    <CommandShortcut className="text-xs tracking-normal text-muted-foreground group-data-selected/command-item:text-foreground">
-                      v{db.version}
-                    </CommandShortcut>
-                  </CommandItem>
-                ))}
+                {hiddenDbs.map((db) => {
+                  const key = dbKey(db);
+                  return (
+                    <CommandItem
+                      key={`hidden:${key}`}
+                      value={`available ${db.name} ${db.origin}`}
+                      onSelect={() => showDatabaseInView(key)}
+                      className="min-h-11 rounded-lg px-4 text-sm"
+                    >
+                      <Plus className="size-4" />
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="truncate font-semibold">{db.name}</span>
+                        {(multiOrigin || duplicateDbNames.has(db.name)) && (
+                          <OriginBadge origin={db.origin} />
+                        )}
+                      </span>
+                      <CommandShortcut className="text-xs tracking-normal text-muted-foreground group-data-selected/command-item:text-foreground">
+                        v{db.version}
+                      </CommandShortcut>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             </CommandList>
           </Command>
-          <div className="border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
-            {visibleDbNames.length} of {discovery?.indexedDb.length ?? 0} databases visible
+          <div className="flex items-center justify-between border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
+            <span>
+              {visibleDbKeys.length} of {discovery?.indexedDb.length ?? 0} databases visible
+            </span>
+            <span className="flex items-center gap-2">
+              <span>
+                scanned {discovery?.frames.length ?? 0} frame{(discovery?.frames.length ?? 0) === 1 ? "" : "s"}
+              </span>
+              {(discovery?.frames.length ?? 0) > 0 && (
+                <span className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] tracking-tight">
+                  {new Set(discovery?.frames.map((f) => f.origin)).size} origins
+                </span>
+              )}
+            </span>
           </div>
         </DialogContent>
       </Dialog>
@@ -1035,13 +1166,13 @@ function App() {
             </div>
           </Alert>
           <div className="flex items-center justify-end gap-2 border-t border-border/80 bg-card px-5 py-4">
-            <Button variant="outline" size="sm" className="min-w-24 rounded-xl" onClick={() => setPendingAction(null)}>
+            <Button variant="outline" size="sm" className="min-w-24 rounded-md" onClick={() => setPendingAction(null)}>
               Cancel
             </Button>
             <Button
               variant="destructive"
               size="sm"
-              className="min-w-28 rounded-xl"
+              className="min-w-28 rounded-md"
               onClick={() => void confirmPendingAction()}
               disabled={busy}
             >
@@ -1051,6 +1182,33 @@ function App() {
         </DialogContent>
       </Dialog>
     </main>
+  );
+}
+
+function exampleFindActive(selected: SelectedNode) {
+  const store = selected.kind === "indexeddb" ? selected.storeName : "store";
+  return JSON.stringify({ store, filter: { active: true }, limit: 50 }, null, 2);
+}
+
+function exampleTopByCreated(selected: SelectedNode) {
+  const store = selected.kind === "indexeddb" ? selected.storeName : "store";
+  return JSON.stringify({ store, filter: {}, sort: { createdAt: -1 }, limit: 10 }, null, 2);
+}
+
+function exampleRegex(selected: SelectedNode) {
+  const store = selected.kind === "indexeddb" ? selected.storeName : "store";
+  return JSON.stringify({ store, filter: { email: { $regex: "@example\\.com$" } }, limit: 25 }, null, 2);
+}
+
+function QueryExampleButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1102,7 +1260,6 @@ function RecordInspector({
             </TabsList>
             <SecondaryActionButton onClick={onCopy}>
               <Copy data-icon="inline-start" />
-              Copy
             </SecondaryActionButton>
           </div>
           <TabsContent value="document" className="min-h-0">
@@ -1201,13 +1358,10 @@ function parseAndValidateJson(source: string): SerializableValue {
 
 function findSerializableJsonError(value: SerializableValue, path = "$"): string | null {
   if (value === null) return null;
-
   if (typeof value === "string" || typeof value === "boolean") return null;
-
   if (typeof value === "number") {
     return Number.isFinite(value) ? null : `${path} must be a finite number`;
   }
-
   if (Array.isArray(value)) {
     for (let index = 0; index < value.length; index += 1) {
       const nestedError = findSerializableJsonError(value[index] as SerializableValue, `${path}[${index}]`);
@@ -1215,7 +1369,6 @@ function findSerializableJsonError(value: SerializableValue, path = "$"): string
     }
     return null;
   }
-
   if (typeof value === "object") {
     for (const [key, nestedValue] of Object.entries(value)) {
       const nestedError = findSerializableJsonError(nestedValue as SerializableValue, `${path}.${key}`);
@@ -1223,13 +1376,27 @@ function findSerializableJsonError(value: SerializableValue, path = "$"): string
     }
     return null;
   }
-
   return `${path} contains a non-serializable value`;
 }
 
 function tabForNode(node: Exclude<SelectedNode, { kind: "overview" }>): WorkspaceTab {
   if (node.kind === "kv") return { id: node.surface, title: node.surface, node };
-  return { id: `${node.dbName}:${node.storeName}`, title: node.storeName, node };
+  return {
+    id: `${node.origin}::${node.dbName}::v${node.dbVersion}:${node.storeName}`,
+    title: node.storeName,
+    node
+  };
+}
+
+function OriginBadge({ origin }: { origin: string }) {
+  return (
+    <span
+      className="inline-flex max-w-[18rem] min-w-0 items-center rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] font-medium leading-none tracking-tight text-muted-foreground"
+      title={origin}
+    >
+      <span className="truncate">{shortOrigin(origin)}</span>
+    </span>
+  );
 }
 
 function isCollapsedPanelSize(size: PanelSize) {
@@ -1242,7 +1409,6 @@ function useStorageRpc() {
 
   useEffect(() => {
     if (!extensionRuntime) return;
-
     const port = connectPort(portRef, pendingRef);
     return () => {
       port.disconnect();
@@ -1283,7 +1449,7 @@ function connectPort(
     if (portRef.current === port) {
       portRef.current = null;
     }
-    const disconnectError = chrome.runtime.lastError?.message ?? "Storage Studio disconnected from the background worker.";
+    const disconnectError = chrome.runtime.lastError?.message ?? "IdxBeaver disconnected from the background worker.";
     for (const resolve of pendingRef.current.values()) {
       resolve({ ok: false, error: disconnectError });
     }
@@ -1302,6 +1468,8 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
           {
             name: "local_first_app",
             version: 3,
+            origin: "https://app.example.test",
+            frameId: 0,
             stores: [
               {
                 name: "users",
@@ -1318,7 +1486,26 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
                 indexes: [{ name: "createdAt", keyPath: "createdAt", unique: false, multiEntry: false }]
               }
             ]
+          },
+          {
+            name: "local_first_app",
+            version: 2,
+            origin: "https://child.example.test",
+            frameId: 1,
+            stores: [
+              {
+                name: "users",
+                keyPath: "id",
+                autoIncrement: false,
+                count: 1,
+                indexes: []
+              }
+            ]
           }
+        ],
+        frames: [
+          { frameId: 0, origin: "https://app.example.test", url: "https://app.example.test/" },
+          { frameId: 1, origin: "https://child.example.test", url: "https://child.example.test/iframe" }
         ],
         localStorage: { count: 4, bytes: 2048 },
         sessionStorage: { count: 2, bytes: 420 }
@@ -1328,18 +1515,9 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
 
   if (request.type === "readIndexedDbStore" || request.type === "runIndexedDbQuery") {
     const rows = [
-      {
-        key: 1,
-        value: { type: "object", preview: "{ id, email, role, active }", value: { id: 1, email: "ada@example.com", role: "admin", active: true } }
-      },
-      {
-        key: 2,
-        value: { type: "object", preview: "{ id, email, role, active }", value: { id: 2, email: "grace@example.com", role: "editor", active: true } }
-      },
-      {
-        key: 3,
-        value: { type: "object", preview: "{ id, email, role, active }", value: { id: 3, email: "linus@example.com", role: "viewer", active: false } }
-      }
+      { key: 1, value: { type: "object", preview: "{ id, email, role, active }", value: { id: 1, email: "ada@example.com", role: "admin", active: true } } },
+      { key: 2, value: { type: "object", preview: "{ id, email, role, active }", value: { id: 2, email: "grace@example.com", role: "editor", active: true } } },
+      { key: 3, value: { type: "object", preview: "{ id, email, role, active }", value: { id: 3, email: "linus@example.com", role: "viewer", active: false } } }
     ];
 
     if (request.type === "runIndexedDbQuery") {
@@ -1381,37 +1559,50 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
 function StorageTree({
   discovery,
   selected,
-  visibleDbNames,
+  visibleDbKeys,
+  duplicateDbNames,
+  multiOrigin,
   openNode,
-  openSql
+  openSql,
+  onRequestDeleteDatabase,
+  onRequestDeleteStore,
+  onRequestClearStore,
+  onHideDatabase
 }: {
   discovery: StorageDiscovery | null;
   selected: SelectedNode;
-  visibleDbNames: string[];
+  visibleDbKeys: string[];
+  duplicateDbNames: Set<string>;
+  multiOrigin: boolean;
   openNode: (node: SelectedNode, options?: { persist?: boolean }) => void;
   openSql: () => void;
+  onRequestDeleteDatabase: (db: IndexedDbDatabaseInfo) => void;
+  onRequestDeleteStore: (db: IndexedDbDatabaseInfo, storeName: string) => void;
+  onRequestClearStore: (db: IndexedDbDatabaseInfo, storeName: string) => void;
+  onHideDatabase: (key: string) => void;
 }) {
-  const [expandedDbNames, setExpandedDbNames] = useState<Set<string>>(new Set());
+  const [expandedDbKeys, setExpandedDbKeys] = useState<Set<string>>(new Set());
 
+  // Never auto-expand on discovery; the user decides what to open.
   useEffect(() => {
     if (!discovery?.indexedDb.length) {
-      setExpandedDbNames(new Set());
+      setExpandedDbKeys(new Set());
       return;
     }
     if (selected.kind === "indexeddb") {
-      setExpandedDbNames((current) => new Set([...current, selected.dbName]));
+      const key = dbKeyFromSelected(selected);
+      setExpandedDbKeys((current) => new Set([...current, key]));
       return;
     }
-    setExpandedDbNames((current) => {
-      const existing = Array.from(current).filter((name) => discovery.indexedDb.some((db) => db.name === name));
-      return existing.length ? new Set(existing) : new Set([discovery.indexedDb[0].name]);
+    setExpandedDbKeys((current) => {
+      const allowed = new Set(discovery.indexedDb.map(dbKey));
+      return new Set(Array.from(current).filter((key) => allowed.has(key)));
     });
   }, [discovery, selected]);
 
   if (!discovery) return <p className="py-4 text-sm text-muted-foreground">Open DevTools on a page and refresh storage.</p>;
 
-  const visibleDbs = discovery.indexedDb.filter((db) => visibleDbNames.includes(db.name));
-  const hiddenDbs = discovery.indexedDb.filter((db) => !visibleDbNames.includes(db.name));
+  const visibleDbs = discovery.indexedDb.filter((db) => visibleDbKeys.includes(dbKey(db)));
 
   return (
     <nav className="flex flex-col gap-1">
@@ -1419,62 +1610,110 @@ function StorageTree({
         Origin dashboard
       </Button>
       <Button variant="outline" className="justify-between" onClick={openSql}>
-        SQL Query <span className="text-muted-foreground">⌘↵</span>
+        Query <span className="text-muted-foreground">⌘↵</span>
       </Button>
 
       <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">IndexedDB</h3>
       {discovery.indexedDb.length === 0 && <p className="text-sm text-muted-foreground">No IndexedDB databases.</p>}
       {visibleDbs.length === 0 && discovery.indexedDb.length > 0 && (
         <p className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-          Add a database above to browse its stores.
+          Click <span className="font-semibold text-foreground">Open</span> above to browse a database.
         </p>
       )}
-      {visibleDbs.map((db) => (
-        <div key={db.name} className="flex flex-col gap-1">
-          <Button
-            variant={selected.kind === "indexeddb" && selected.dbName === db.name ? "secondary" : "ghost"}
-            className="justify-between"
-            onClick={() => {
-              setExpandedDbNames((current) => {
-                const next = new Set(current);
-                if (next.has(db.name)) next.delete(db.name);
-                else next.add(db.name);
-                return next;
-              });
-            }}
-            aria-expanded={expandedDbNames.has(db.name)}
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <ChevronRight
-                data-icon="inline-start"
-                className={expandedDbNames.has(db.name) ? "rotate-90 transition-transform" : "transition-transform"}
-              />
-              <Database data-icon="inline-start" />
-              <span className="truncate">{db.name}</span>
-            </span>
-            <span className="text-xs text-muted-foreground">v{db.version}</span>
-          </Button>
-          {expandedDbNames.has(db.name) && (
-            <div className="ml-4 flex flex-col gap-1 border-l border-border pl-2">
-              {db.stores.map((store) => (
+      {visibleDbs.map((db) => {
+        const key = dbKey(db);
+        const isExpanded = expandedDbKeys.has(key);
+        const isSelectedDb = selected.kind === "indexeddb" && selected.dbName === db.name && selected.dbVersion === db.version && selected.origin === db.origin;
+        const showOrigin = multiOrigin || duplicateDbNames.has(db.name);
+        return (
+          <div key={key} className="flex flex-col gap-1">
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
                 <Button
-                  key={`${db.name}:${store.name}`}
-                  variant={selected.kind === "indexeddb" && selected.dbName === db.name && selected.storeName === store.name ? "secondary" : "ghost"}
-                  className="justify-between"
-                  onClick={() => openNode({ kind: "indexeddb", dbName: db.name, storeName: store.name })}
-                  onDoubleClick={() => openNode({ kind: "indexeddb", dbName: db.name, storeName: store.name }, { persist: true })}
+                  variant={isSelectedDb ? "secondary" : "ghost"}
+                  className={cn(
+                    "h-auto justify-between py-1.5",
+                    isSelectedDb && "bg-accent text-accent-foreground ring-1 ring-ring/30"
+                  )}
+                  onClick={() => {
+                    setExpandedDbKeys((current) => {
+                      const next = new Set(current);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  aria-expanded={isExpanded}
                 >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Table2 data-icon="inline-start" />
-                    <span className="truncate">{store.name}</span>
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <ChevronRight
+                      data-icon="inline-start"
+                      className={isExpanded ? "rotate-90 transition-transform" : "transition-transform"}
+                    />
+                    <Database data-icon="inline-start" />
+                    <span className="flex min-w-0 flex-col items-start gap-0.5">
+                      <span className="truncate">{db.name}</span>
+                      {showOrigin && <OriginBadge origin={db.origin} />}
+                    </span>
                   </span>
-                  <span className="text-muted-foreground">{store.count ?? "?"}</span>
+                  <span className={cn("text-xs text-muted-foreground", isSelectedDb && "text-current/75")}>
+                    v{db.version}
+                  </span>
                 </Button>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
+              </ContextMenuTrigger>
+              <ContextMenuContent className="w-52">
+                <ContextMenuItem onSelect={() => onHideDatabase(key)}>Hide from sidebar</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem variant="destructive" onSelect={() => onRequestDeleteDatabase(db)}>
+                  Delete database
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+            {isExpanded && (
+              <div className="ml-4 flex flex-col gap-1 border-l border-border pl-2">
+                {db.stores.map((store) => {
+                  const isSelectedStore = isSelectedDb && selected.kind === "indexeddb" && selected.storeName === store.name;
+                  return (
+                    <ContextMenu key={`${key}:${store.name}`}>
+                      <ContextMenuTrigger asChild>
+                        <Button
+                          variant={isSelectedStore ? "secondary" : "ghost"}
+                          className={cn(
+                            "justify-between",
+                            isSelectedStore && "bg-primary text-primary-foreground ring-1 ring-primary/70 shadow-sm hover:bg-primary/90"
+                          )}
+                          onClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId })}
+                          onDoubleClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <Table2 data-icon="inline-start" />
+                            <span className="truncate">{store.name}</span>
+                          </span>
+                          <span className={cn("text-muted-foreground", isSelectedStore && "text-primary-foreground/80")}>
+                            {store.count ?? "?"}
+                          </span>
+                        </Button>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="w-52">
+                        <ContextMenuItem onSelect={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}>
+                          Open in tab
+                        </ContextMenuItem>
+                        <ContextMenuItem onSelect={() => onRequestClearStore(db, store.name)}>
+                          Clear store
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem variant="destructive" onSelect={() => onRequestDeleteStore(db, store.name)}>
+                          Delete store
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Storage</h3>
       <Button variant={selected.kind === "kv" && selected.surface === "localStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => openNode({ kind: "kv", surface: "localStorage" }, { persist: true })}>
@@ -1489,7 +1728,7 @@ function StorageTree({
 
 function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
   if (!discovery) return <p className="p-4 text-sm text-muted-foreground">No storage metadata loaded yet.</p>;
-  const stores = discovery.indexedDb.flatMap((db) => db.stores.map((store) => ({ db: db.name, ...store })));
+  const stores = discovery.indexedDb.flatMap((db) => db.stores.map((store) => ({ db: db.name, version: db.version, origin: db.origin, ...store })));
   return (
     <section className="grid grid-cols-4 gap-3 p-4">
       <article className="rounded-lg border border-border bg-card p-4">
@@ -1515,7 +1754,7 @@ function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
       <section className="col-span-4 rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Largest stores</h3>
         {stores.length === 0 ? <p>No object stores found.</p> : stores.sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).slice(0, 8).map((store) => (
-          <div className="flex justify-between border-t border-border py-3" key={`${store.db}:${store.name}`}>
+          <div className="flex justify-between border-t border-border py-3" key={`${store.origin}::${store.db}:v${store.version}:${store.name}`}>
             <span>{store.db}.{store.name}</span>
             <strong>{store.count ?? "?"} rows</strong>
           </div>
@@ -1554,45 +1793,16 @@ function PanelToggleButton({
   );
 }
 
-function PrimaryActionButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof Button>) {
-  return (
-    <Button
-      size="sm"
-      className={`font-semibold ${className ?? ""}`}
-      {...props}
-    />
-  );
+function PrimaryActionButton({ className, ...props }: React.ComponentProps<typeof Button>) {
+  return <Button size="sm" className={`font-semibold ${className ?? ""}`} {...props} />;
 }
 
-function SecondaryActionButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof Button>) {
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      className={`font-semibold ${className ?? ""}`}
-      {...props}
-    />
-  );
+function SecondaryActionButton({ className, ...props }: React.ComponentProps<typeof Button>) {
+  return <Button variant="outline" size="sm" className={`font-semibold ${className ?? ""}`} {...props} />;
 }
 
-function DestructiveActionButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof Button>) {
-  return (
-    <Button
-      variant="destructive"
-      size="sm"
-      className={`font-semibold ${className ?? ""}`}
-      {...props}
-    />
-  );
+function DestructiveActionButton({ className, ...props }: React.ComponentProps<typeof Button>) {
+  return <Button variant="destructive" size="sm" className={`font-semibold ${className ?? ""}`} {...props} />;
 }
 
 function DataGrid({
@@ -1717,16 +1927,8 @@ function KvGrid({
         header: "Key",
         cell: ({ row }) => <code className="font-mono text-foreground">{row.original.key}</code>
       },
-      {
-        id: "value",
-        header: "Value",
-        accessorFn: (row) => row.parsed.preview
-      },
-      {
-        id: "type",
-        header: "Type",
-        accessorFn: (row) => row.parsed.type
-      },
+      { id: "value", header: "Value", accessorFn: (row) => row.parsed.preview },
+      { id: "type", header: "Type", accessorFn: (row) => row.parsed.type },
       {
         id: "actions",
         header: "",
@@ -1815,7 +2017,7 @@ function renderColumn(record: IndexedDbRecord, column: string) {
 function titleForSelection(selected: SelectedNode) {
   if (selected.kind === "overview") return "Origin dashboard";
   if (selected.kind === "kv") return selected.surface;
-  return `${selected.dbName}.${selected.storeName}`;
+  return selected.storeName;
 }
 
 function toCsv(rows: unknown[]) {

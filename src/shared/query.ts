@@ -1,70 +1,62 @@
-import type { ComparisonOperator, QueryCondition, QueryPlan, SerializedCell } from "./types";
+import type { NoSqlQuery } from "./types";
 
-const queryPattern =
-  /^SELECT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_$.-]+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+([a-zA-Z0-9_$.]+)(?:\s+(ASC|DESC))?)?(?:\s+LIMIT\s+(\d+))?\s*;?$/i;
-
-const conditionPattern =
-  /^\s*([a-zA-Z0-9_$.]+)\s*(=|!=|<=|>=|<|>|LIKE)\s*(null|true|false|-?\d+(?:\.\d+)?|'[^']*'|"[^"]*")\s*$/i;
-
-export function parseSelectQuery(input: string): QueryPlan {
+export function parseMongoQuery(input: string): NoSqlQuery {
   const trimmed = input.trim();
-  const match = queryPattern.exec(trimmed);
-  if (!match) {
-    throw new Error("Use SELECT columns FROM store WHERE field = value ORDER BY field LIMIT n.");
+  if (!trimmed) {
+    throw new Error("Query is empty. Provide a JSON object with at least a \"store\" field.");
   }
 
-  const [, rawColumns, storeName, rawWhere, orderColumn, orderDirection, rawLimit] = match;
-  const select = rawColumns.trim() === "*" ? ["*"] : rawColumns.split(",").map((column) => column.trim()).filter(Boolean);
-  if (select.length === 0) {
-    throw new Error("Select at least one column or use *.");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    throw new Error(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const where = rawWhere ? parseWhere(rawWhere) : [];
-  const limit = rawLimit ? Number(rawLimit) : 200;
-  if (!Number.isInteger(limit) || limit < 1 || limit > 5000) {
-    throw new Error("LIMIT must be between 1 and 5000.");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Query must be a JSON object, e.g. { \"store\": \"users\", \"filter\": {} }.");
+  }
+
+  const obj = parsed as Record<string, unknown>;
+
+  if (typeof obj.store !== "string" || !obj.store.trim()) {
+    throw new Error("Query must include a non-empty \"store\" string.");
+  }
+
+  if (obj.filter !== undefined && (obj.filter === null || typeof obj.filter !== "object" || Array.isArray(obj.filter))) {
+    throw new Error("\"filter\" must be an object.");
+  }
+
+  if (obj.sort !== undefined) {
+    if (!obj.sort || typeof obj.sort !== "object" || Array.isArray(obj.sort)) {
+      throw new Error("\"sort\" must be an object mapping fields to 1 or -1.");
+    }
+    for (const value of Object.values(obj.sort as Record<string, unknown>)) {
+      if (value !== 1 && value !== -1) {
+        throw new Error("\"sort\" values must be 1 (asc) or -1 (desc).");
+      }
+    }
+  }
+
+  if (obj.limit !== undefined) {
+    if (typeof obj.limit !== "number" || !Number.isInteger(obj.limit) || obj.limit < 1 || obj.limit > 5000) {
+      throw new Error("\"limit\" must be an integer between 1 and 5000.");
+    }
+  }
+
+  if (obj.project !== undefined) {
+    if (!Array.isArray(obj.project) || !obj.project.every((item) => typeof item === "string")) {
+      throw new Error("\"project\" must be an array of field-path strings.");
+    }
   }
 
   return {
-    select,
-    storeName,
-    where,
-    orderBy: orderColumn
-      ? { column: orderColumn, direction: orderDirection?.toUpperCase() === "DESC" ? "DESC" : "ASC" }
-      : undefined,
-    limit,
-    explain: buildExplain(where, orderColumn, limit)
+    store: obj.store,
+    filter: (obj.filter as Record<string, unknown> | undefined) ?? {},
+    sort: obj.sort as NoSqlQuery["sort"],
+    limit: (obj.limit as number | undefined) ?? 200,
+    project: obj.project as string[] | undefined
   };
-}
-
-function parseWhere(rawWhere: string): QueryCondition[] {
-  return rawWhere.split(/\s+AND\s+/i).map((rawCondition) => {
-    const match = conditionPattern.exec(rawCondition);
-    if (!match) {
-      throw new Error(`Unsupported WHERE condition: ${rawCondition.trim()}`);
-    }
-
-    const [, column, operator, rawValue] = match;
-    return {
-      column,
-      operator: operator.toUpperCase() as ComparisonOperator,
-      value: parseLiteral(rawValue)
-    };
-  });
-}
-
-function parseLiteral(rawValue: string): string | number | boolean | null {
-  if (/^null$/i.test(rawValue)) return null;
-  if (/^true$/i.test(rawValue)) return true;
-  if (/^false$/i.test(rawValue)) return false;
-  if (/^-?\d+(?:\.\d+)?$/.test(rawValue)) return Number(rawValue);
-  return rawValue.slice(1, -1);
-}
-
-function buildExplain(where: QueryCondition[], orderColumn: string | undefined, limit: number): string {
-  const predicates = where.length === 0 ? "no predicates" : `${where.length} predicate${where.length === 1 ? "" : "s"}`;
-  const ordering = orderColumn ? `, order by ${orderColumn}` : "";
-  return `SELECT scan with ${predicates}${ordering}, limit ${limit}. Indexed fast path is used when the first predicate matches an object-store index.`;
 }
 
 export function getPathValue(value: unknown, path: string): unknown {
@@ -74,27 +66,4 @@ export function getPathValue(value: unknown, path: string): unknown {
     }
     return undefined;
   }, value);
-}
-
-export function compareValues(actual: unknown, operator: ComparisonOperator, expected: unknown): boolean {
-  if (operator === "LIKE") {
-    const pattern = String(expected).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*");
-    return new RegExp(`^${pattern}$`, "i").test(String(actual ?? ""));
-  }
-
-  if (operator === "=") return actual === expected;
-  if (operator === "!=") return actual !== expected;
-
-  if (typeof actual !== "number" && typeof actual !== "string") return false;
-  if (typeof expected !== "number" && typeof expected !== "string") return false;
-
-  if (operator === "<") return actual < expected;
-  if (operator === "<=") return actual <= expected;
-  if (operator === ">") return actual > expected;
-  if (operator === ">=") return actual >= expected;
-  return false;
-}
-
-export function serializedPreview(cell: SerializedCell): string {
-  return cell.preview || String(cell.value ?? "");
 }

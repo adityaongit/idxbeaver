@@ -33,6 +33,12 @@ export interface IndexedDbDatabaseInfo {
   name: string;
   version: number;
   stores: IndexedDbStoreInfo[];
+  // The inspected page can contain iframes with distinct origins, and each
+  // origin has its own IndexedDB partition. We tag every discovered DB with
+  // the frame origin that returned it, plus the frameId we can use to route
+  // follow-up RPCs to that frame.
+  origin: string;
+  frameId: number;
 }
 
 export interface StorageDiscovery {
@@ -40,6 +46,13 @@ export interface StorageDiscovery {
   indexedDb: IndexedDbDatabaseInfo[];
   localStorage: StorageKvSummary;
   sessionStorage: StorageKvSummary;
+  frames: FrameInfo[];
+}
+
+export interface FrameInfo {
+  frameId: number;
+  origin: string;
+  url: string;
 }
 
 export interface StorageKvSummary {
@@ -68,24 +81,15 @@ export interface KvReadResult {
   rows: KeyValueRecord[];
 }
 
-export type ComparisonOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "LIKE";
+export type MongoFilter = Record<string, unknown>;
+export type MongoSort = Record<string, 1 | -1>;
 
-export interface QueryCondition {
-  column: string;
-  operator: ComparisonOperator;
-  value: string | number | boolean | null;
-}
-
-export interface QueryPlan {
-  select: string[];
-  storeName: string;
-  where: QueryCondition[];
-  orderBy?: {
-    column: string;
-    direction: "ASC" | "DESC";
-  };
-  limit: number;
-  explain: string;
+export interface NoSqlQuery {
+  store: string;
+  filter?: MongoFilter;
+  sort?: MongoSort;
+  limit?: number;
+  project?: string[];
 }
 
 export interface QueryResult {
@@ -102,11 +106,14 @@ export interface IndexedCellRecord {
 
 export type StorageRequest =
   | { type: "discover"; tabId: number }
-  | { type: "readIndexedDbStore"; tabId: number; dbName: string; storeName: string; limit: number }
-  | { type: "putIndexedDbRecord"; tabId: number; dbName: string; storeName: string; key: SerializableValue; value: SerializableValue }
-  | { type: "addIndexedDbRecord"; tabId: number; dbName: string; storeName: string; key?: SerializableValue; value: SerializableValue }
-  | { type: "deleteIndexedDbRecord"; tabId: number; dbName: string; storeName: string; key: SerializableValue }
-  | { type: "runIndexedDbQuery"; tabId: number; dbName: string; plan: QueryPlan }
+  | { type: "readIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; limit: number }
+  | { type: "putIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key: SerializableValue; value: SerializableValue }
+  | { type: "addIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key?: SerializableValue; value: SerializableValue }
+  | { type: "deleteIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key: SerializableValue }
+  | { type: "runIndexedDbQuery"; tabId: number; frameId: number; dbName: string; dbVersion: number; query: NoSqlQuery }
+  | { type: "clearIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string }
+  | { type: "deleteIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string }
+  | { type: "deleteIndexedDbDatabase"; tabId: number; frameId: number; dbName: string }
   | { type: "readKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage" }
   | { type: "setKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage"; key: string; value: string }
   | { type: "removeKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage"; key: string }

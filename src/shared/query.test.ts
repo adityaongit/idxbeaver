@@ -1,45 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { compareValues, getPathValue, parseSelectQuery } from "./query";
+import { getPathValue, parseMongoQuery } from "./query";
 
-describe("parseSelectQuery", () => {
-  it("parses a basic select query with predicate, ordering, and limit", () => {
-    expect(parseSelectQuery("SELECT id, email FROM users WHERE email LIKE '%@acme.com' AND active = true ORDER BY id DESC LIMIT 50;")).toMatchObject({
-      select: ["id", "email"],
-      storeName: "users",
-      where: [
-        { column: "email", operator: "LIKE", value: "%@acme.com" },
-        { column: "active", operator: "=", value: true }
-      ],
-      orderBy: { column: "id", direction: "DESC" },
-      limit: 50
+describe("parseMongoQuery", () => {
+  it("parses a filter with operators, sort, limit, and projection", () => {
+    const input = JSON.stringify({
+      store: "users",
+      filter: { age: { $gte: 18 }, "profile.country": "IN" },
+      sort: { createdAt: -1 },
+      limit: 50,
+      project: ["id", "email"]
+    });
+    expect(parseMongoQuery(input)).toEqual({
+      store: "users",
+      filter: { age: { $gte: 18 }, "profile.country": "IN" },
+      sort: { createdAt: -1 },
+      limit: 50,
+      project: ["id", "email"]
     });
   });
 
-  it("defaults to selecting all rows with a bounded limit", () => {
-    expect(parseSelectQuery("SELECT * FROM syncQueue")).toMatchObject({
-      select: ["*"],
-      storeName: "syncQueue",
-      where: [],
+  it("defaults filter to {} and limit to 200", () => {
+    expect(parseMongoQuery(JSON.stringify({ store: "users" }))).toMatchObject({
+      store: "users",
+      filter: {},
       limit: 200
     });
   });
 
-  it("rejects unsupported syntax", () => {
-    expect(() => parseSelectQuery("DELETE FROM users")).toThrow("Use SELECT");
+  it("rejects invalid JSON", () => {
+    expect(() => parseMongoQuery("{ not json")).toThrow(/Invalid JSON/);
   });
 
-  it("rejects unbounded large limits", () => {
-    expect(() => parseSelectQuery("SELECT * FROM users LIMIT 100000")).toThrow("LIMIT must be between 1 and 5000");
+  it("requires a store name", () => {
+    expect(() => parseMongoQuery(JSON.stringify({ filter: {} }))).toThrow(/store/);
+  });
+
+  it("rejects out-of-range limits", () => {
+    expect(() => parseMongoQuery(JSON.stringify({ store: "users", limit: 99999 }))).toThrow(/limit/i);
+  });
+
+  it("rejects non-1/-1 sort values", () => {
+    expect(() => parseMongoQuery(JSON.stringify({ store: "users", sort: { x: 2 } }))).toThrow(/sort/i);
   });
 });
 
 describe("query helpers", () => {
   it("reads dotted paths", () => {
     expect(getPathValue({ profile: { email: "ada@example.com" } }, "profile.email")).toBe("ada@example.com");
-  });
-
-  it("matches LIKE conditions with percent wildcards", () => {
-    expect(compareValues("ada@example.com", "LIKE", "%@example.com")).toBe(true);
-    expect(compareValues("ada@example.com", "LIKE", "%@acme.com")).toBe(false);
   });
 });
