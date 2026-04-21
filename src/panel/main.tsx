@@ -1032,9 +1032,9 @@ function App() {
           panelRef={rightPanelRef}
           collapsible
           collapsedSize="0%"
-          defaultSize="22%"
-          minSize="240px"
-          maxSize="460px"
+          defaultSize="26%"
+          minSize="280px"
+          maxSize="560px"
           onResize={(size) => setRightPanelCollapsed(isCollapsedPanelSize(size))}
         >
           <RecordInspector
@@ -1212,6 +1212,15 @@ function QueryExampleButton({ onClick, children }: { onClick: () => void; childr
   );
 }
 
+type InferredType = "string" | "number" | "boolean" | "null" | "object" | "array";
+
+function inferType(value: SerializableValue): InferredType {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  if (typeof value === "object") return "object";
+  return typeof value as "string" | "number" | "boolean";
+}
+
 function RecordInspector({
   selected,
   selectedRecord,
@@ -1231,6 +1240,48 @@ function RecordInspector({
 }) {
   const inspectedValue = selectedRecord ? recordValue(selectedRecord) : null;
   const inspectedKey = selectedRecord ? recordKey(selectedRecord) : null;
+  const isKv = selected.kind === "kv";
+  const [fieldSearch, setFieldSearch] = useState("");
+
+  // For IndexedDB the draft is a JSON document; for KV it's a plain string.
+  // `draftValue` is the parsed, structured view that the field editor mutates.
+  // Committing back to `editDraft` (the serialized form the parent sends to the
+  // RPC) happens on every edit so the existing Save button keeps working.
+  const draftValue = useMemo<SerializableValue>(() => {
+    if (!selectedRecord) return null;
+    if (isKv) {
+      try {
+        return JSON.parse(editDraft) as SerializableValue;
+      } catch {
+        return editDraft;
+      }
+    }
+    try {
+      return JSON.parse(editDraft) as SerializableValue;
+    } catch {
+      return inspectedValue;
+    }
+  }, [editDraft, isKv, inspectedValue, selectedRecord]);
+
+  const writeDraft = useCallback(
+    (next: SerializableValue) => {
+      if (isKv && typeof next === "string") {
+        setEditDraft(next);
+      } else {
+        setEditDraft(JSON.stringify(next, null, 2));
+      }
+    },
+    [isKv, setEditDraft]
+  );
+
+  const dirty = useMemo(() => {
+    if (!selectedRecord) return false;
+    try {
+      return JSON.stringify(draftValue) !== JSON.stringify(inspectedValue);
+    } catch {
+      return true;
+    }
+  }, [draftValue, inspectedValue, selectedRecord]);
 
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-border bg-background">
@@ -1240,7 +1291,14 @@ function RecordInspector({
             <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">Inspector</p>
             <h2 className="truncate text-xl font-black">{selectedRecord ? "Selected document" : "No row selected"}</h2>
           </div>
-          {selectedRecord && <Badge variant="outline">{selected.kind === "kv" ? "Key value" : "Record"}</Badge>}
+          {selectedRecord && (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{isKv ? "Key value" : "Record"}</Badge>
+              <SecondaryActionButton onClick={onCopy} aria-label="Copy JSON">
+                <Copy className="size-4" />
+              </SecondaryActionButton>
+            </div>
+          )}
         </div>
         {selectedRecord && (
           <div className="mt-3 rounded-md border border-border bg-card px-3 py-2 font-mono text-xs">
@@ -1251,42 +1309,186 @@ function RecordInspector({
         )}
       </div>
 
-      {selectedRecord && inspectedValue !== null ? (
-        <Tabs defaultValue="document" className="min-h-0 flex-1 gap-0">
-          <div className="flex items-center justify-between border-b border-border bg-card px-2">
-            <TabsList variant="line" className="h-9 justify-start rounded-none border-0 bg-transparent px-0">
-              <TabsTrigger value="document">Document</TabsTrigger>
-              <TabsTrigger value="json">JSON</TabsTrigger>
-            </TabsList>
-            <SecondaryActionButton onClick={onCopy}>
-              <Copy data-icon="inline-start" />
-            </SecondaryActionButton>
+      {selectedRecord && draftValue !== null ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="border-b border-border px-3 py-2">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-9 w-full rounded-md pl-9 text-sm"
+                value={fieldSearch}
+                onChange={(event) => setFieldSearch(event.target.value)}
+                placeholder="Search for field..."
+              />
+            </label>
           </div>
-          <TabsContent value="document" className="min-h-0">
-            <ScrollArea className="h-full">
-              <div className="p-3">
-                <JsonDocumentView value={inspectedValue} />
-              </div>
-            </ScrollArea>
-          </TabsContent>
-          <TabsContent value="json" className="min-h-0">
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-                <Textarea
-                  className="min-h-0 flex-1 resize-none rounded-md font-mono text-xs leading-5"
-                  value={safePrettyJson(editDraft, inspectedValue)}
-                  onChange={(event) => setEditDraft(event.target.value)}
-                  spellCheck={false}
-                />
-                <PrimaryActionButton onClick={saveRecord} disabled={busy}>Save changes</PrimaryActionButton>
-              </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col gap-3 p-3">
+              <FieldEditor
+                value={draftValue}
+                onChange={writeDraft}
+                searchText={fieldSearch.trim().toLowerCase()}
+              />
             </div>
-          </TabsContent>
-        </Tabs>
+          </ScrollArea>
+          <div className="shrink-0 border-t border-border bg-card p-3">
+            <PrimaryActionButton onClick={saveRecord} disabled={busy || !dirty} className="w-full">
+              {dirty ? "Save changes" : "No changes"}
+            </PrimaryActionButton>
+          </div>
+        </div>
       ) : (
         <div className="p-4 text-sm text-muted-foreground">Select a row to inspect its fields, nested values, and raw JSON.</div>
       )}
     </aside>
+  );
+}
+
+// Top-level editor: when the document is an object, render one row per key.
+// For scalars (edited KV entries that aren't JSON objects, or scalar records),
+// render a single row keyed as "value".
+function FieldEditor({
+  value,
+  onChange,
+  searchText
+}: {
+  value: SerializableValue;
+  onChange: (next: SerializableValue) => void;
+  searchText: string;
+}) {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const entries = Object.entries(value as Record<string, SerializableValue>);
+    const filtered = searchText
+      ? entries.filter(([k]) => k.toLowerCase().includes(searchText))
+      : entries;
+
+    if (entries.length === 0) {
+      return <p className="text-xs text-muted-foreground">No fields. The document is an empty object.</p>;
+    }
+
+    return (
+      <>
+        {filtered.map(([key, fieldValue]) => (
+          <FieldRow
+            key={key}
+            name={key}
+            value={fieldValue}
+            onChange={(next) => onChange({ ...(value as Record<string, SerializableValue>), [key]: next })}
+          />
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-xs text-muted-foreground">No fields match "{searchText}".</p>
+        )}
+      </>
+    );
+  }
+
+  return <FieldRow name="value" value={value} onChange={onChange} />;
+}
+
+function FieldRow({
+  name,
+  value,
+  onChange
+}: {
+  name: string;
+  value: SerializableValue;
+  onChange: (next: SerializableValue) => void;
+}) {
+  const type = inferType(value);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate font-mono text-[11px] text-foreground" title={name}>{name}</span>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{type}</span>
+      </div>
+      <FieldInput value={value} onChange={onChange} type={type} />
+    </div>
+  );
+}
+
+function FieldInput({
+  value,
+  onChange,
+  type
+}: {
+  value: SerializableValue;
+  onChange: (next: SerializableValue) => void;
+  type: InferredType;
+}) {
+  if (type === "boolean") {
+    return (
+      <select
+        className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+        value={String(value)}
+        onChange={(event) => onChange(event.target.value === "true")}
+      >
+        <option value="true">true</option>
+        <option value="false">false</option>
+      </select>
+    );
+  }
+
+  if (type === "null") {
+    return (
+      <div className="flex items-center gap-2">
+        <Input
+          className="h-9 flex-1 cursor-not-allowed bg-muted/30 text-sm text-muted-foreground"
+          value="NULL"
+          disabled
+          readOnly
+        />
+        <Button variant="outline" size="sm" onClick={() => onChange("")}>Set</Button>
+      </div>
+    );
+  }
+
+  if (type === "number") {
+    return (
+      <Input
+        type="number"
+        className="h-9 w-full rounded-md font-mono text-sm"
+        value={value === null ? "" : String(value)}
+        onChange={(event) => {
+          const raw = event.target.value;
+          if (raw === "") {
+            onChange(0);
+            return;
+          }
+          const parsed = Number(raw);
+          onChange(Number.isFinite(parsed) ? parsed : (value as number));
+        }}
+      />
+    );
+  }
+
+  if (type === "object" || type === "array") {
+    const pretty = JSON.stringify(value, null, 2);
+    return (
+      <Textarea
+        className="min-h-28 rounded-md font-mono text-xs leading-5"
+        value={pretty}
+        spellCheck={false}
+        onChange={(event) => {
+          try {
+            onChange(JSON.parse(event.target.value) as SerializableValue);
+          } catch {
+            // Keep old value on invalid JSON; the textarea still reflects the
+            // broken text until it parses cleanly.
+          }
+        }}
+      />
+    );
+  }
+
+  // string
+  return (
+    <Input
+      className="h-9 w-full rounded-md text-sm"
+      value={value as string}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }
 
