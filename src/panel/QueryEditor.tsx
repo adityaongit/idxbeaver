@@ -3,7 +3,7 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
-import { bracketMatching, foldGutter, indentOnInput } from "@codemirror/language";
+import { bracketMatching, defaultHighlightStyle, foldGutter, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { searchKeymap } from "@codemirror/search";
 import { json } from "@codemirror/lang-json";
 
@@ -142,6 +142,7 @@ export function QueryEditor({ value, onChange, onRun, suggestions, theme }: Quer
           }
         ]),
         json(),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         suggestionCompartment.of(completionExtension),
         themeCompartment.of(createTheme(theme)),
         EditorView.updateListener.of((update) => {
