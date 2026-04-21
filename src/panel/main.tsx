@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ChevronRight, Database, Moon, PanelBottom, PanelLeft, PanelRight, Plus, RefreshCw, Search, Sun, Table2, Trash2, X } from "lucide-react";
+import { ChevronRight, Copy, Database, Moon, PanelBottom, PanelLeft, PanelRight, Plus, RefreshCw, Search, Sun, Table2, Trash2, X } from "lucide-react";
 import { JsonView, collapseAllNested } from "react-json-view-lite";
 import "react-json-view-lite/dist/index.css";
 import {
@@ -12,8 +12,11 @@ import {
 } from "@tanstack/react-table";
 import type { PanelImperativeHandle, PanelSize } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from "../components/ui/command";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Textarea } from "../components/ui/textarea";
@@ -39,12 +42,21 @@ type SelectedNode =
   | { kind: "kv"; surface: "localStorage" | "sessionStorage" };
 
 type Notice = { tone: "success" | "error" | "info"; message: string } | null;
+type PendingAction =
+  | { kind: "deleteIndexed"; label: string; execute: () => Promise<void> }
+  | { kind: "deleteKv"; label: string; execute: () => Promise<void> }
+  | { kind: "clearKv"; label: string; execute: () => Promise<void> }
+  | null;
 
 type WorkspaceTab =
-  | { id: "overview"; title: string; node: { kind: "overview" } }
   | { id: string; title: string; node: { kind: "indexeddb"; dbName: string; storeName: string } }
-  | { id: string; title: string; node: { kind: "kv"; surface: "localStorage" | "sessionStorage" } }
-  | { id: "sql"; title: string; node: { kind: "sql" } };
+  | { id: string; title: string; node: { kind: "kv"; surface: "localStorage" | "sessionStorage" } };
+
+type SqlSuggestion = {
+  label: string;
+  insertText: string;
+  kind: "keyword" | "table" | "column";
+};
 
 const extensionRuntime =
   typeof chrome !== "undefined" &&
@@ -66,20 +78,22 @@ function App() {
   const [editDraft, setEditDraft] = useState("");
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("{\n  \n}");
-  const [tabs, setTabs] = useState<WorkspaceTab[]>([
-    { id: "overview", title: "Origin", node: { kind: "overview" } },
-    { id: "sql", title: "SQL Query", node: { kind: "sql" } }
-  ]);
+  const [tabs, setTabs] = useState<WorkspaceTab[]>([]);
+  const [previewTab, setPreviewTab] = useState<WorkspaceTab | null>(null);
   const [activeTabId, setActiveTabId] = useState("overview");
   const [filterText, setFilterText] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [visibleDbNames, setVisibleDbNames] = useState<string[]>([]);
+  const [databasePickerOpen, setDatabasePickerOpen] = useState(false);
+  const [sqlCursor, setSqlCursor] = useState(queryText.length);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
   const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const sqlEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
   const refreshDiscovery = useCallback(async () => {
     setBusy(true);
@@ -124,12 +138,55 @@ function App() {
     return selectedDb.stores.find((store) => store.name === selected.storeName) ?? null;
   }, [selected, selectedDb]);
 
+  const visibleDbs = useMemo(
+    () => discovery?.indexedDb.filter((db) => visibleDbNames.includes(db.name)) ?? [],
+    [discovery, visibleDbNames]
+  );
+
+  const hiddenDbs = useMemo(
+    () => discovery?.indexedDb.filter((db) => !visibleDbNames.includes(db.name)) ?? [],
+    [discovery, visibleDbNames]
+  );
+
+  const renderedTabs = useMemo(() => {
+    const all = [
+      { value: "overview", title: "Origin", closable: false, preview: false },
+      { value: "sql", title: "SQL Query", closable: false, preview: false },
+      ...tabs.map((tab) => ({ value: tab.id, title: tab.title, closable: true, preview: false }))
+    ];
+
+    if (previewTab && !tabs.some((tab) => tab.id === previewTab.id)) {
+      all.push({ value: "preview", title: previewTab.title, closable: false, preview: true });
+    }
+
+    return all;
+  }, [previewTab, tabs]);
+
   const canToggleBottomPanel = activeTabId !== "sql" && selected.kind !== "overview";
+  const pendingActionTitle =
+    pendingAction?.kind === "clearKv"
+      ? "Clear all keys?"
+      : pendingAction?.kind === "deleteKv"
+        ? "Delete key?"
+        : pendingAction?.kind === "deleteIndexed"
+          ? "Delete record?"
+          : "Confirm action";
 
   useEffect(() => {
     if (canToggleBottomPanel) return;
     setBottomPanelCollapsed(false);
   }, [canToggleBottomPanel]);
+
+  useEffect(() => {
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    document.body.classList.toggle("dark", isDark);
+
+    return () => {
+      document.documentElement.classList.remove("dark");
+      document.body.classList.remove("dark");
+    };
+  }, [theme]);
 
   const loadIndexedStore = useCallback(
     async (dbName: string, storeName: string) => {
@@ -167,30 +224,52 @@ function App() {
     [rpc]
   );
 
-  const chooseNode = (node: SelectedNode) => {
+  const openNode = (node: SelectedNode, options?: { persist?: boolean }) => {
+    const persist = options?.persist ?? false;
     setSelected(node);
-    const tab = tabForNode(node);
-    setTabs((current) => (current.some((item) => item.id === tab.id) ? current : [...current, tab]));
-    setActiveTabId(tab.id);
     setFilterText("");
+
     if (node.kind === "indexeddb") void loadIndexedStore(node.dbName, node.storeName);
     if (node.kind === "kv") void loadKv(node.surface);
+
     if (node.kind === "overview") {
+      setPreviewTab(null);
+      setActiveTabId("overview");
       setTableResult(null);
       setKvResult(null);
       setQueryResult(null);
       setSelectedRecord(null);
+      return;
     }
+
+    const tab = tabForNode(node);
+    if (node.kind === "kv") {
+      setPreviewTab(null);
+      setTabs((current) => (current.some((item) => item.id === tab.id) ? current : [...current, tab]));
+      setActiveTabId(tab.id);
+      return;
+    }
+
+    if (persist || tabs.some((item) => item.id === tab.id)) {
+      setPreviewTab(null);
+      setTabs((current) => (current.some((item) => item.id === tab.id) ? current : [...current, tab]));
+      setActiveTabId(tab.id);
+      return;
+    }
+
+    setPreviewTab(tab);
+    setActiveTabId("preview");
   };
 
   const chooseTab = (tab: WorkspaceTab) => {
-    setActiveTabId(tab.id);
-    setFilterText("");
-    if (tab.node.kind === "sql") return;
-    setSelected(tab.node);
-    if (tab.node.kind === "indexeddb") void loadIndexedStore(tab.node.dbName, tab.node.storeName);
-    if (tab.node.kind === "kv") void loadKv(tab.node.surface);
-    if (tab.node.kind === "overview") {
+    openNode(tab.node, { persist: true });
+  };
+
+  const closeTab = (tabId: string) => {
+    setTabs((current) => current.filter((tab) => tab.id !== tabId));
+    if (activeTabId === tabId) {
+      setActiveTabId("overview");
+      setSelected({ kind: "overview" });
       setTableResult(null);
       setKvResult(null);
       setQueryResult(null);
@@ -198,14 +277,12 @@ function App() {
     }
   };
 
-  const closeTab = (tabId: string) => {
-    if (tabId === "overview" || tabId === "sql") return;
-    setTabs((current) => current.filter((tab) => tab.id !== tabId));
-    if (activeTabId === tabId) {
-      const fallback = tabs.find((tab) => tab.id === "overview") ?? tabs[0];
-      if (fallback) chooseTab(fallback);
-    }
-  };
+  const promotePreviewTab = useCallback(() => {
+    if (!previewTab) return;
+    setTabs((current) => (current.some((tab) => tab.id === previewTab.id) ? current : [...current, previewTab]));
+    setPreviewTab(null);
+    setActiveTabId(previewTab.id);
+  }, [previewTab]);
 
   const runQuery = async () => {
     if (selected.kind !== "indexeddb") {
@@ -235,7 +312,7 @@ function App() {
   const saveIndexedRecord = async () => {
     if (selected.kind !== "indexeddb" || !selectedRecord || "parsed" in selectedRecord) return;
     try {
-      const value = JSON.parse(editDraft) as SerializableValue;
+      const value = parseAndValidateJson(editDraft);
       setBusy(true);
       const response = await rpc({
         type: "putIndexedDbRecord",
@@ -258,7 +335,7 @@ function App() {
   const addIndexedRecord = async () => {
     if (selected.kind !== "indexeddb") return;
     try {
-      const value = JSON.parse(newValue) as SerializableValue;
+      const value = parseAndValidateJson(newValue);
       const key = newKey.trim() ? (JSON.parse(newKey) as SerializableValue) : undefined;
       setBusy(true);
       const response = await rpc({
@@ -284,23 +361,28 @@ function App() {
 
   const deleteIndexedRecord = async (record: IndexedDbRecord) => {
     if (selected.kind !== "indexeddb") return;
-    if (!confirm("Delete this IndexedDB record?")) return;
-    setBusy(true);
-    const response = await rpc({
-      type: "deleteIndexedDbRecord",
-      tabId,
-      dbName: selected.dbName,
-      storeName: selected.storeName,
-      key: record.key
+    setPendingAction({
+      kind: "deleteIndexed",
+      label: `Delete record ${JSON.stringify(record.key)} from ${selected.storeName}`,
+      execute: async () => {
+        setBusy(true);
+        const response = await rpc({
+          type: "deleteIndexedDbRecord",
+          tabId,
+          dbName: selected.dbName,
+          storeName: selected.storeName,
+          key: record.key
+        });
+        setBusy(false);
+        if (!response.ok) {
+          setNotice({ tone: "error", message: response.error });
+          return;
+        }
+        await loadIndexedStore(selected.dbName, selected.storeName);
+        await refreshDiscovery();
+        setNotice({ tone: "success", message: "Record deleted." });
+      }
     });
-    setBusy(false);
-    if (!response.ok) {
-      setNotice({ tone: "error", message: response.error });
-      return;
-    }
-    await loadIndexedStore(selected.dbName, selected.storeName);
-    await refreshDiscovery();
-    setNotice({ tone: "success", message: "Record deleted." });
   };
 
   const saveKv = async () => {
@@ -347,33 +429,42 @@ function App() {
 
   const deleteKv = async (record: KeyValueRecord) => {
     if (selected.kind !== "kv") return;
-    if (!confirm(`Delete ${record.key}?`)) return;
-    setBusy(true);
-    const response = await rpc({ type: "removeKeyValue", tabId, surface: selected.surface, key: record.key });
-    setBusy(false);
-    if (!response.ok) {
-      setNotice({ tone: "error", message: response.error });
-      return;
-    }
-    await loadKv(selected.surface);
-    await refreshDiscovery();
-    setNotice({ tone: "success", message: "Key deleted." });
+    setPendingAction({
+      kind: "deleteKv",
+      label: `Delete key ${record.key} from ${selected.surface}`,
+      execute: async () => {
+        setBusy(true);
+        const response = await rpc({ type: "removeKeyValue", tabId, surface: selected.surface, key: record.key });
+        setBusy(false);
+        if (!response.ok) {
+          setNotice({ tone: "error", message: response.error });
+          return;
+        }
+        await loadKv(selected.surface);
+        await refreshDiscovery();
+        setNotice({ tone: "success", message: "Key deleted." });
+      }
+    });
   };
 
   const clearKv = async () => {
     if (selected.kind !== "kv") return;
-    const typed = prompt(`Type ${selected.surface} to clear all keys.`);
-    if (typed !== selected.surface) return;
-    setBusy(true);
-    const response = await rpc({ type: "clearKeyValue", tabId, surface: selected.surface });
-    setBusy(false);
-    if (!response.ok) {
-      setNotice({ tone: "error", message: response.error });
-      return;
-    }
-    await loadKv(selected.surface);
-    await refreshDiscovery();
-    setNotice({ tone: "success", message: `${selected.surface} cleared.` });
+    setPendingAction({
+      kind: "clearKv",
+      label: `Clear all keys from ${selected.surface}`,
+      execute: async () => {
+        setBusy(true);
+        const response = await rpc({ type: "clearKeyValue", tabId, surface: selected.surface });
+        setBusy(false);
+        if (!response.ok) {
+          setNotice({ tone: "error", message: response.error });
+          return;
+        }
+        await loadKv(selected.surface);
+        await refreshDiscovery();
+        setNotice({ tone: "success", message: `${selected.surface} cleared.` });
+      }
+    });
   };
 
   const visibleExportRows = useMemo(() => {
@@ -397,8 +488,21 @@ function App() {
   };
 
   const selectRecord = (record: IndexedDbRecord | KeyValueRecord) => {
+    if (rightPanelRef.current?.isCollapsed()) {
+      rightPanelRef.current.expand();
+    }
+    if (activeTabId === "preview") {
+      promotePreviewTab();
+    }
     setSelectedRecord(record);
     setEditDraft("parsed" in record ? record.value : JSON.stringify(record.value.value, null, 2));
+  };
+
+  const confirmPendingAction = async () => {
+    if (!pendingAction) return;
+    const action = pendingAction;
+    setPendingAction(null);
+    await action.execute();
   };
 
   const updateVisibleDbNames = useCallback(
@@ -423,7 +527,7 @@ function App() {
     (dbName: string) => {
       updateVisibleDbNames((current) => current.filter((name) => name !== dbName));
       if (selected.kind === "indexeddb" && selected.dbName === dbName) {
-        chooseNode({ kind: "overview" });
+        openNode({ kind: "overview" });
       }
     },
     [selected, updateVisibleDbNames]
@@ -438,9 +542,80 @@ function App() {
     else panelRef.collapse();
   };
 
+  const sqlSuggestionPool = useMemo<SqlSuggestion[]>(() => {
+    const keywordSuggestions = [
+      "SELECT",
+      "FROM",
+      "WHERE",
+      "ORDER BY",
+      "LIMIT",
+      "GROUP BY",
+      "COUNT(*)",
+      "DISTINCT"
+    ].map((keyword) => ({ label: keyword, insertText: keyword, kind: "keyword" as const }));
+
+    const tableSuggestions =
+      discovery?.indexedDb.flatMap((db) =>
+        db.stores.map((store) => ({
+          label: `${store.name}`,
+          insertText: store.name,
+          kind: "table" as const
+        }))
+      ) ?? [];
+
+    const columnSuggestions =
+      tableResult?.columns.map((column) => ({
+        label: column,
+        insertText: column,
+        kind: "column" as const
+      })) ?? [];
+
+    return Array.from(
+      new Map([...tableSuggestions, ...columnSuggestions, ...keywordSuggestions].map((item) => [item.insertText, item])).values()
+    );
+  }, [discovery, tableResult?.columns]);
+
+  const sqlSuggestions = useMemo(() => {
+    const beforeCursor = queryText.slice(0, sqlCursor);
+    const tokenMatch = beforeCursor.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
+    const token = tokenMatch?.[1] ?? "";
+
+    const onlyTables = /\bFROM\s+$/i.test(beforeCursor) || /\bJOIN\s+$/i.test(beforeCursor);
+    const onlyColumns = /\bSELECT\s+$/i.test(beforeCursor) || /\bWHERE\s+$/i.test(beforeCursor);
+
+    const candidates = sqlSuggestionPool.filter((item) => {
+      if (onlyTables) return item.kind === "table";
+      if (onlyColumns) return item.kind === "column" || item.kind === "keyword";
+      return true;
+    });
+
+    if (!token) return candidates.slice(0, 6);
+
+    return candidates
+      .filter((item) => item.insertText.toLowerCase().startsWith(token.toLowerCase()) && item.insertText.toLowerCase() !== token.toLowerCase())
+      .slice(0, 6);
+  }, [queryText, sqlCursor, sqlSuggestionPool]);
+
+  const applySqlSuggestion = (suggestion: SqlSuggestion) => {
+    const cursor = sqlEditorRef.current?.selectionStart ?? sqlCursor;
+    const beforeCursor = queryText.slice(0, cursor);
+    const tokenMatch = beforeCursor.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
+    const replaceStart = tokenMatch ? cursor - tokenMatch[1].length : cursor;
+    const nextQuery = `${queryText.slice(0, replaceStart)}${suggestion.insertText}${queryText.slice(cursor)}`;
+    const nextCursor = replaceStart + suggestion.insertText.length;
+
+    setQueryText(nextQuery);
+    setSqlCursor(nextCursor);
+
+    requestAnimationFrame(() => {
+      sqlEditorRef.current?.focus();
+      sqlEditorRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   return (
     <main className={`${theme} flex h-screen min-w-[1100px] flex-col bg-background text-foreground`}>
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur">
+      <header className="relative flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-8 w-8 place-items-center rounded-md border border-primary bg-primary text-xs font-black text-primary-foreground">
             SS
@@ -451,6 +626,15 @@ function App() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="font-semibold"
+            onClick={() => setDatabasePickerOpen(true)}
+          >
+            <Database data-icon="inline-start" />
+            Open
+          </Button>
           <PanelToggleButton
             active={!leftPanelCollapsed}
             onClick={() => togglePanel("left")}
@@ -510,10 +694,8 @@ function App() {
               discovery={discovery}
               selected={selected}
               visibleDbNames={visibleDbNames}
-              chooseNode={chooseNode}
-              showDatabaseInView={showDatabaseInView}
-              hideDatabaseFromView={hideDatabaseFromView}
-              openSql={() => chooseTab(tabs.find((tab) => tab.id === "sql")!)}
+              openNode={openNode}
+              openSql={() => setActiveTabId("sql")}
             />
           </aside>
         </ResizablePanel>
@@ -525,23 +707,35 @@ function App() {
             <Tabs
               value={activeTabId}
               onValueChange={(value) => {
+                if (value === "overview") {
+                  openNode({ kind: "overview" });
+                  return;
+                }
+                if (value === "sql") {
+                  setActiveTabId("sql");
+                  return;
+                }
+                if (value === "preview" && previewTab) {
+                  openNode(previewTab.node);
+                  return;
+                }
                 const tab = tabs.find((item) => item.id === value);
                 if (tab) chooseTab(tab);
               }}
               className="shrink-0 gap-0"
             >
               <TabsList variant="line" className="h-9 w-full justify-start rounded-none border-b border-border bg-card px-2">
-                {tabs.map((tab) => (
-                  <TabsTrigger key={tab.id} value={tab.id} className="min-w-28 flex-none px-4">
+                {renderedTabs.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value} className={`min-w-28 flex-none px-4 ${tab.preview ? "italic text-muted-foreground" : ""}`}>
                     {tab.title}
-                    {tab.id !== "overview" && tab.id !== "sql" && (
+                    {tab.closable && (
                       <span
                         className="text-base text-muted-foreground hover:text-foreground"
                         role="button"
                         tabIndex={0}
                         onClick={(event) => {
                           event.stopPropagation();
-                          closeTab(tab.id);
+                          closeTab(tab.value);
                         }}
                       >
                         ×
@@ -579,12 +773,11 @@ function App() {
             </header>
 
             {notice && (
-              <div
-                className={`shrink-0 border-b border-border px-4 py-2 text-sm ${
-                  notice.tone === "error" ? "bg-destructive/10 text-destructive" : notice.tone === "success" ? "bg-muted text-foreground" : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {notice.message}
+              <div className="shrink-0 border-b border-border px-4 py-2">
+                <Alert variant={notice.tone === "error" ? "destructive" : "default"}>
+                  <AlertTitle>{notice.tone === "error" ? "Action failed" : notice.tone === "success" ? "Done" : "Notice"}</AlertTitle>
+                  <AlertDescription>{notice.message}</AlertDescription>
+                </Alert>
               </div>
             )}
 
@@ -673,8 +866,40 @@ function App() {
               <section className="flex min-h-0 flex-1 flex-col">
                 <div className="grid min-h-72 grid-cols-[42px_minmax(0,1fr)] border-b border-border bg-background">
                   <div className="border-r border-border p-4 text-right font-mono text-sm text-muted-foreground">1</div>
-                  <Textarea className="min-h-72 resize-none rounded-none border-0 p-4 focus:ring-0" value={queryText} onChange={(event) => setQueryText(event.target.value)} spellCheck={false} />
+                  <Textarea
+                    ref={sqlEditorRef}
+                    className="min-h-72 resize-none rounded-none border-0 p-4 font-mono text-sm leading-6 focus:ring-0"
+                    value={queryText}
+                    onChange={(event) => {
+                      setQueryText(event.target.value);
+                      setSqlCursor(event.target.selectionStart);
+                    }}
+                    onClick={(event) => setSqlCursor(event.currentTarget.selectionStart)}
+                    onKeyUp={(event) => setSqlCursor(event.currentTarget.selectionStart)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Tab" && sqlSuggestions.length > 0) {
+                        event.preventDefault();
+                        applySqlSuggestion(sqlSuggestions[0]);
+                      }
+                    }}
+                    spellCheck={false}
+                  />
                 </div>
+                {sqlSuggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2 border-b border-border bg-card px-4 py-2">
+                    {sqlSuggestions.map((suggestion) => (
+                      <button
+                        key={`${suggestion.kind}:${suggestion.insertText}`}
+                        type="button"
+                        onClick={() => applySqlSuggestion(suggestion)}
+                        className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-2.5 py-1 font-mono text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      >
+                        <span>{suggestion.insertText}</span>
+                        <span className="uppercase tracking-wide text-[10px]">{suggestion.kind}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center justify-end gap-3 border-b border-border bg-card px-4 py-2 text-sm text-muted-foreground">
                   <span>{selected.kind === "indexeddb" ? `Context: ${selected.dbName}.${selected.storeName}` : "Select a table from the sidebar for query context"}</span>
                   <PrimaryActionButton onClick={runQuery} disabled={busy || selected.kind !== "indexeddb"}>Run Current ⌘↵</PrimaryActionButton>
@@ -716,10 +941,115 @@ function App() {
             editDraft={editDraft}
             setEditDraft={setEditDraft}
             saveRecord={selected.kind === "kv" ? saveKv : saveIndexedRecord}
+            onCopy={() => {
+              if (!selectedRecord) return;
+              const value = recordValue(selectedRecord);
+              void navigator.clipboard.writeText(JSON.stringify(value, null, 2));
+              setNotice({ tone: "success", message: "Copied document JSON." });
+            }}
             busy={busy}
           />
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <Dialog open={databasePickerOpen} onOpenChange={setDatabasePickerOpen}>
+        <DialogContent
+          className="max-h-[min(80vh,40rem)] max-w-[min(640px,calc(100vw-2.5rem))] gap-0 overflow-hidden border-border bg-background p-0 text-foreground shadow-2xl"
+          showCloseButton={false}
+        >
+          <DialogHeader className="border-b border-border px-5 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 space-y-1.5">
+                <DialogTitle className="text-[1.5rem] font-black tracking-tight">Open databases</DialogTitle>
+                <DialogDescription className="max-w-lg text-sm leading-6">
+                  Search and choose which IndexedDB databases appear in the left sidebar.
+                </DialogDescription>
+              </div>
+              <Button variant="outline" size="sm" className="shrink-0" onClick={() => setDatabasePickerOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </DialogHeader>
+          <Command className="rounded-none bg-background p-0">
+            <div className="border-b border-border px-5 py-3.5">
+              <CommandInput placeholder="Search databases..." className="text-sm" />
+            </div>
+            <CommandList className="max-h-[min(52vh,24rem)] px-4 py-3">
+              <CommandEmpty className="py-10 text-sm text-muted-foreground">No matching databases.</CommandEmpty>
+              <CommandGroup heading="In view" className="px-0 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pb-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-black **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em]">
+                {visibleDbs.map((db) => (
+                  <CommandItem
+                    key={`visible:${db.name}`}
+                    value={`visible ${db.name}`}
+                    onSelect={() => hideDatabaseFromView(db.name)}
+                    className="min-h-11 rounded-lg px-4 text-sm"
+                  >
+                    <Database className="size-4" />
+                    <span className="truncate font-semibold">{db.name}</span>
+                    <CommandShortcut className="text-destructive group-data-selected/command-item:text-destructive">
+                      <X className="size-4" />
+                    </CommandShortcut>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              <CommandSeparator className="my-3" />
+              <CommandGroup heading="Available" className="px-0 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pb-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-black **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em]">
+                {hiddenDbs.map((db) => (
+                  <CommandItem
+                    key={`hidden:${db.name}`}
+                    value={`available ${db.name}`}
+                    onSelect={() => showDatabaseInView(db.name)}
+                    className="min-h-11 rounded-lg px-4 text-sm"
+                  >
+                    <Plus className="size-4" />
+                    <span className="truncate font-semibold">{db.name}</span>
+                    <CommandShortcut className="text-xs tracking-normal text-muted-foreground group-data-selected/command-item:text-foreground">
+                      v{db.version}
+                    </CommandShortcut>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          <div className="border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
+            {visibleDbNames.length} of {discovery?.indexedDb.length ?? 0} databases visible
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(pendingAction)} onOpenChange={(open) => !open && setPendingAction(null)}>
+        <DialogContent
+          className="max-w-[min(420px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-[22px] border-border bg-card p-0 text-card-foreground shadow-2xl"
+          showCloseButton={false}
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>{pendingActionTitle}</DialogTitle>
+            <DialogDescription>{pendingAction?.label}</DialogDescription>
+          </DialogHeader>
+          <Alert variant="destructive" className="rounded-none border-0 bg-transparent px-5 pt-5 pb-3">
+            <div className="space-y-2.5">
+              <AlertTitle className="text-[1.75rem] font-black tracking-tight text-foreground">{pendingActionTitle}</AlertTitle>
+              <AlertDescription className="text-sm leading-6 text-muted-foreground">
+                {pendingAction?.label}
+              </AlertDescription>
+            </div>
+          </Alert>
+          <div className="flex items-center justify-end gap-2 border-t border-border/80 bg-card px-5 py-4">
+            <Button variant="outline" size="sm" className="min-w-24 rounded-xl" onClick={() => setPendingAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="min-w-28 rounded-xl"
+              onClick={() => void confirmPendingAction()}
+              disabled={busy}
+            >
+              {busy ? "Working..." : "Confirm"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
@@ -730,6 +1060,7 @@ function RecordInspector({
   editDraft,
   setEditDraft,
   saveRecord,
+  onCopy,
   busy
 }: {
   selected: SelectedNode;
@@ -737,6 +1068,7 @@ function RecordInspector({
   editDraft: string;
   setEditDraft: (value: string) => void;
   saveRecord: () => void;
+  onCopy: () => void;
   busy: boolean;
 }) {
   const inspectedValue = selectedRecord ? recordValue(selectedRecord) : null;
@@ -763,10 +1095,16 @@ function RecordInspector({
 
       {selectedRecord && inspectedValue !== null ? (
         <Tabs defaultValue="document" className="min-h-0 flex-1 gap-0">
-          <TabsList variant="line" className="h-9 w-full justify-start rounded-none border-b border-border bg-card px-2">
-            <TabsTrigger value="document">Document</TabsTrigger>
-            <TabsTrigger value="json">JSON</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center justify-between border-b border-border bg-card px-2">
+            <TabsList variant="line" className="h-9 justify-start rounded-none border-0 bg-transparent px-0">
+              <TabsTrigger value="document">Document</TabsTrigger>
+              <TabsTrigger value="json">JSON</TabsTrigger>
+            </TabsList>
+            <SecondaryActionButton onClick={onCopy}>
+              <Copy data-icon="inline-start" />
+              Copy
+            </SecondaryActionButton>
+          </div>
           <TabsContent value="document" className="min-h-0">
             <ScrollArea className="h-full">
               <div className="p-3">
@@ -854,8 +1192,42 @@ function safePrettyJson(source: string, fallback: SerializableValue) {
   }
 }
 
-function tabForNode(node: SelectedNode): WorkspaceTab {
-  if (node.kind === "overview") return { id: "overview", title: "Origin", node };
+function parseAndValidateJson(source: string): SerializableValue {
+  const parsed = JSON.parse(source) as SerializableValue;
+  const validationError = findSerializableJsonError(parsed);
+  if (validationError) throw new Error(validationError);
+  return parsed;
+}
+
+function findSerializableJsonError(value: SerializableValue, path = "$"): string | null {
+  if (value === null) return null;
+
+  if (typeof value === "string" || typeof value === "boolean") return null;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? null : `${path} must be a finite number`;
+  }
+
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const nestedError = findSerializableJsonError(value[index] as SerializableValue, `${path}[${index}]`);
+      if (nestedError) return nestedError;
+    }
+    return null;
+  }
+
+  if (typeof value === "object") {
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const nestedError = findSerializableJsonError(nestedValue as SerializableValue, `${path}.${key}`);
+      if (nestedError) return nestedError;
+    }
+    return null;
+  }
+
+  return `${path} contains a non-serializable value`;
+}
+
+function tabForNode(node: Exclude<SelectedNode, { kind: "overview" }>): WorkspaceTab {
   if (node.kind === "kv") return { id: node.surface, title: node.surface, node };
   return { id: `${node.dbName}:${node.storeName}`, title: node.storeName, node };
 }
@@ -1010,17 +1382,13 @@ function StorageTree({
   discovery,
   selected,
   visibleDbNames,
-  chooseNode,
-  showDatabaseInView,
-  hideDatabaseFromView,
+  openNode,
   openSql
 }: {
   discovery: StorageDiscovery | null;
   selected: SelectedNode;
   visibleDbNames: string[];
-  chooseNode: (node: SelectedNode) => void;
-  showDatabaseInView: (dbName: string) => void;
-  hideDatabaseFromView: (dbName: string) => void;
+  openNode: (node: SelectedNode, options?: { persist?: boolean }) => void;
   openSql: () => void;
 }) {
   const [expandedDbNames, setExpandedDbNames] = useState<Set<string>>(new Set());
@@ -1047,58 +1415,12 @@ function StorageTree({
 
   return (
     <nav className="flex flex-col gap-1">
-      <Button variant={selected.kind === "overview" ? "secondary" : "ghost"} className="justify-start" onClick={() => chooseNode({ kind: "overview" })}>
+      <Button variant={selected.kind === "overview" ? "secondary" : "ghost"} className="justify-start" onClick={() => openNode({ kind: "overview" })}>
         Origin dashboard
       </Button>
       <Button variant="outline" className="justify-between" onClick={openSql}>
         SQL Query <span className="text-muted-foreground">⌘↵</span>
       </Button>
-
-      <section className="mt-4 rounded-xl border border-border bg-background/60 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">IndexedDB view</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Only selected databases stay in the navigation tree.</p>
-          </div>
-          <Badge variant="outline">{visibleDbs.length}/{discovery.indexedDb.length || 0}</Badge>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {visibleDbs.length === 0 && (
-            <span className="text-sm text-muted-foreground">No databases in view.</span>
-          )}
-          {visibleDbs.map((db) => (
-            <button
-              key={db.name}
-              type="button"
-              onClick={() => hideDatabaseFromView(db.name)}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground transition hover:bg-muted"
-              aria-label={`Remove ${db.name} from this view`}
-            >
-              <Database className="h-3.5 w-3.5" />
-              <span className="max-w-28 truncate">{db.name}</span>
-              <X className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-          ))}
-        </div>
-
-        {hiddenDbs.length > 0 && (
-          <div className="mt-3 border-t border-border pt-3">
-            <p className="mb-2 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Add database</p>
-            <div className="flex flex-col gap-1">
-              {hiddenDbs.map((db) => (
-                <Button key={db.name} variant="ghost" className="justify-between" onClick={() => showDatabaseInView(db.name)}>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Plus data-icon="inline-start" />
-                    <span className="truncate">{db.name}</span>
-                  </span>
-                  <span className="text-xs text-muted-foreground">v{db.version}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
 
       <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">IndexedDB</h3>
       {discovery.indexedDb.length === 0 && <p className="text-sm text-muted-foreground">No IndexedDB databases.</p>}
@@ -1139,7 +1461,8 @@ function StorageTree({
                   key={`${db.name}:${store.name}`}
                   variant={selected.kind === "indexeddb" && selected.dbName === db.name && selected.storeName === store.name ? "secondary" : "ghost"}
                   className="justify-between"
-                  onClick={() => chooseNode({ kind: "indexeddb", dbName: db.name, storeName: store.name })}
+                  onClick={() => openNode({ kind: "indexeddb", dbName: db.name, storeName: store.name })}
+                  onDoubleClick={() => openNode({ kind: "indexeddb", dbName: db.name, storeName: store.name }, { persist: true })}
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <Table2 data-icon="inline-start" />
@@ -1154,10 +1477,10 @@ function StorageTree({
       ))}
 
       <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Storage</h3>
-      <Button variant={selected.kind === "kv" && selected.surface === "localStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => chooseNode({ kind: "kv", surface: "localStorage" })}>
+      <Button variant={selected.kind === "kv" && selected.surface === "localStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => openNode({ kind: "kv", surface: "localStorage" }, { persist: true })}>
         LocalStorage <span className="text-muted-foreground">{discovery.localStorage.count}</span>
       </Button>
-      <Button variant={selected.kind === "kv" && selected.surface === "sessionStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => chooseNode({ kind: "kv", surface: "sessionStorage" })}>
+      <Button variant={selected.kind === "kv" && selected.surface === "sessionStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => openNode({ kind: "kv", surface: "sessionStorage" }, { persist: true })}>
         SessionStorage <span className="text-muted-foreground">{discovery.sessionStorage.count}</span>
       </Button>
     </nav>
@@ -1308,14 +1631,15 @@ function DataGrid({
         cell: ({ row }) => (
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="sm"
             aria-label="Delete record"
+            className="h-9 w-full justify-center rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={(event) => {
               event.stopPropagation();
               onDelete(row.original);
             }}
           >
-            <Trash2 />
+            <Trash2 className="size-4" />
           </Button>
         )
       }
@@ -1353,7 +1677,14 @@ function DataGrid({
               onClick={() => onSelect(row.original)}
             >
               {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-3 py-1.5">
+                <td
+                  key={cell.id}
+                  className={
+                    cell.column.id === "actions"
+                      ? "w-16 border-b border-r border-border p-1"
+                      : "max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-3 py-1.5"
+                  }
+                >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}
@@ -1402,14 +1733,15 @@ function KvGrid({
         cell: ({ row }) => (
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="sm"
             aria-label="Delete key"
+            className="h-9 w-full justify-center rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={(event) => {
               event.stopPropagation();
               onDelete(row.original);
             }}
           >
-            <Trash2 />
+            <Trash2 className="size-4" />
           </Button>
         )
       }
@@ -1447,7 +1779,14 @@ function KvGrid({
               onClick={() => onSelect(row.original)}
             >
               {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-3 py-1.5">
+                <td
+                  key={cell.id}
+                  className={
+                    cell.column.id === "actions"
+                      ? "w-16 border-b border-r border-border p-1"
+                      : "max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-3 py-1.5"
+                  }
+                >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}

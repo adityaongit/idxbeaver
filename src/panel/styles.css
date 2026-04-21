@@ -94,6 +94,10 @@ button:disabled {
   --sidebar-accent-foreground: oklch(0.16 0 0);
   --sidebar-border: oklch(0.9 0 0);
   --sidebar-ring: oklch(0.35 0 0);
+  --json-string: oklch(0.52 0.16 151);
+  --json-number: oklch(0.56 0.14 67);
+  --json-boolean: oklch(0.55 0.15 262);
+  --json-null: oklch(0.58 0.18 28);
 }
 
 .dark {
@@ -128,6 +132,10 @@ button:disabled {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.72 0 0);
+  --json-string: oklch(0.82 0.13 151);
+  --json-number: oklch(0.8 0.1 67);
+  --json-boolean: oklch(0.78 0.11 262);
+  --json-null: oklch(0.74 0.16 28);
 }
 
 @layer base {
@@ -199,20 +207,20 @@ button:disabled {
 
 .storage-studio-json-tree__string,
 .text-json-string {
-  color: #7dd3a7;
+  color: var(--json-string);
 }
 
 .storage-studio-json-tree__number,
 .text-json-number {
-  color: #f4bf75;
+  color: var(--json-number);
 }
 
 .storage-studio-json-tree__boolean,
 .text-json-boolean {
-  color: #9ab8ff;
+  color: var(--json-boolean);
 }
 
 .storage-studio-json-tree__null,
 .text-json-null {
-  color: #f28b82;
+  color: var(--json-null);
 }
