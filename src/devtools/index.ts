@@ -1,1 +1,1 @@
-chrome.devtools.panels.create("Storage Studio", "", "panel.html");
+chrome.devtools.panels.create("IdxBeaver", "", "panel.html");

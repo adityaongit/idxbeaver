@@ -1,4 +1,4 @@
-# Storage Studio
+# IdxBeaver
 
 A Manifest V3 Chrome DevTools extension that gives browser storage a database-client workflow.
 
@@ -25,7 +25,7 @@ Load the extension from `dist/`:
 2. Enable Developer mode.
 3. Click "Load unpacked".
 4. Select the `dist/` directory.
-5. Open DevTools on any page and choose the "Storage Studio" panel.
+5. Open DevTools on any page and choose the "IdxBeaver" panel.
 
 For UI preview without extension APIs:
 
