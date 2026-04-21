@@ -1,91 +1,6 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-@theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: Outfit, sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-  --font-mono: monospace;
-  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --radius: 0.5rem;
-  --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
-  --tracking-tight: calc(var(--tracking-normal) - 0.025em);
-  --tracking-wide: calc(var(--tracking-normal) + 0.025em);
-  --tracking-wider: calc(var(--tracking-normal) + 0.05em);
-  --tracking-widest: calc(var(--tracking-normal) + 0.1em);
-  --tracking-normal: var(--tracking-normal);
-  --shadow-2xl: var(--shadow-2xl);
-  --shadow-xl: var(--shadow-xl);
-  --shadow-lg: var(--shadow-lg);
-  --shadow-md: var(--shadow-md);
-  --shadow: var(--shadow);
-  --shadow-sm: var(--shadow-sm);
-  --shadow-xs: var(--shadow-xs);
-  --shadow-2xs: var(--shadow-2xs);
-  --spacing: var(--spacing);
-  --letter-spacing: var(--letter-spacing);
-  --shadow-offset-y: var(--shadow-offset-y);
-  --shadow-offset-x: var(--shadow-offset-x);
-  --shadow-spread: var(--shadow-spread);
-  --shadow-blur: var(--shadow-blur);
-  --shadow-opacity: var(--shadow-opacity);
-  --color-shadow-color: var(--shadow-color);
-  --color-destructive-foreground: var(--destructive-foreground);
-}
 
 :root {
   --background: oklch(0.9911 0 0);
@@ -103,6 +18,7 @@ button:disabled {
   --accent: oklch(0.9461 0 0);
   --accent-foreground: oklch(0.2435 0 0);
   --destructive: oklch(0.5523 0.1927 32.7272);
+  --destructive-foreground: oklch(0.9934 0.0032 17.2118);
   --border: oklch(0.9037 0 0);
   --input: oklch(0.9731 0 0);
   --ring: oklch(0.8348 0.1302 160.9080);
@@ -111,7 +27,6 @@ button:disabled {
   --chart-3: oklch(0.6056 0.2189 292.7172);
   --chart-4: oklch(0.7686 0.1647 70.0804);
   --chart-5: oklch(0.6959 0.1491 162.4796);
-  --radius: 0.5rem;
   --sidebar: oklch(0.9911 0 0);
   --sidebar-foreground: oklch(0.5452 0 0);
   --sidebar-primary: oklch(0.8348 0.1302 160.9080);
@@ -120,22 +35,16 @@ button:disabled {
   --sidebar-accent-foreground: oklch(0.2435 0 0);
   --sidebar-border: oklch(0.9037 0 0);
   --sidebar-ring: oklch(0.8348 0.1302 160.9080);
-  --json-string: oklch(0.52 0.16 151);
-  --json-number: oklch(0.56 0.14 67);
-  --json-boolean: oklch(0.55 0.15 262);
-  --json-null: oklch(0.58 0.18 28);
-  --destructive-foreground: oklch(0.9934 0.0032 17.2118);
   --font-sans: Outfit, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: monospace;
-  --shadow-color: #000000;
-  --shadow-opacity: 0.17;
+  --radius: 0.5rem;
+  --shadow-x: 0px;
+  --shadow-y: 1px;
   --shadow-blur: 3px;
   --shadow-spread: 0px;
-  --shadow-offset-x: 0px;
-  --shadow-offset-y: 1px;
-  --letter-spacing: 0.025em;
-  --spacing: 0.25rem;
+  --shadow-opacity: 0.17;
+  --shadow-color: #000000;
   --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
   --shadow-xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
   --shadow-sm: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
@@ -145,6 +54,12 @@ button:disabled {
   --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
   --tracking-normal: 0.025em;
+  --spacing: 0.25rem;
+
+  --json-string: oklch(0.48 0.14 151);
+  --json-number: oklch(0.52 0.14 257);
+  --json-boolean: oklch(0.52 0.16 292);
+  --json-null: oklch(0.55 0 0);
 }
 
 .dark {
@@ -163,6 +78,7 @@ button:disabled {
   --accent: oklch(0.3132 0 0);
   --accent-foreground: oklch(0.9851 0 0);
   --destructive: oklch(0.7176 0.1862 26.1026);
+  --destructive-foreground: oklch(0.9368 0.0045 34.3092);
   --border: oklch(0.2809 0 0);
   --input: oklch(0.2603 0 0);
   --ring: oklch(0.8003 0.1821 151.7110);
@@ -179,23 +95,16 @@ button:disabled {
   --sidebar-accent-foreground: oklch(0.9851 0 0);
   --sidebar-border: oklch(0.2809 0 0);
   --sidebar-ring: oklch(0.8003 0.1821 151.7110);
-  --json-string: oklch(0.82 0.13 151);
-  --json-number: oklch(0.8 0.1 67);
-  --json-boolean: oklch(0.78 0.11 262);
-  --json-null: oklch(0.74 0.16 28);
-  --destructive-foreground: oklch(0.9368 0.0045 34.3092);
-  --radius: 0.5rem;
   --font-sans: Outfit, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: monospace;
-  --shadow-color: #000000;
-  --shadow-opacity: 0.17;
+  --radius: 0.5rem;
+  --shadow-x: 0px;
+  --shadow-y: 1px;
   --shadow-blur: 3px;
   --shadow-spread: 0px;
-  --shadow-offset-x: 0px;
-  --shadow-offset-y: 1px;
-  --letter-spacing: 0.025em;
-  --spacing: 0.25rem;
+  --shadow-opacity: 0.17;
+  --shadow-color: #000000;
   --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
   --shadow-xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
   --shadow-sm: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
@@ -204,6 +113,71 @@ button:disabled {
   --shadow-lg: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17);
   --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
+
+  --json-string: oklch(0.80 0.14 151);
+  --json-number: oklch(0.78 0.13 70);
+  --json-boolean: oklch(0.76 0.12 262);
+  --json-null: oklch(0.60 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+  --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+  --tracking-normal: var(--tracking-normal);
+  --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+  --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+  --tracking-widest: calc(var(--tracking-normal) + 0.1em);
 }
 
 @layer base {
@@ -214,29 +188,119 @@ button:disabled {
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
   }
-  html {
-    @apply font-sans;
-  }
 }
+
+/* ----------------------------------------------------------------------------
+ * Scrollbars — thin, muted, never intrusive.
+ * -------------------------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.4 0 0 / 0.5) transparent;
+}
+
+.dark *::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: oklch(0.6 0 0 / 0.3);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.6 0 0 / 0.5);
+}
+.dark *::-webkit-scrollbar-thumb {
+  background-color: oklch(0.45 0 0 / 0.45);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.55 0 0 / 0.65);
+}
+
+/* ----------------------------------------------------------------------------
+ * Reusable utility classes
+ * -------------------------------------------------------------------------- */
+
+.section-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.table-row-zebra:nth-child(even) {
+  background-color: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.table-row-hover:hover {
+  background-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.table-row-selected {
+  background-color: color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  box-shadow: inset 2px 0 0 0 var(--primary);
+}
+
+.mono,
+.font-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum", "zero", "ss01";
+  font-variant-numeric: tabular-nums;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 3px;
+  background-color: color-mix(in srgb, var(--muted) 60%, transparent);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip--tight {
+  height: 16px;
+  padding: 0 4px;
+  font-size: 9px;
+}
+
+/* ----------------------------------------------------------------------------
+ * JSON tree (inspector document mode)
+ * -------------------------------------------------------------------------- */
 
 .storage-studio-json-preview {
   color: var(--foreground);
 }
 
 .storage-studio-json-tree {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
-  line-height: 1.7;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
   color: var(--foreground);
 }
 
 .storage-studio-json-tree__children {
   margin: 0;
-  padding: 0 0 0 1rem;
+  padding: 0 0 0 0.75rem;
 }
 
 .storage-studio-json-tree__row {
-  padding: 0.125rem 0;
+  padding: 0.0625rem 0;
 }
 
 .storage-studio-json-tree__label {
@@ -252,8 +316,9 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
+  width: 0.75rem;
   color: var(--muted-foreground);
+  font-size: 10px;
 }
 
 .storage-studio-json-tree__chevron::after {
@@ -292,4 +357,69 @@ button:disabled {
 .storage-studio-json-tree__null,
 .text-json-null {
   color: var(--json-null);
+}
+
+/* ----------------------------------------------------------------------------
+ * Open databases picker — operator-panel aesthetic. Tight rows, left rail on
+ * active ("in view") rows, quiet hover, section rhythm driven by spacing not
+ * heavy backgrounds.
+ * -------------------------------------------------------------------------- */
+
+.db-picker [cmdk-group-heading] {
+  display: flex !important;
+  align-items: center;
+  padding: 8px 8px 4px;
+  gap: 6px;
+}
+
+.db-picker [cmdk-group] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Rows are flat by default — typography and the left rail do the work, not
+ * a filled background. Interaction states only change text color, so the
+ * list reads as a list and not a pile of pills. */
+.db-picker__row {
+  background-color: transparent !important;
+  transition: color 120ms ease;
+}
+
+.db-picker__row:hover,
+.db-picker__row[data-selected="true"] {
+  background-color: transparent !important;
+  color: var(--foreground);
+}
+
+/* The "in view" accent rail — tells you at a glance the DB is already loaded
+ * into the sidebar. Kept thin (2px) so it reads as a mark, not a bar. */
+.db-picker__row--active {
+  padding-left: 14px;
+}
+
+.db-picker__row--active::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background-color: var(--primary);
+  opacity: 0.85;
+}
+
+/* Keep the generated checkmark out of this picker — we use our own trailing
+ * controls (version chip + X) so the cmdk default is redundant. */
+.db-picker [data-slot="command-item"] > svg:last-child[class*="ml-auto"] {
+  display: none;
+}
+
+/* Loader dot pulse for inline busy indicators */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.pulse-soft {
+  animation: pulse-soft 1.4s ease-in-out infinite;
 }

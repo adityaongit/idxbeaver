@@ -19,8 +19,10 @@ import { Badge } from "../components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from "../components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
+import { Kbd, KbdGroup } from "../components/ui/kbd";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Textarea } from "../components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../components/ui/context-menu";
 import { parseMongoQuery } from "../shared/query";
@@ -116,6 +118,10 @@ function App() {
   const [filterText, setFilterText] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [visibleDbKeys, setVisibleDbKeys] = useState<string[]>([]);
+  // Tracks which DB the user last opened/expanded in the sidebar. Lets the
+  // Query tab run against any store in that DB before a specific store is
+  // selected in the tree.
+  const [activeDbKey, setActiveDbKey] = useState<string | null>(null);
   const [databasePickerOpen, setDatabasePickerOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -202,11 +208,7 @@ function App() {
   }, [discovery]);
 
   const renderedTabs = useMemo(() => {
-    const all = [
-      { value: "overview", title: "Origin", closable: false, preview: false },
-      { value: "sql", title: "Query", closable: false, preview: false },
-      ...tabs.map((tab) => ({ value: tab.id, title: tab.title, closable: true, preview: false }))
-    ];
+    const all = tabs.map((tab) => ({ value: tab.id, title: tab.title, closable: true, preview: false }));
     if (previewTab && !tabs.some((tab) => tab.id === previewTab.id)) {
       all.push({ value: "preview", title: previewTab.title, closable: false, preview: true });
     }
@@ -279,7 +281,10 @@ function App() {
     setSelected(node);
     setFilterText("");
 
-    if (node.kind === "indexeddb") void loadIndexedStore(node.frameId, node.dbName, node.dbVersion, node.storeName);
+    if (node.kind === "indexeddb") {
+      setActiveDbKey(dbKeyFromSelected(node));
+      void loadIndexedStore(node.frameId, node.dbName, node.dbVersion, node.storeName);
+    }
     if (node.kind === "kv") void loadKv(node.surface);
 
     if (node.kind === "overview") {
@@ -334,9 +339,20 @@ function App() {
     setActiveTabId(previewTab.id);
   }, [previewTab]);
 
+  const queryDbContext = useMemo(() => {
+    if (selected.kind === "indexeddb") {
+      return { frameId: selected.frameId, dbName: selected.dbName, dbVersion: selected.dbVersion };
+    }
+    const candidate =
+      (activeDbKey && discovery?.indexedDb.find((db) => dbKey(db) === activeDbKey && visibleDbKeys.includes(activeDbKey))) ||
+      (visibleDbs.length === 1 ? visibleDbs[0] : null);
+    if (!candidate) return null;
+    return { frameId: candidate.frameId, dbName: candidate.name, dbVersion: candidate.version };
+  }, [selected, activeDbKey, discovery, visibleDbKeys, visibleDbs]);
+
   const runQuery = async () => {
-    if (selected.kind !== "indexeddb") {
-      setNotice({ tone: "error", message: "Select an IndexedDB store before running a query." });
+    if (!queryDbContext) {
+      setNotice({ tone: "error", message: "Open an IndexedDB database before running a query." });
       return;
     }
 
@@ -346,9 +362,9 @@ function App() {
       const response = await rpc({
         type: "runIndexedDbQuery",
         tabId,
-        frameId: selected.frameId,
-        dbName: selected.dbName,
-        dbVersion: selected.dbVersion,
+        frameId: queryDbContext.frameId,
+        dbName: queryDbContext.dbName,
+        dbVersion: queryDbContext.dbVersion,
         query
       });
       setBusy(false);
@@ -710,21 +726,20 @@ function App() {
 
   return (
     <main className={`${theme} flex h-screen min-w-[1100px] flex-col bg-background text-foreground`}>
-      <header className="relative flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-8 w-8 place-items-center rounded-md border border-primary bg-primary text-xs font-black text-primary-foreground">
-            SS
+      <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-5 w-5 place-items-center rounded-sm bg-foreground/90 text-[9px] font-semibold tracking-wider text-background">
+            IB
           </span>
-          <div className="min-w-0">
-            <h1 className="text-sm font-bold leading-tight">IdxBeaver</h1>
-            <p className="truncate text-xs text-muted-foreground">{discovery?.origin ?? "Inspecting current tab"}</p>
+          <div className="min-w-0 leading-tight">
+            <h1 className="text-[12px] font-medium leading-tight">IdxBeaver</h1>
+            <p className="truncate font-mono text-[10px] leading-tight text-muted-foreground">{discovery?.origin ?? "no inspected tab"}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="outline"
-            size="sm"
-            className="font-semibold"
+            size="xs"
             onClick={() => setDatabasePickerOpen(true)}
           >
             <Database data-icon="inline-start" />
@@ -758,13 +773,13 @@ function App() {
           >
             <PanelRight />
           </PanelToggleButton>
-          <div className="mx-1 h-5 w-px bg-border" />
-          <PrimaryActionButton onClick={refreshDiscovery} disabled={busy}>
+          <div className="mx-0.5 h-4 w-px bg-border" />
+          <Button variant="outline" size="xs" onClick={refreshDiscovery} disabled={busy}>
             <RefreshCw data-icon="inline-start" className={busy ? "animate-spin" : undefined} />
-            {busy ? "Working..." : "Refresh storage"}
-          </PrimaryActionButton>
+            {busy ? "Working…" : "Refresh"}
+          </Button>
           <Button
-            size="icon-sm"
+            size="icon-xs"
             variant="outline"
             onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
             aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
@@ -784,7 +799,7 @@ function App() {
           maxSize="380px"
           onResize={(size) => setLeftPanelCollapsed(isCollapsedPanelSize(size))}
         >
-          <aside className="h-full overflow-auto border-r border-border bg-card p-3">
+          <aside className="h-full overflow-auto border-r border-border bg-card">
             <StorageTree
               discovery={discovery}
               selected={selected}
@@ -797,6 +812,9 @@ function App() {
               onRequestDeleteStore={requestDeleteStore}
               onRequestClearStore={requestClearStore}
               onHideDatabase={hideDatabaseFromView}
+              onActivateDb={setActiveDbKey}
+              activeDbKey={activeDbKey}
+              onOpenPicker={() => setDatabasePickerOpen(true)}
             />
           </aside>
         </ResizablePanel>
@@ -805,7 +823,7 @@ function App() {
 
         <ResizablePanel defaultSize="57%" minSize="520px">
           <section className="flex h-full min-w-0 flex-col bg-background">
-            <Tabs
+            {renderedTabs.length > 0 && <Tabs
               value={activeTabId}
               onValueChange={(value) => {
                 if (value === "overview") {
@@ -825,13 +843,17 @@ function App() {
               }}
               className="shrink-0 gap-0"
             >
-              <TabsList variant="line" className="h-9 w-full justify-start rounded-none border-b border-border bg-card px-2">
+              <TabsList variant="line" className="h-7 w-full justify-start rounded-none border-b border-border bg-card px-1.5">
                 {renderedTabs.map((tab) => (
-                  <TabsTrigger key={tab.value} value={tab.value} className={`min-w-28 flex-none px-4 ${tab.preview ? "italic text-muted-foreground" : ""}`}>
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className={`min-w-0 flex-none gap-1.5 px-2.5 text-[11px] font-normal ${tab.preview ? "italic text-muted-foreground" : ""}`}
+                  >
                     {tab.title}
                     {tab.closable && (
                       <span
-                        className="text-base text-muted-foreground hover:text-foreground"
+                        className="text-muted-foreground hover:text-foreground"
                         role="button"
                         tabIndex={0}
                         onClick={(event) => {
@@ -845,48 +867,55 @@ function App() {
                   </TabsTrigger>
                 ))}
               </TabsList>
-            </Tabs>
+            </Tabs>}
 
-            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">
-                  {activeTabId === "sql" ? "Query editor" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "IndexedDB table" : selected.surface}
-                </p>
-                <h2 className="truncate text-xl font-black">{activeTabId === "sql" ? "Query" : titleForSelection(selected)}</h2>
-                {activeTabId !== "sql" && selected.kind === "indexeddb" && (
-                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                    <OriginBadge origin={selected.origin} />
-                    <span className="inline-flex items-center rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-tight text-muted-foreground">
-                      {selected.dbName} · v{selected.dbVersion}
-                    </span>
-                  </div>
-                )}
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/50 px-3 py-1.5">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="section-label shrink-0">
+                  {activeTabId === "sql" ? "Query" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "Store" : "KV"}
+                </span>
+                <span className="h-3 w-px bg-border" />
+                <h2 className="truncate text-[12px] font-medium tracking-tight">{activeTabId === "sql" ? "MongoDB-style query" : titleForSelection(selected)}</h2>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <label className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    className="h-10 w-64 rounded-xl pl-9"
+                    className="h-6 w-52 rounded-sm pl-6 text-[11px]"
                     value={filterText}
                     onChange={(event) => setFilterText(event.target.value)}
-                    placeholder="Search for field or value..."
+                    placeholder="Search…"
                   />
                 </label>
-                <SecondaryActionButton onClick={() => exportVisible("json")} disabled={visibleExportRows.length === 0}>
-                  Export JSON
-                </SecondaryActionButton>
-                <SecondaryActionButton onClick={() => exportVisible("csv")} disabled={visibleExportRows.length === 0}>
-                  Export CSV
-                </SecondaryActionButton>
+                <Button variant="outline" size="xs" onClick={() => exportVisible("json")} disabled={visibleExportRows.length === 0}>JSON</Button>
+                <Button variant="outline" size="xs" onClick={() => exportVisible("csv")} disabled={visibleExportRows.length === 0}>CSV</Button>
               </div>
             </header>
 
             {notice && (
-              <div className="shrink-0 border-b border-border px-4 py-2">
-                <Alert variant={notice.tone === "error" ? "destructive" : "default"}>
-                  <AlertTitle>{notice.tone === "error" ? "Action failed" : notice.tone === "success" ? "Done" : "Notice"}</AlertTitle>
-                  <AlertDescription>{notice.message}</AlertDescription>
-                </Alert>
+              <div
+                className={`flex shrink-0 items-center gap-2 border-b px-3 py-1 text-[11px] ${
+                  notice.tone === "error"
+                    ? "border-destructive/30 bg-destructive/10 text-destructive"
+                    : notice.tone === "success"
+                      ? "border-primary/40 bg-primary/20 text-foreground"
+                      : "border-border bg-muted/30 text-foreground/70"
+                }`}
+              >
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${
+                  notice.tone === "error" ? "bg-destructive" : notice.tone === "success" ? "bg-primary" : "bg-muted-foreground"
+                }`} />
+                <span className="font-medium">{notice.tone === "error" ? "Error" : notice.tone === "success" ? "Done" : "Info"}</span>
+                <span className="text-muted-foreground">·</span>
+                <span className="truncate">{notice.message}</span>
+                <button
+                  type="button"
+                  className="ml-auto text-muted-foreground hover:text-foreground"
+                  onClick={() => setNotice(null)}
+                  aria-label="Dismiss"
+                >
+                  <X className="size-3" />
+                </button>
               </div>
             )}
 
@@ -896,15 +925,17 @@ function App() {
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="78%" minSize="260px">
                   <div className="flex h-full min-h-0 flex-col">
-                    <section className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-sm">
-                      <div className="flex min-w-0 items-center gap-3 text-muted-foreground">
-                        <span>{tableResult?.total ?? tableResult?.rows.length ?? 0} rows</span>
+                    <section className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/40 px-3 py-1 text-[11px]">
+                      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                        <span className="font-mono tabular-nums text-foreground/80">{tableResult?.total ?? tableResult?.rows.length ?? 0}</span>
+                        <span>rows</span>
                         {selectedStore && (
                           <>
-                            <span className="text-border">•</span>
-                            <span>key path <code className="font-mono text-foreground">{JSON.stringify(selectedStore.keyPath)}</code></span>
-                            <span className="text-border">•</span>
-                            <span>auto increment {String(selectedStore.autoIncrement)}</span>
+                            <span className="text-border">·</span>
+                            <span>key</span>
+                            <span className="font-mono text-foreground/80">{JSON.stringify(selectedStore.keyPath)}</span>
+                            <span className="text-border">·</span>
+                            <span>auto-incr {String(selectedStore.autoIncrement)}</span>
                           </>
                         )}
                       </div>
@@ -928,11 +959,14 @@ function App() {
                   minSize="130px"
                   onResize={(size) => setBottomPanelCollapsed(isCollapsedPanelSize(size))}
                 >
-                  <section className="grid h-full gap-3 overflow-auto bg-card p-4">
-                    <h3 className="text-xs font-black uppercase tracking-normal text-muted-foreground">Add record</h3>
-                    <Input value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder="Optional key as JSON, e.g. 42 or &quot;id&quot;" />
-                    <Textarea className="min-h-24" value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
-                    <PrimaryActionButton onClick={addIndexedRecord}>Add record</PrimaryActionButton>
+                  <section className="flex h-full flex-col gap-2 overflow-auto bg-card p-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="section-label">Add record</h3>
+                      <span className="font-mono text-[10px] text-muted-foreground">json</span>
+                    </div>
+                    <Input className="h-7 rounded-sm font-mono text-[10px]" value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder='optional key, e.g. 42 or "id"' />
+                    <Textarea className="min-h-20 rounded-sm font-mono text-[10px] leading-5" value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
+                    <Button size="xs" onClick={addIndexedRecord} className="self-start">Insert record</Button>
                   </section>
                 </ResizablePanel>
               </ResizablePanelGroup>
@@ -958,13 +992,13 @@ function App() {
                   minSize="130px"
                   onResize={(size) => setBottomPanelCollapsed(isCollapsedPanelSize(size))}
                 >
-                  <section className="grid h-full gap-3 overflow-auto bg-card p-4">
-                    <h3 className="text-xs font-black uppercase tracking-normal text-muted-foreground">Add key</h3>
-                    <Input value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder="Key" />
-                    <Textarea className="min-h-24" value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
-                    <div className="flex gap-2">
-                      <PrimaryActionButton onClick={addKv}>Save key</PrimaryActionButton>
-                      <DestructiveActionButton onClick={clearKv}>Clear {selected.surface}</DestructiveActionButton>
+                  <section className="flex h-full flex-col gap-2 overflow-auto bg-card p-3">
+                    <h3 className="section-label">Add key</h3>
+                    <Input className="h-7 rounded-sm font-mono text-[10px]" value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder="key" />
+                    <Textarea className="min-h-20 rounded-sm font-mono text-[10px] leading-5" value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} placeholder="value" />
+                    <div className="flex gap-1.5">
+                      <Button size="xs" onClick={addKv}>Save key</Button>
+                      <Button size="xs" variant="destructive" onClick={clearKv}>Clear {selected.surface}</Button>
                     </div>
                   </section>
                 </ResizablePanel>
@@ -973,8 +1007,8 @@ function App() {
 
             {activeTabId === "sql" && (
               <section className="flex min-h-0 flex-1 flex-col">
-                <div className="min-h-72 border-b border-border bg-background">
-                  <Suspense fallback={<div className="grid min-h-72 place-items-center text-sm text-muted-foreground">Loading query editor…</div>}>
+                <div className="min-h-56 border-b border-border bg-card">
+                  <Suspense fallback={<div className="grid min-h-56 place-items-center text-[11px] text-muted-foreground">Loading editor…</div>}>
                     <QueryEditor
                       value={queryText}
                       onChange={setQueryText}
@@ -984,21 +1018,33 @@ function App() {
                     />
                   </Suspense>
                 </div>
-                <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold uppercase tracking-wide">Examples</span>
-                    <QueryExampleButton onClick={() => setQueryText(exampleFindActive(selected))}>Active rows</QueryExampleButton>
-                    <QueryExampleButton onClick={() => setQueryText(exampleTopByCreated(selected))}>Top 10 by createdAt</QueryExampleButton>
-                    <QueryExampleButton onClick={() => setQueryText(exampleRegex(selected))}>Email regex</QueryExampleButton>
+                <div className="flex items-center justify-between gap-3 border-b border-border bg-card/50 px-3 py-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="section-label mr-1">Examples</span>
+                    <QueryExampleButton onClick={() => setQueryText(exampleFindActive(selected))}>active</QueryExampleButton>
+                    <QueryExampleButton onClick={() => setQueryText(exampleTopByCreated(selected))}>top 10 by createdAt</QueryExampleButton>
+                    <QueryExampleButton onClick={() => setQueryText(exampleRegex(selected))}>email regex</QueryExampleButton>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span>{selected.kind === "indexeddb" ? `Context: ${shortOrigin(selected.origin)} · ${selected.dbName} v${selected.dbVersion} · ${selected.storeName}` : "Select a store from the sidebar for query context"}</span>
-                    <PrimaryActionButton onClick={runQuery} disabled={busy || selected.kind !== "indexeddb"}>Run ⌘↵</PrimaryActionButton>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-mono">
+                      {selected.kind === "indexeddb"
+                        ? `${selected.dbName} v${selected.dbVersion} · ${selected.storeName}`
+                        : queryDbContext
+                          ? `${queryDbContext.dbName} v${queryDbContext.dbVersion} · any store`
+                          : "no database opened"}
+                    </span>
+                    <Button size="xs" onClick={runQuery} disabled={busy || !queryDbContext}>
+                      Run
+                      <KbdGroup className="ml-1 opacity-70">
+                        <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">⌘</Kbd>
+                        <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">↵</Kbd>
+                      </KbdGroup>
+                    </Button>
                   </div>
                 </div>
                 {queryResult ? (
                   <>
-                    <p className="border-b border-border px-4 py-2 text-sm text-muted-foreground">{queryResult.plan}</p>
+                    <p className="border-b border-border bg-muted/20 px-3 py-1 font-mono text-[10px] text-muted-foreground">{queryResult.plan}</p>
                     <DataGrid
                       columns={queryResult.columns}
                       indexedRows={queryResult.rows.map((row) => ({ key: row.key, value: row.value }))}
@@ -1009,15 +1055,11 @@ function App() {
                     />
                   </>
                 ) : (
-                  <div className="grid min-h-64 place-items-center p-6 text-sm text-muted-foreground">
-                    <div className="max-w-md space-y-2 text-center">
-                      <p className="font-semibold text-foreground">Write a MongoDB-style query in JSON.</p>
-                      <p>
-                        Required: <code className="font-mono">"store"</code>. Optional: <code className="font-mono">"filter"</code>, <code className="font-mono">"sort"</code>, <code className="font-mono">"limit"</code>, <code className="font-mono">"project"</code>.
-                      </p>
-                      <p>
-                        Operators: <code className="font-mono">$eq $ne $gt $gte $lt $lte $in $nin $regex $exists $and $or $not</code>. Nested paths use dots, e.g. <code className="font-mono">"profile.country"</code>.
-                      </p>
+                  <div className="grid min-h-52 place-items-center p-6">
+                    <div className="max-w-sm space-y-1.5 text-center text-[11px] text-muted-foreground">
+                      <p className="font-medium text-foreground">MongoDB-style query in JSON</p>
+                      <p>Required: <code className="font-mono text-foreground/80">store</code>. Optional: <code className="font-mono text-foreground/80">filter sort limit project</code>.</p>
+                      <p className="font-mono text-[10px] leading-relaxed">$eq · $ne · $gt · $gte · $lt · $lte · $in · $nin · $regex · $exists · $and · $or · $not</p>
                     </div>
                   </div>
                 )}
@@ -1056,29 +1098,53 @@ function App() {
 
       <Dialog open={databasePickerOpen} onOpenChange={setDatabasePickerOpen}>
         <DialogContent
-          className="max-h-[min(85vh,48rem)] max-w-[min(960px,calc(100vw-2.5rem))] gap-0 overflow-hidden border-border bg-background p-0 text-foreground shadow-2xl sm:max-w-[min(960px,calc(100vw-2.5rem))]"
+          className="max-h-[min(80vh,44rem)] max-w-[min(720px,calc(100vw-2.5rem))] gap-0 overflow-hidden rounded-xl border-border bg-background p-0 text-foreground shadow-2xl sm:max-w-[min(720px,calc(100vw-2.5rem))]"
           showCloseButton={false}
         >
-          <DialogHeader className="border-b border-border px-5 py-4">
+          <DialogHeader className="space-y-0 border-b border-border px-4 pt-3 pb-2.5">
             <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 space-y-1.5">
-                <DialogTitle className="text-[1.5rem] font-black tracking-tight">Open databases</DialogTitle>
-                <DialogDescription className="max-w-lg text-sm leading-6">
-                  Search and choose which IndexedDB databases appear in the left sidebar.
+              <div className="min-w-0 space-y-0.5">
+                <DialogTitle className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
+                  <span className="inline-block size-1.5 rounded-full bg-primary" />
+                  Open databases
+                </DialogTitle>
+                <DialogDescription className="text-[11.5px] leading-snug text-muted-foreground">
+                  Pick which IndexedDB databases appear in the sidebar.
                 </DialogDescription>
               </div>
-              <Button variant="outline" size="sm" className="shrink-0" onClick={() => setDatabasePickerOpen(false)}>
+              <Button variant="outline" size="xs" className="shrink-0" onClick={() => setDatabasePickerOpen(false)}>
                 Close
               </Button>
             </div>
           </DialogHeader>
-          <Command className="rounded-none bg-background p-0">
-            <div className="border-b border-border px-5 py-3.5">
-              <CommandInput placeholder="Search databases..." className="text-sm" />
+          <Command className="db-picker rounded-none bg-background p-0">
+            <div className="border-b border-border px-3 py-2">
+              <CommandInput placeholder="Search databases…" className="text-[12px]" />
             </div>
-            <CommandList className="max-h-[min(52vh,24rem)] px-4 py-3">
-              <CommandEmpty className="py-10 text-sm text-muted-foreground">No matching databases.</CommandEmpty>
-              <CommandGroup heading="In view" className="px-0 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pb-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-black **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em]">
+            <CommandList className="max-h-[min(56vh,26rem)] px-2 py-2">
+              <CommandEmpty className="py-8 text-center text-[11.5px] text-muted-foreground">
+                No matching databases.
+              </CommandEmpty>
+
+              <CommandGroup
+                heading={(
+                  <span className="flex items-center gap-1.5">
+                    <span className="section-label">In view</span>
+                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
+                      {visibleDbs.length}
+                    </span>
+                  </span>
+                ) as unknown as string}
+                className="db-picker__group px-0 pt-1 pb-0.5"
+              >
+                {visibleDbs.length === 0 && (
+                  <div className="mx-1 mb-0.5 rounded-md border border-dashed border-border/70 bg-card/40 px-3 py-2.5 text-[11px] leading-snug text-muted-foreground">
+                    <p className="font-medium text-foreground/80">No databases opened yet.</p>
+                    <p className="mt-0.5">
+                      Pick one from <span className="font-medium text-foreground/80">Available</span> below to start browsing.
+                    </p>
+                  </div>
+                )}
                 {visibleDbs.map((db) => {
                   const key = dbKey(db);
                   return (
@@ -1086,25 +1152,37 @@ function App() {
                       key={`visible:${key}`}
                       value={`visible ${db.name} ${db.origin}`}
                       onSelect={() => hideDatabaseFromView(key)}
-                      className="min-h-11 rounded-lg px-4 text-sm"
+                      className="db-picker__row db-picker__row--active group/command-item relative flex h-8 items-center gap-2 pl-3 pr-2 text-[12px]"
                     >
-                      <Database className="size-4" />
+                      <Database className="size-3.5 text-primary/80" />
                       <span className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="truncate font-semibold">{db.name}</span>
+                        <span className="truncate font-medium text-foreground">{db.name}</span>
                         {(multiOrigin || duplicateDbNames.has(db.name)) && (
                           <OriginBadge origin={db.origin} />
                         )}
                       </span>
-                      <CommandShortcut className="flex items-center gap-2 text-destructive group-data-selected/command-item:text-destructive">
-                        <span className="text-xs tracking-normal text-muted-foreground">v{db.version}</span>
-                        <X className="size-4" />
+                      <CommandShortcut className="flex items-center gap-1.5">
+                        <span className="chip chip--tight">v{db.version}</span>
+                        <X className="size-3 text-muted-foreground/40 opacity-0 transition-[color,opacity] group-hover/command-item:text-destructive group-hover/command-item:opacity-100 group-data-selected/command-item:text-destructive group-data-selected/command-item:opacity-100" />
                       </CommandShortcut>
                     </CommandItem>
                   );
                 })}
               </CommandGroup>
-              <CommandSeparator className="my-3" />
-              <CommandGroup heading="Available" className="px-0 **:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:pb-2 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-black **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em]">
+
+              {visibleDbs.length > 0 && hiddenDbs.length > 0 && <div className="h-1" />}
+
+              <CommandGroup
+                heading={(
+                  <span className="flex items-center gap-1.5">
+                    <span className="section-label">Available</span>
+                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
+                      {hiddenDbs.length}
+                    </span>
+                  </span>
+                ) as unknown as string}
+                className="db-picker__group px-0 pt-1 pb-0.5"
+              >
                 {hiddenDbs.map((db) => {
                   const key = dbKey(db);
                   return (
@@ -1112,17 +1190,19 @@ function App() {
                       key={`hidden:${key}`}
                       value={`available ${db.name} ${db.origin}`}
                       onSelect={() => showDatabaseInView(key)}
-                      className="min-h-11 rounded-lg px-4 text-sm"
+                      className="db-picker__row group/command-item flex h-8 items-center gap-2 pl-3 pr-2 text-[12px]"
                     >
-                      <Plus className="size-4" />
+                      <Plus className="size-3.5 text-muted-foreground/50 transition-colors group-hover/command-item:text-foreground group-data-selected/command-item:text-foreground" />
                       <span className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="truncate font-semibold">{db.name}</span>
+                        <span className="truncate font-medium text-foreground/85 transition-colors group-hover/command-item:text-foreground">
+                          {db.name}
+                        </span>
                         {(multiOrigin || duplicateDbNames.has(db.name)) && (
                           <OriginBadge origin={db.origin} />
                         )}
                       </span>
-                      <CommandShortcut className="text-xs tracking-normal text-muted-foreground group-data-selected/command-item:text-foreground">
-                        v{db.version}
+                      <CommandShortcut>
+                        <span className="chip chip--tight">v{db.version}</span>
                       </CommandShortcut>
                     </CommandItem>
                   );
@@ -1130,17 +1210,22 @@ function App() {
               </CommandGroup>
             </CommandList>
           </Command>
-          <div className="flex items-center justify-between border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
-            <span>
-              {visibleDbKeys.length} of {discovery?.indexedDb.length ?? 0} databases visible
+          <div className="flex items-center justify-between gap-3 border-t border-border bg-card/40 px-3.5 py-2 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="font-mono tabular-nums text-foreground/85">{visibleDbKeys.length}</span>
+              <span>of</span>
+              <span className="font-mono tabular-nums">{discovery?.indexedDb.length ?? 0}</span>
+              <span>visible</span>
             </span>
-            <span className="flex items-center gap-2">
-              <span>
-                scanned {discovery?.frames.length ?? 0} frame{(discovery?.frames.length ?? 0) === 1 ? "" : "s"}
+            <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1">
+                <span>scanned</span>
+                <span className="font-mono tabular-nums text-foreground/85">{discovery?.frames.length ?? 0}</span>
+                <span>frame{(discovery?.frames.length ?? 0) === 1 ? "" : "s"}</span>
               </span>
               {(discovery?.frames.length ?? 0) > 0 && (
-                <span className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] tracking-tight">
-                  {new Set(discovery?.frames.map((f) => f.origin)).size} origins
+                <span className="chip chip--tight">
+                  {new Set(discovery?.frames.map((f) => f.origin)).size} origin{new Set(discovery?.frames.map((f) => f.origin)).size === 1 ? "" : "s"}
                 </span>
               )}
             </span>
@@ -1150,33 +1235,28 @@ function App() {
 
       <Dialog open={Boolean(pendingAction)} onOpenChange={(open) => !open && setPendingAction(null)}>
         <DialogContent
-          className="max-w-[min(420px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-[22px] border-border bg-card p-0 text-card-foreground shadow-2xl"
+          className="max-w-[min(380px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-md border-border bg-card p-0 text-card-foreground shadow-2xl"
           showCloseButton={false}
         >
           <DialogHeader className="sr-only">
             <DialogTitle>{pendingActionTitle}</DialogTitle>
             <DialogDescription>{pendingAction?.label}</DialogDescription>
           </DialogHeader>
-          <Alert variant="destructive" className="rounded-none border-0 bg-transparent px-5 pt-5 pb-3">
-            <div className="space-y-2.5">
-              <AlertTitle className="text-[1.75rem] font-black tracking-tight text-foreground">{pendingActionTitle}</AlertTitle>
-              <AlertDescription className="text-sm leading-6 text-muted-foreground">
-                {pendingAction?.label}
-              </AlertDescription>
+          <div className="space-y-1.5 border-b border-border px-3 py-3">
+            <div className="flex items-start gap-2">
+              <Trash2 className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium tracking-tight text-foreground">{pendingActionTitle}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{pendingAction?.label}</p>
+              </div>
             </div>
-          </Alert>
-          <div className="flex items-center justify-end gap-2 border-t border-border/80 bg-card px-5 py-4">
-            <Button variant="outline" size="sm" className="min-w-24 rounded-md" onClick={() => setPendingAction(null)}>
+          </div>
+          <div className="flex items-center justify-end gap-1.5 bg-card px-3 py-2">
+            <Button variant="outline" size="xs" onClick={() => setPendingAction(null)}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="min-w-28 rounded-md"
-              onClick={() => void confirmPendingAction()}
-              disabled={busy}
-            >
-              {busy ? "Working..." : "Confirm"}
+            <Button variant="destructive" size="xs" onClick={() => void confirmPendingAction()} disabled={busy}>
+              {busy ? "Working…" : "Confirm"}
             </Button>
           </div>
         </DialogContent>
@@ -1205,7 +1285,7 @@ function QueryExampleButton({ onClick, children }: { onClick: () => void; childr
     <button
       type="button"
       onClick={onClick}
-      className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+      className="rounded-sm border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
     >
       {children}
     </button>
@@ -1284,46 +1364,47 @@ function RecordInspector({
   }, [draftValue, inspectedValue, selectedRecord]);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-l border-border bg-background">
-      <div className="border-b border-border p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">Inspector</p>
-            <h2 className="truncate text-xl font-black">{selectedRecord ? "Selected document" : "No row selected"}</h2>
-          </div>
+    <aside className="flex h-full min-h-0 flex-col border-l border-border bg-card">
+      <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="section-label">{isKv ? "KV record" : "Row"}</p>
           {selectedRecord && (
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">{isKv ? "Key value" : "Record"}</Badge>
-              <SecondaryActionButton onClick={onCopy} aria-label="Copy JSON">
-                <Copy className="size-4" />
-              </SecondaryActionButton>
-            </div>
+            <>
+              <span className="h-3 w-px bg-border" />
+              <span className="truncate font-mono text-[11px] text-foreground">
+                <span className="text-muted-foreground">key=</span>
+                <JsonInlineValue value={inspectedKey} />
+              </span>
+            </>
           )}
         </div>
         {selectedRecord && (
-          <div className="mt-3 rounded-md border border-border bg-card px-3 py-2 font-mono text-xs">
-            <span className="text-muted-foreground">key</span>
-            <span className="px-2 text-muted-foreground">=</span>
-            <JsonInlineValue value={inspectedKey} />
-          </div>
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label="Copy JSON"
+            className="flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Copy className="size-3" />
+          </button>
         )}
-      </div>
+      </header>
 
       {selectedRecord && draftValue !== null ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b border-border px-3 py-2">
+          <div className="border-b border-border bg-background px-2 py-1.5">
             <label className="relative block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-9 w-full rounded-md pl-9 text-sm"
+                className="h-6 w-full rounded-sm pl-6 text-[11px] md:text-[11px]"
                 value={fieldSearch}
                 onChange={(event) => setFieldSearch(event.target.value)}
-                placeholder="Search for field..."
+                placeholder="Search field…"
               />
             </label>
           </div>
           <ScrollArea className="min-h-0 flex-1">
-            <div className="flex flex-col gap-3 p-3">
+            <div className="flex flex-col">
               <FieldEditor
                 value={draftValue}
                 onChange={writeDraft}
@@ -1331,14 +1412,19 @@ function RecordInspector({
               />
             </div>
           </ScrollArea>
-          <div className="shrink-0 border-t border-border bg-card p-3">
-            <PrimaryActionButton onClick={saveRecord} disabled={busy || !dirty} className="w-full">
+          <div className="shrink-0 border-t border-border bg-card px-2 py-1.5">
+            <Button size="sm" onClick={saveRecord} disabled={busy || !dirty} className="h-6 w-full text-[11px] md:text-[11px]">
               {dirty ? "Save changes" : "No changes"}
-            </PrimaryActionButton>
+            </Button>
           </div>
         </div>
       ) : (
-        <div className="p-4 text-sm text-muted-foreground">Select a row to inspect its fields, nested values, and raw JSON.</div>
+        <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+          <div className="flex size-8 items-center justify-center rounded-sm border border-dashed border-border text-muted-foreground">
+            <Search className="size-3.5" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Select a row to inspect its fields, nested values, and raw JSON.</p>
+        </div>
       )}
     </aside>
   );
@@ -1363,7 +1449,7 @@ function FieldEditor({
       : entries;
 
     if (entries.length === 0) {
-      return <p className="text-xs text-muted-foreground">No fields. The document is an empty object.</p>;
+      return <p className="px-3 py-2 text-[11px] text-muted-foreground">No fields. The document is an empty object.</p>;
     }
 
     return (
@@ -1377,7 +1463,7 @@ function FieldEditor({
           />
         ))}
         {filtered.length === 0 && (
-          <p className="text-xs text-muted-foreground">No fields match "{searchText}".</p>
+          <p className="px-3 py-2 text-[11px] text-muted-foreground">No fields match "{searchText}".</p>
         )}
       </>
     );
@@ -1398,10 +1484,10 @@ function FieldRow({
   const type = inferType(value);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate font-mono text-[11px] text-foreground" title={name}>{name}</span>
-        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{type}</span>
+    <div className="border-b border-border pl-2 pr-3 py-1 last:border-b-0 hover:bg-muted/20">
+      <div className="flex items-baseline gap-2 pb-0.5">
+        <span className="min-w-0 flex-1 truncate text-[10px] text-foreground" title={name}>{name}</span>
+        <span className="shrink-0 font-mono text-[8px] uppercase tracking-wider text-muted-foreground">{type}</span>
       </div>
       <FieldInput value={value} onChange={onChange} type={type} />
     </div>
@@ -1419,27 +1505,28 @@ function FieldInput({
 }) {
   if (type === "boolean") {
     return (
-      <select
-        className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-        value={String(value)}
-        onChange={(event) => onChange(event.target.value === "true")}
-      >
-        <option value="true">true</option>
-        <option value="false">false</option>
-      </select>
+      <Select value={String(value)} onValueChange={(next) => onChange(next === "true")}>
+        <SelectTrigger size="sm" className="h-6 w-full rounded-sm font-mono text-[11px] md:text-[11px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="font-mono text-[11px] md:text-[11px]">
+          <SelectItem value="true">true</SelectItem>
+          <SelectItem value="false">false</SelectItem>
+        </SelectContent>
+      </Select>
     );
   }
 
   if (type === "null") {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Input
-          className="h-9 flex-1 cursor-not-allowed bg-muted/30 text-sm text-muted-foreground"
+          className="h-6 flex-1 cursor-not-allowed rounded-sm bg-muted/30 font-mono text-[11px] text-muted-foreground md:text-[11px]"
           value="NULL"
           disabled
           readOnly
         />
-        <Button variant="outline" size="sm" onClick={() => onChange("")}>Set</Button>
+        <Button variant="outline" size="xs" onClick={() => onChange("")}>Set</Button>
       </div>
     );
   }
@@ -1448,7 +1535,7 @@ function FieldInput({
     return (
       <Input
         type="number"
-        className="h-9 w-full rounded-md font-mono text-sm"
+        className="h-6 w-full rounded-sm font-mono text-[11px] md:text-[11px]"
         value={value === null ? "" : String(value)}
         onChange={(event) => {
           const raw = event.target.value;
@@ -1467,7 +1554,7 @@ function FieldInput({
     const pretty = JSON.stringify(value, null, 2);
     return (
       <Textarea
-        className="min-h-28 rounded-md font-mono text-xs leading-5"
+        className="min-h-20 rounded-sm font-mono text-[11px] leading-4 md:text-[11px]"
         value={pretty}
         spellCheck={false}
         onChange={(event) => {
@@ -1485,7 +1572,7 @@ function FieldInput({
   // string
   return (
     <Input
-      className="h-9 w-full rounded-md text-sm"
+      className="h-6 w-full rounded-sm font-mono text-[11px] md:text-[11px]"
       value={value as string}
       onChange={(event) => onChange(event.target.value)}
     />
@@ -1769,7 +1856,10 @@ function StorageTree({
   onRequestDeleteDatabase,
   onRequestDeleteStore,
   onRequestClearStore,
-  onHideDatabase
+  onHideDatabase,
+  onActivateDb,
+  activeDbKey,
+  onOpenPicker
 }: {
   discovery: StorageDiscovery | null;
   selected: SelectedNode;
@@ -1782,6 +1872,9 @@ function StorageTree({
   onRequestDeleteStore: (db: IndexedDbDatabaseInfo, storeName: string) => void;
   onRequestClearStore: (db: IndexedDbDatabaseInfo, storeName: string) => void;
   onHideDatabase: (key: string) => void;
+  onActivateDb: (key: string | null) => void;
+  activeDbKey: string | null;
+  onOpenPicker: () => void;
 }) {
   const [expandedDbKeys, setExpandedDbKeys] = useState<Set<string>>(new Set());
 
@@ -1802,165 +1895,259 @@ function StorageTree({
     });
   }, [discovery, selected]);
 
-  if (!discovery) return <p className="py-4 text-sm text-muted-foreground">Open DevTools on a page and refresh storage.</p>;
+  if (!discovery) return <p className="px-3 py-3 text-[11px] text-muted-foreground">Open DevTools on a page and refresh storage.</p>;
 
   const visibleDbs = discovery.indexedDb.filter((db) => visibleDbKeys.includes(dbKey(db)));
 
   return (
-    <nav className="flex flex-col gap-1">
-      <Button variant={selected.kind === "overview" ? "secondary" : "ghost"} className="justify-start" onClick={() => openNode({ kind: "overview" })}>
-        Origin dashboard
-      </Button>
-      <Button variant="outline" className="justify-between" onClick={openSql}>
-        Query <span className="text-muted-foreground">⌘↵</span>
-      </Button>
+    <nav className="flex flex-col">
+      <div className="flex flex-col gap-0.5 px-1.5 py-2">
+        <TreeItem
+          active={selected.kind === "overview"}
+          onClick={() => openNode({ kind: "overview" })}
+          icon={<Database className="size-3" />}
+          label="Origin dashboard"
+        />
+        <TreeItem
+          active={false}
+          onClick={openSql}
+          icon={<Search className="size-3" />}
+          label="Query"
+          trailing={
+            <KbdGroup>
+              <Kbd>⌘</Kbd>
+              <Kbd>↵</Kbd>
+            </KbdGroup>
+          }
+        />
+      </div>
 
-      <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">IndexedDB</h3>
-      {discovery.indexedDb.length === 0 && <p className="text-sm text-muted-foreground">No IndexedDB databases.</p>}
-      {visibleDbs.length === 0 && discovery.indexedDb.length > 0 && (
-        <p className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-          Click <span className="font-semibold text-foreground">Open</span> above to browse a database.
-        </p>
-      )}
-      {visibleDbs.map((db) => {
-        const key = dbKey(db);
-        const isExpanded = expandedDbKeys.has(key);
-        const isSelectedDb = selected.kind === "indexeddb" && selected.dbName === db.name && selected.dbVersion === db.version && selected.origin === db.origin;
-        const showOrigin = multiOrigin || duplicateDbNames.has(db.name);
-        return (
-          <div key={key} className="flex flex-col gap-1">
-            <ContextMenu>
-              <ContextMenuTrigger asChild>
-                <Button
-                  variant={isSelectedDb ? "secondary" : "ghost"}
-                  className={cn(
-                    "h-auto justify-between py-1.5",
-                    isSelectedDb && "bg-accent text-accent-foreground ring-1 ring-ring/30"
-                  )}
-                  onClick={() => {
-                    setExpandedDbKeys((current) => {
-                      const next = new Set(current);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    });
-                  }}
-                  aria-expanded={isExpanded}
-                >
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
+      <TreeSection label="IndexedDB" count={discovery.indexedDb.length}>
+        {discovery.indexedDb.length === 0 && (
+          <p className="px-3 py-2 text-[11px] text-muted-foreground">No databases.</p>
+        )}
+        {visibleDbs.length === 0 && discovery.indexedDb.length > 0 && (
+          <p className="mx-1.5 rounded-sm border border-dashed border-border px-2.5 py-2 text-[11px] text-muted-foreground">
+            Click{" "}
+            <button
+              type="button"
+              onClick={onOpenPicker}
+              className="font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              Open
+            </button>{" "}
+            to browse a database.
+          </p>
+        )}
+        {visibleDbs.map((db) => {
+          const key = dbKey(db);
+          const isExpanded = expandedDbKeys.has(key);
+          const isSelectedDb = selected.kind === "indexeddb" && selected.dbName === db.name && selected.dbVersion === db.version && selected.origin === db.origin;
+          const showOrigin = multiOrigin || duplicateDbNames.has(db.name);
+          return (
+            <div key={key} className="flex flex-col">
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "group mx-1.5 flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-[11px] transition-colors",
+                      isSelectedDb || activeDbKey === key
+                        ? "bg-accent text-accent-foreground"
+                        : "text-foreground/85 hover:bg-muted/60"
+                    )}
+                    onClick={() => {
+                      onActivateDb(key);
+                      setExpandedDbKeys((current) => {
+                        const next = new Set(current);
+                        if (next.has(key)) next.delete(key);
+                        else next.add(key);
+                        return next;
+                      });
+                    }}
+                    aria-expanded={isExpanded}
+                  >
                     <ChevronRight
-                      data-icon="inline-start"
-                      className={isExpanded ? "rotate-90 transition-transform" : "transition-transform"}
+                      className={cn(
+                        "size-3 shrink-0 text-muted-foreground transition-transform",
+                        isExpanded && "rotate-90"
+                      )}
                     />
-                    <Database data-icon="inline-start" />
-                    <span className="flex min-w-0 flex-col items-start gap-0.5">
+                    <Database className="size-3 shrink-0 text-muted-foreground" />
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
                       <span className="truncate">{db.name}</span>
                       {showOrigin && <OriginBadge origin={db.origin} />}
                     </span>
-                  </span>
-                  <span className={cn("text-xs text-muted-foreground", isSelectedDb && "text-current/75")}>
-                    v{db.version}
-                  </span>
-                </Button>
-              </ContextMenuTrigger>
-              <ContextMenuContent className="w-52">
-                <ContextMenuItem onSelect={() => onHideDatabase(key)}>Hide from sidebar</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem variant="destructive" onSelect={() => onRequestDeleteDatabase(db)}>
-                  Delete database
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-            {isExpanded && (
-              <div className="ml-4 flex flex-col gap-1 border-l border-border pl-2">
-                {db.stores.map((store) => {
-                  const isSelectedStore = isSelectedDb && selected.kind === "indexeddb" && selected.storeName === store.name;
-                  return (
-                    <ContextMenu key={`${key}:${store.name}`}>
-                      <ContextMenuTrigger asChild>
-                        <Button
-                          variant={isSelectedStore ? "secondary" : "ghost"}
-                          className={cn(
-                            "justify-between",
-                            isSelectedStore && "bg-primary text-primary-foreground ring-1 ring-primary/70 shadow-sm hover:bg-primary/90"
-                          )}
-                          onClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId })}
-                          onDoubleClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <Table2 data-icon="inline-start" />
-                            <span className="truncate">{store.name}</span>
-                          </span>
-                          <span className={cn("text-muted-foreground", isSelectedStore && "text-primary-foreground/80")}>
-                            {store.count ?? "?"}
-                          </span>
-                        </Button>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent className="w-52">
-                        <ContextMenuItem onSelect={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}>
-                          Open in tab
-                        </ContextMenuItem>
-                        <ContextMenuItem onSelect={() => onRequestClearStore(db, store.name)}>
-                          Clear store
-                        </ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem variant="destructive" onSelect={() => onRequestDeleteStore(db, store.name)}>
-                          Delete store
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+                    <span className="font-mono text-[10px] text-muted-foreground/80">v{db.version}</span>
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-52">
+                  <ContextMenuItem onSelect={() => onHideDatabase(key)}>Hide from sidebar</ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem variant="destructive" onSelect={() => onRequestDeleteDatabase(db)}>
+                    Delete database
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+              {isExpanded && (
+                <div className="flex flex-col">
+                  {db.stores.map((store) => {
+                    const isSelectedStore = isSelectedDb && selected.kind === "indexeddb" && selected.storeName === store.name;
+                    return (
+                      <ContextMenu key={`${key}:${store.name}`}>
+                        <ContextMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className={cn(
+                              "mx-1.5 flex items-center gap-1.5 rounded-sm py-1 pr-1.5 pl-6 text-left text-[11px] transition-colors",
+                              isSelectedStore
+                                ? "bg-primary/25 text-foreground"
+                                : "text-foreground/80 hover:bg-muted/60"
+                            )}
+                            onClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId })}
+                            onDoubleClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}
+                          >
+                            <Table2 className="size-3 shrink-0 text-muted-foreground" />
+                            <span className="flex-1 truncate">{store.name}</span>
+                            <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                              {store.count ?? "?"}
+                            </span>
+                          </button>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent className="w-52">
+                          <ContextMenuItem onSelect={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}>
+                            Open in tab
+                          </ContextMenuItem>
+                          <ContextMenuItem onSelect={() => onRequestClearStore(db, store.name)}>
+                            Clear store
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem variant="destructive" onSelect={() => onRequestDeleteStore(db, store.name)}>
+                            Delete store
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </TreeSection>
 
-      <h3 className="mt-4 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Storage</h3>
-      <Button variant={selected.kind === "kv" && selected.surface === "localStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => openNode({ kind: "kv", surface: "localStorage" }, { persist: true })}>
-        LocalStorage <span className="text-muted-foreground">{discovery.localStorage.count}</span>
-      </Button>
-      <Button variant={selected.kind === "kv" && selected.surface === "sessionStorage" ? "secondary" : "ghost"} className="justify-between" onClick={() => openNode({ kind: "kv", surface: "sessionStorage" }, { persist: true })}>
-        SessionStorage <span className="text-muted-foreground">{discovery.sessionStorage.count}</span>
-      </Button>
+      <TreeSection label="Storage" count={2}>
+        <TreeItem
+          active={selected.kind === "kv" && selected.surface === "localStorage"}
+          onClick={() => openNode({ kind: "kv", surface: "localStorage" }, { persist: true })}
+          icon={<Database className="size-3" />}
+          label="LocalStorage"
+          trailing={<span className="font-mono text-[10px] text-muted-foreground tabular-nums">{discovery.localStorage.count}</span>}
+        />
+        <TreeItem
+          active={selected.kind === "kv" && selected.surface === "sessionStorage"}
+          onClick={() => openNode({ kind: "kv", surface: "sessionStorage" }, { persist: true })}
+          icon={<Database className="size-3" />}
+          label="SessionStorage"
+          trailing={<span className="font-mono text-[10px] text-muted-foreground tabular-nums">{discovery.sessionStorage.count}</span>}
+        />
+      </TreeSection>
     </nav>
   );
 }
 
-function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
-  if (!discovery) return <p className="p-4 text-sm text-muted-foreground">No storage metadata loaded yet.</p>;
-  const stores = discovery.indexedDb.flatMap((db) => db.stores.map((store) => ({ db: db.name, version: db.version, origin: db.origin, ...store })));
+function TreeSection({ label, count, children }: { label: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="grid grid-cols-4 gap-3 p-4">
-      <article className="rounded-lg border border-border bg-card p-4">
-        <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">IndexedDB</p>
-        <strong className="mt-2 block text-3xl font-black">{discovery.indexedDb.length}</strong>
-        <span className="text-muted-foreground">databases</span>
-      </article>
-      <article className="rounded-lg border border-border bg-card p-4">
-        <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">Object stores</p>
-        <strong className="mt-2 block text-3xl font-black">{stores.length}</strong>
-        <span className="text-muted-foreground">tables</span>
-      </article>
-      <article className="rounded-lg border border-border bg-card p-4">
-        <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">LocalStorage</p>
-        <strong className="mt-2 block text-3xl font-black">{discovery.localStorage.count}</strong>
-        <span className="text-muted-foreground">{formatBytes(discovery.localStorage.bytes)}</span>
-      </article>
-      <article className="rounded-lg border border-border bg-card p-4">
-        <p className="text-[11px] font-black uppercase tracking-normal text-muted-foreground">SessionStorage</p>
-        <strong className="mt-2 block text-3xl font-black">{discovery.sessionStorage.count}</strong>
-        <span className="text-muted-foreground">{formatBytes(discovery.sessionStorage.bytes)}</span>
-      </article>
-      <section className="col-span-4 rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-2 text-[11px] font-black uppercase tracking-normal text-muted-foreground">Largest stores</h3>
-        {stores.length === 0 ? <p>No object stores found.</p> : stores.sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).slice(0, 8).map((store) => (
-          <div className="flex justify-between border-t border-border py-3" key={`${store.origin}::${store.db}:v${store.version}:${store.name}`}>
-            <span>{store.db}.{store.name}</span>
-            <strong>{store.count ?? "?"} rows</strong>
-          </div>
-        ))}
+    <section className="border-t border-border py-1.5">
+      <header className="flex items-center justify-between px-3 py-1">
+        <h3 className="section-label">{label}</h3>
+        {typeof count === "number" && (
+          <span className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">{count}</span>
+        )}
+      </header>
+      <div className="flex flex-col">{children}</div>
+    </section>
+  );
+}
+
+function TreeItem({
+  active,
+  onClick,
+  icon,
+  label,
+  trailing
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  label: string;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "mx-1.5 flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-[11px] transition-colors",
+        active
+          ? "bg-accent text-accent-foreground"
+          : "text-foreground/85 hover:bg-muted/60"
+      )}
+    >
+      {icon && <span className="text-muted-foreground">{icon}</span>}
+      <span className="flex-1 truncate">{label}</span>
+      {trailing && <span className="flex shrink-0 items-center leading-none">{trailing}</span>}
+    </button>
+  );
+}
+
+function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
+  if (!discovery) return <p className="p-4 text-xs text-muted-foreground">No storage metadata loaded yet.</p>;
+  const stores = discovery.indexedDb.flatMap((db) => db.stores.map((store) => ({ db: db.name, version: db.version, origin: db.origin, ...store })));
+  const totalRows = stores.reduce((sum, s) => sum + (s.count ?? 0), 0);
+
+  const tile = (label: string, value: React.ReactNode, sub: string) => (
+    <article className="flex min-h-0 flex-col justify-between rounded-sm border border-border bg-card px-3 py-2.5">
+      <p className="section-label">{label}</p>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <strong className="font-mono text-[20px] font-medium leading-none tabular-nums">{value}</strong>
+        <span className="text-[11px] text-muted-foreground">{sub}</span>
+      </div>
+    </article>
+  );
+
+  return (
+    <section className="grid min-h-0 grid-cols-4 gap-2 overflow-auto p-3">
+      {tile("IndexedDB", discovery.indexedDb.length, "databases")}
+      {tile("Object stores", stores.length, "tables")}
+      {tile("LocalStorage", discovery.localStorage.count, formatBytes(discovery.localStorage.bytes))}
+      {tile("SessionStorage", discovery.sessionStorage.count, formatBytes(discovery.sessionStorage.bytes))}
+
+      <section className="col-span-4 rounded-sm border border-border bg-card">
+        <header className="flex items-center justify-between border-b border-border px-3 py-1.5">
+          <h3 className="section-label">Largest stores</h3>
+          <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{totalRows} rows total</span>
+        </header>
+        <div className="divide-y divide-border">
+          {stores.length === 0 ? (
+            <p className="px-3 py-2 text-[11px] text-muted-foreground">No object stores found.</p>
+          ) : stores.sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).slice(0, 12).map((store) => (
+            <div
+              className="flex items-center justify-between px-3 py-1.5 text-[11px]"
+              key={`${store.origin}::${store.db}:v${store.version}:${store.name}`}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Table2 className="size-3 shrink-0 text-muted-foreground" />
+                <span className="truncate font-mono">
+                  <span className="text-muted-foreground">{store.db}</span>
+                  <span className="text-foreground/30">.</span>
+                  <span className="text-foreground">{store.name}</span>
+                </span>
+              </span>
+              <span className="font-mono text-muted-foreground tabular-nums">{store.count ?? "?"}</span>
+            </div>
+          ))}
+        </div>
       </section>
     </section>
   );
@@ -1982,7 +2169,7 @@ function PanelToggleButton({
   return (
     <Button
       type="button"
-      size="icon-sm"
+      size="icon-xs"
       variant={active ? "secondary" : "outline"}
       className={active ? "border border-border" : undefined}
       aria-pressed={active}
@@ -2027,36 +2214,18 @@ function DataGrid({
     () => [
       {
         id: "key",
-        header: "Key",
+        header: "key",
         accessorFn: (row) => JSON.stringify(row.key),
-        cell: ({ getValue }) => <code className="font-mono text-foreground">{String(getValue())}</code>
+        cell: ({ getValue }) => <span className="font-mono text-muted-foreground tabular-nums">{String(getValue())}</span>
       },
       ...visibleColumns.map<ColumnDef<IndexedDbRecord>>((column) => ({
         id: column,
         header: column,
         accessorFn: (row) => renderColumn(row, column),
-        cell: ({ getValue }) => String(getValue() ?? "")
-      })),
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Delete record"
-            className="h-9 w-full justify-center rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(row.original);
-            }}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        )
-      }
+        cell: ({ getValue }) => <span className="font-mono text-foreground">{String(getValue() ?? "")}</span>
+      }))
     ],
-    [onDelete, visibleColumns]
+    [visibleColumns]
   );
   const table = useReactTable({
     data: indexedRows,
@@ -2066,15 +2235,18 @@ function DataGrid({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel()
   });
-  if (indexedRows.length === 0) return <p className="p-4 text-sm text-muted-foreground">No records loaded.</p>;
+  if (indexedRows.length === 0) return <p className="p-3 text-[11px] text-muted-foreground">No records loaded.</p>;
   return (
-    <div className="min-h-0 flex-1 overflow-auto border-b border-border bg-background">
-      <table className="w-full border-collapse text-xs">
+    <div className="min-h-0 flex-1 overflow-auto bg-background">
+      <table className="w-full border-collapse text-[11px]">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
-                <th key={header.id} className="sticky top-0 z-10 border-b border-r border-border bg-card px-3 py-2 text-left text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                <th
+                  key={header.id}
+                  className="sticky top-0 z-10 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[10px] font-medium lowercase tracking-wide text-muted-foreground backdrop-blur-sm last:border-r-0"
+                >
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </th>
               ))}
@@ -2082,29 +2254,40 @@ function DataGrid({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr
-              key={row.id}
-              className={`cursor-pointer odd:bg-background even:bg-muted/30 hover:bg-muted ${sameIndexedRecord(selectedRecord, row.original) ? "bg-accent text-accent-foreground" : ""}`}
-              onClick={() => onSelect(row.original)}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td
-                  key={cell.id}
-                  className={
-                    cell.column.id === "actions"
-                      ? "w-16 border-b border-r border-border p-1"
-                      : "max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-3 py-1.5"
-                  }
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map((row, rowIndex) => {
+            const isSelected = sameIndexedRecord(selectedRecord, row.original);
+            return (
+              <ContextMenu key={row.id}>
+                <ContextMenuTrigger asChild>
+                  <tr
+                    className={cn(
+                      "group/datarow cursor-default transition-colors",
+                      rowIndex % 2 === 1 && !isSelected && "bg-muted/20",
+                      isSelected ? "bg-primary/25" : "hover:bg-muted/60"
+                    )}
+                    onClick={() => onSelect(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td
+                        key={cell.id}
+                        className="max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-2 py-0.5 leading-5 last:border-r-0"
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-40">
+                  <ContextMenuItem variant="destructive" onSelect={() => onDelete(row.original)}>
+                    Delete record
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
         </tbody>
       </table>
-      {table.getRowModel().rows.length === 0 && <p className="p-4 text-sm text-muted-foreground">No rows match the filter.</p>}
+      {table.getRowModel().rows.length === 0 && <p className="p-3 text-[11px] text-muted-foreground">No rows match the filter.</p>}
     </div>
   );
 }
@@ -2126,31 +2309,13 @@ function KvGrid({
     () => [
       {
         accessorKey: "key",
-        header: "Key",
-        cell: ({ row }) => <code className="font-mono text-foreground">{row.original.key}</code>
+        header: "key",
+        cell: ({ row }) => <span className="font-mono text-foreground">{row.original.key}</span>
       },
-      { id: "value", header: "Value", accessorFn: (row) => row.parsed.preview },
-      { id: "type", header: "Type", accessorFn: (row) => row.parsed.type },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Delete key"
-            className="h-9 w-full justify-center rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(row.original);
-            }}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        )
-      }
+      { id: "value", header: "value", accessorFn: (row) => row.parsed.preview, cell: ({ getValue }) => <span className="font-mono text-foreground/85">{String(getValue() ?? "")}</span> },
+      { id: "type", header: "type", accessorFn: (row) => row.parsed.type, cell: ({ getValue }) => <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{String(getValue() ?? "")}</span> }
     ],
-    [onDelete]
+    []
   );
   const table = useReactTable({
     data: rows,
@@ -2160,15 +2325,18 @@ function KvGrid({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel()
   });
-  if (rows.length === 0) return <p className="p-4 text-sm text-muted-foreground">No keys found.</p>;
+  if (rows.length === 0) return <p className="p-3 text-[11px] text-muted-foreground">No keys found.</p>;
   return (
-    <div className="h-full overflow-auto border-b border-border bg-background">
-      <table className="w-full border-collapse text-xs">
+    <div className="h-full overflow-auto bg-background">
+      <table className="w-full border-collapse text-[11px]">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
-                <th key={header.id} className="sticky top-0 z-10 border-b border-r border-border bg-card px-3 py-2 text-left text-[11px] font-black uppercase tracking-normal text-muted-foreground">
+                <th
+                  key={header.id}
+                  className="sticky top-0 z-10 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[10px] font-medium lowercase tracking-wide text-muted-foreground backdrop-blur-sm last:border-r-0"
+                >
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </th>
               ))}
@@ -2176,29 +2344,40 @@ function KvGrid({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr
-              key={row.id}
-              className={`cursor-pointer odd:bg-background even:bg-muted/30 hover:bg-muted ${selectedRecord?.key === row.original.key ? "bg-accent text-accent-foreground" : ""}`}
-              onClick={() => onSelect(row.original)}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td
-                  key={cell.id}
-                  className={
-                    cell.column.id === "actions"
-                      ? "w-16 border-b border-r border-border p-1"
-                      : "max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-3 py-1.5"
-                  }
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map((row, rowIndex) => {
+            const isSelected = selectedRecord?.key === row.original.key;
+            return (
+              <ContextMenu key={row.id}>
+                <ContextMenuTrigger asChild>
+                  <tr
+                    className={cn(
+                      "group/datarow cursor-default transition-colors",
+                      rowIndex % 2 === 1 && !isSelected && "bg-muted/20",
+                      isSelected ? "bg-primary/25" : "hover:bg-muted/60"
+                    )}
+                    onClick={() => onSelect(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td
+                        key={cell.id}
+                        className="max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-2 py-0.5 leading-5 last:border-r-0"
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-40">
+                  <ContextMenuItem variant="destructive" onSelect={() => onDelete(row.original)}>
+                    Delete key
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
         </tbody>
       </table>
-      {table.getRowModel().rows.length === 0 && <p className="p-4 text-sm text-muted-foreground">No keys match the filter.</p>}
+      {table.getRowModel().rows.length === 0 && <p className="p-3 text-[11px] text-muted-foreground">No keys match the filter.</p>}
     </div>
   );
 }
