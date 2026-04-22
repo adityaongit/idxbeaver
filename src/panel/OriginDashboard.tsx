@@ -258,10 +258,12 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
       <Dialog open={nukeOpen} onOpenChange={(v) => { if (!nukeProgress) setNukeOpen(v); }}>
         <DialogContent className="w-[380px]">
           <DialogHeader>
-            <DialogTitle>Nuke <span className="font-mono">{hostname}</span>?</DialogTitle>
+            <DialogTitle>Delete all storage?</DialogTitle>
             <DialogDescription className="text-[11.5px] leading-relaxed">
               Permanently deletes all cookies, LocalStorage, SessionStorage, IndexedDB
-              databases, and Cache Storage for this origin. Cannot be undone.
+              databases, and Cache Storage for{" "}
+              <span className="break-all font-mono text-foreground">{hostname}</span>.
+              {" "}Cannot be undone.
             </DialogDescription>
           </DialogHeader>
           {nukeDone ? (
@@ -273,7 +275,8 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-[11.5px] text-muted-foreground">
-                Type <span className="font-mono font-medium text-foreground">{hostname}</span> to confirm:
+                Type the hostname to confirm:
+                <span className="mt-0.5 block break-all font-mono text-[11px] text-foreground">{hostname}</span>
               </p>
               <Input
                 ref={nukeInputRef}
@@ -281,7 +284,7 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
                 onChange={(e) => setNukeInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && nukeInput === hostname) void handleNuke(); }}
                 placeholder={hostname}
-                className="font-mono text-[12px]"
+                className="font-mono text-[11px]"
               />
               <Button
                 variant="destructive"
@@ -290,7 +293,7 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
                 onClick={() => void handleNuke()}
                 className="w-full"
               >
-                Delete all data for {hostname}
+                Delete all data
               </Button>
             </div>
           )}
