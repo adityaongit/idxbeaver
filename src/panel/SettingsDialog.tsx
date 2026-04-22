@@ -164,6 +164,15 @@ export function SettingsDialog({ open, prefs, onOpenChange, onPrefsChange }: Set
               onChange={(v) => patch({ showHiddenSystemDbs: v })}
             />
           </section>
+
+          <section className="space-y-2">
+            <h3 className="section-label">Sidebar</h3>
+            <CheckRow
+              label="Show row counts and sizes"
+              checked={draft.showStoreSizes}
+              onChange={(v) => patch({ showStoreSizes: v })}
+            />
+          </section>
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-border bg-card px-3 py-2">

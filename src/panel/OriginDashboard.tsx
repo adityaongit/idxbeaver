@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Database, Trash2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { cn } from "@/lib/utils";
 import type {
   CookieRecord,
   StorageDiscovery,
@@ -12,16 +11,15 @@ import type {
   StorageRequest
 } from "../shared/types";
 
-function formatBytes(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  let v = bytes;
-  let u = 0;
-  while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
-  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[u]}`;
+function fmtBytes(bytes: number | null): string {
+  if (bytes === null || bytes === 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(2)} GB`;
 }
 
-function formatNum(n: number): string {
+function fmtNum(n: number): string {
   return n.toLocaleString();
 }
 
@@ -47,7 +45,6 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
     void rpc({ type: "storageEstimate", tabId }).then((r) => {
       if (r.ok) setEstimate(r.data as StorageEstimateResult);
     });
-    // Fetch cookies to check for expired ones
     const url = discovery.url || discovery.origin;
     if (url) {
       void rpc({ type: "readCookies", tabId, url }).then((r) => {
@@ -70,12 +67,10 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
 
   const handleNuke = useCallback(async () => {
     if (!discovery) return;
-    const hostname = (() => {
-      try { return new URL(discovery.origin).hostname; } catch { return discovery.origin; }
-    })();
+    const hostname = (() => { try { return new URL(discovery.origin).hostname; } catch { return discovery.origin; } })();
     if (nukeInput !== hostname) return;
-    setNukeProgress("Clearing cookies…");
     const url = discovery.url || discovery.origin;
+    setNukeProgress("Clearing cookies…");
     await rpc({ type: "clearCookies", tabId, url }).catch(() => null);
     setNukeProgress("Clearing LocalStorage…");
     await rpc({ type: "clearKeyValue", tabId, surface: "localStorage" }).catch(() => null);
@@ -98,23 +93,20 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
     return <p className="p-4 text-xs text-muted-foreground">No storage metadata loaded yet.</p>;
   }
 
-  const hostname = (() => {
-    try { return new URL(discovery.origin).hostname; } catch { return discovery.origin; }
-  })();
+  const hostname = (() => { try { return new URL(discovery.origin).hostname; } catch { return discovery.origin; } })();
 
   const stores = discovery.indexedDb.flatMap((db) =>
     db.stores.map((store) => {
       const key = `${db.origin}::${db.name}::v${db.version}::${store.name}`;
       const summary = storeSummaries.get(key);
       return {
-        db: db.name, version: db.version, origin: db.origin, frameId: db.frameId,
+        db: db.name, version: db.version, origin: db.origin,
         name: store.name, count: store.count,
         approxBytes: summary && summary !== "loading" ? summary.approxBytes : null,
       };
     })
   );
 
-  // Sort stores by approxBytes if available, else by count
   const sortedStores = [...stores].sort((a, b) => {
     if (a.approxBytes !== null && b.approxBytes !== null) return b.approxBytes - a.approxBytes;
     if (a.approxBytes !== null) return -1;
@@ -122,150 +114,162 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
     return (b.count ?? 0) - (a.count ?? 0);
   });
 
-  // Per-surface byte estimates (best-effort)
-  const idbBytes = stores.reduce((sum, s) => sum + (s.approxBytes ?? 0), 0);
+  const idbBytes = stores.reduce((s, r) => s + (r.approxBytes ?? 0), 0);
   const lsBytes = discovery.localStorage.bytes;
   const ssBytes = discovery.sessionStorage.bytes;
   const cookieBytes = discovery.cookies?.bytes ?? 0;
-  const cacheBytes = 0; // not easily summed without fetching all entries
-  const knownBytes = idbBytes + lsBytes + ssBytes + cookieBytes + cacheBytes;
+  const knownBytes = idbBytes + lsBytes + ssBytes + cookieBytes;
   const totalBytes = estimate?.usage ?? knownBytes;
+  const quota = estimate?.quota ?? null;
 
-  const surfaces: { label: string; bytes: number; count: string }[] = [
-    { label: "IndexedDB", bytes: idbBytes, count: `${discovery.indexedDb.length} DBs · ${stores.length} stores` },
-    { label: "LocalStorage", bytes: lsBytes, count: `${discovery.localStorage.count} keys` },
-    { label: "SessionStorage", bytes: ssBytes, count: `${discovery.sessionStorage.count} keys` },
-    { label: "Cookies", bytes: cookieBytes, count: `${discovery.cookies?.count ?? 0} cookies` },
-    ...(discovery.cacheStorage?.caches.length ? [{ label: "Cache", bytes: cacheBytes, count: `${discovery.cacheStorage.caches.length} caches` }] : []),
-  ].filter((s) => s.bytes > 0 || s.count !== "0 keys");
-
-  const maxSurfaceBytes = Math.max(...surfaces.map((s) => s.bytes), 1);
-
-  const hasStaleData = staleCookies.length > 0;
+  type SurfaceRow = { label: string; bytes: number; detail: string };
+  const surfaceRows: SurfaceRow[] = [
+    { label: "IndexedDB", bytes: idbBytes, detail: `${discovery.indexedDb.length} db · ${stores.length} stores` },
+    { label: "LocalStorage", bytes: lsBytes, detail: `${discovery.localStorage.count} keys` },
+    { label: "SessionStorage", bytes: ssBytes, detail: `${discovery.sessionStorage.count} keys` },
+    { label: "Cookies", bytes: cookieBytes, detail: `${discovery.cookies?.count ?? 0} cookies` },
+    ...(discovery.cacheStorage?.caches.length
+      ? [{ label: "Cache", bytes: 0, detail: `${discovery.cacheStorage.caches.length} caches` }]
+      : []),
+  ];
+  const maxBytes = Math.max(...surfaceRows.map((r) => r.bytes), 1);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] text-muted-foreground">Origin</p>
-          <h2 className="font-mono text-sm font-medium">{discovery.origin}</h2>
+    <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+      {/* Origin header bar */}
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/40 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="section-label shrink-0">Origin</span>
+          <span className="truncate font-mono text-[11px] text-foreground/80">{discovery.origin}</span>
         </div>
-        <Button
-          variant="destructive"
-          size="xs"
-          onClick={() => setNukeOpen(true)}
-          className="shrink-0 gap-1"
-        >
-          <Trash2 className="size-3" />
-          Nuke origin
-        </Button>
+        {quota !== null && (
+          <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
+            {fmtBytes(totalBytes)} / {fmtBytes(quota)}
+          </span>
+        )}
       </div>
 
-      {/* Summary tiles */}
-      <div className="grid grid-cols-4 gap-2">
-        {tile("Total storage", estimate?.usage !== undefined && estimate.usage !== null ? formatBytes(estimate.usage) : formatBytes(knownBytes), estimate?.quota ? `of ${formatBytes(estimate.quota)}` : "estimated")}
-        {tile("IndexedDB", String(discovery.indexedDb.length), "databases")}
-        {tile("Object stores", String(stores.length), "tables")}
-        {tile("Rows (IDB)", formatNum(stores.reduce((s, r) => s + (r.count ?? 0), 0)), "across all stores")}
-      </div>
+      <div className="flex flex-col gap-4 p-3">
+        {/* Compact stats row */}
+        <div className="grid grid-cols-4 divide-x divide-border rounded-sm border border-border bg-card text-[11px]">
+          <StatCell label="Total storage" value={fmtBytes(totalBytes)} />
+          <StatCell label="IndexedDB" value={`${discovery.indexedDb.length}`} sub="databases" />
+          <StatCell label="Object stores" value={`${stores.length}`} />
+          <StatCell label="Total rows" value={fmtNum(stores.reduce((s, r) => s + (r.count ?? 0), 0))} />
+        </div>
 
-      {/* Per-surface breakdown */}
-      <article className="rounded-sm border border-border bg-card">
-        <header className="border-b border-border px-3 py-1.5">
-          <h3 className="section-label">Storage breakdown</h3>
-        </header>
-        <div className="divide-y divide-border">
-          {surfaces.map((surf) => (
-            <div key={surf.label} className="flex items-center gap-3 px-3 py-2">
-              <span className="w-24 shrink-0 text-[11px] text-muted-foreground">{surf.label}</span>
-              <div className="min-w-0 flex-1">
-                <div className="mb-0.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary/70"
-                    style={{ width: `${Math.max(surf.bytes / maxSurfaceBytes * 100, surf.bytes > 0 ? 2 : 0)}%` }}
-                  />
+        {/* Surface breakdown */}
+        <section>
+          <h3 className="section-label mb-2">Storage breakdown</h3>
+          <div className="rounded-sm border border-border bg-card">
+            {surfaceRows.map((row, i) => (
+              <div
+                key={row.label}
+                className={`flex items-center gap-3 px-3 py-1.5 text-[11px] ${i > 0 ? "border-t border-border" : ""}`}
+              >
+                <span className="w-24 shrink-0 text-muted-foreground">{row.label}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary/60 transition-all"
+                      style={{ width: `${row.bytes > 0 ? Math.max(row.bytes / maxBytes * 100, 2) : 0}%` }}
+                    />
+                  </div>
                 </div>
-                <span className="text-[10px] text-muted-foreground">{surf.count}</span>
-              </div>
-              <span className="w-16 shrink-0 text-right font-mono text-[11px] tabular-nums">
-                {surf.bytes > 0 ? formatBytes(surf.bytes) : "—"}
-              </span>
-            </div>
-          ))}
-          {surfaces.length === 0 && (
-            <p className="px-3 py-2 text-[11px] text-muted-foreground">No storage data available.</p>
-          )}
-        </div>
-      </article>
-
-      {/* Top stores */}
-      <article className="rounded-sm border border-border bg-card">
-        <header className="flex items-center justify-between border-b border-border px-3 py-1.5">
-          <h3 className="section-label">Top stores</h3>
-          <span className="font-mono text-[10px] text-muted-foreground">by size estimate</span>
-        </header>
-        <div className="divide-y divide-border">
-          {sortedStores.length === 0 ? (
-            <p className="px-3 py-2 text-[11px] text-muted-foreground">No object stores found.</p>
-          ) : sortedStores.slice(0, 5).map((store, i) => (
-            <div
-              key={`${store.origin}::${store.db}::v${store.version}::${store.name}`}
-              className="flex items-center justify-between px-3 py-1.5 text-[11px]"
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="w-3 text-center font-mono text-[10px] text-muted-foreground/50">{i + 1}</span>
-                <Database className="size-3 shrink-0 text-muted-foreground" />
-                <span className="truncate font-mono">
-                  <span className="text-muted-foreground">{store.db}</span>
-                  <span className="text-border">.</span>
-                  <span className="text-foreground">{store.name}</span>
+                <span className="w-20 shrink-0 text-right font-mono tabular-nums text-muted-foreground">
+                  {row.bytes > 0 ? fmtBytes(row.bytes) : row.detail}
                 </span>
-              </span>
-              <span className="flex shrink-0 items-center gap-3 font-mono text-[10px] text-muted-foreground tabular-nums">
-                {store.count !== null ? <span>{formatNum(store.count)} rows</span> : null}
-                {store.approxBytes !== null ? <span>{formatBytes(store.approxBytes)}</span> : null}
-              </span>
-            </div>
-          ))}
-        </div>
-      </article>
-
-      {/* Stale data */}
-      {hasStaleData && (
-        <article className="rounded-sm border border-amber-500/30 bg-amber-500/5">
-          <header className="flex items-center gap-2 border-b border-amber-500/20 px-3 py-1.5">
-            <AlertTriangle className="size-3 text-amber-500" />
-            <h3 className="section-label text-amber-600 dark:text-amber-400">Stale data detected</h3>
-          </header>
-          <div className="divide-y divide-border px-3 py-1">
-            {staleCookies.map((c) => (
-              <p key={c.name} className="py-1 text-[11px] text-muted-foreground">
-                Cookie <span className="font-mono text-foreground">{c.name}</span> expired{" "}
-                {c.expirationDate ? new Date(c.expirationDate * 1000).toLocaleDateString() : ""}
-              </p>
+                {row.bytes > 0 && (
+                  <span className="w-20 shrink-0 text-right text-muted-foreground/60">{row.detail}</span>
+                )}
+              </div>
             ))}
           </div>
-        </article>
-      )}
+        </section>
+
+        {/* Top stores */}
+        <section>
+          <h3 className="section-label mb-2">Top stores</h3>
+          <div className="rounded-sm border border-border bg-card">
+            {sortedStores.length === 0 ? (
+              <p className="px-3 py-2 text-[11px] text-muted-foreground">No object stores found.</p>
+            ) : sortedStores.slice(0, 5).map((store, i) => (
+              <div
+                key={`${store.origin}::${store.db}::v${store.version}::${store.name}`}
+                className={`flex items-center justify-between px-3 py-1.5 text-[11px] ${i > 0 ? "border-t border-border" : ""}`}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="w-3 shrink-0 text-center font-mono text-[10px] text-muted-foreground/40">{i + 1}</span>
+                  <span className="truncate font-mono">
+                    <span className="text-muted-foreground">{store.db}.</span>
+                    <span className="text-foreground">{store.name}</span>
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3 font-mono text-[10px] text-muted-foreground tabular-nums">
+                  {store.count !== null && <span>{fmtNum(store.count)} rows</span>}
+                  {store.approxBytes !== null && <span>{fmtBytes(store.approxBytes)}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Stale data */}
+        {staleCookies.length > 0 && (
+          <section>
+            <h3 className="section-label mb-2 flex items-center gap-1.5">
+              <AlertTriangle className="size-3 text-amber-500" />
+              Stale cookies
+            </h3>
+            <div className="rounded-sm border border-amber-500/20 bg-amber-500/5">
+              {staleCookies.map((c, i) => (
+                <div
+                  key={c.name}
+                  className={`flex items-center justify-between px-3 py-1.5 text-[11px] ${i > 0 ? "border-t border-amber-500/10" : ""}`}
+                >
+                  <span className="font-mono text-foreground/80">{c.name}</span>
+                  <span className="text-muted-foreground">
+                    expired {c.expirationDate ? new Date(c.expirationDate * 1000).toLocaleDateString() : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Danger zone */}
+        <section className="border-t border-border pt-3">
+          <h3 className="section-label mb-2 text-destructive/70">Danger zone</h3>
+          <div className="flex items-center justify-between rounded-sm border border-destructive/20 bg-card px-3 py-2 text-[11px]">
+            <span className="text-muted-foreground">Permanently delete all storage for this origin</span>
+            <Button
+              variant="outline"
+              size="xs"
+              className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              onClick={() => setNukeOpen(true)}
+            >
+              Nuke origin…
+            </Button>
+          </div>
+        </section>
+      </div>
 
       {/* Nuke dialog */}
       <Dialog open={nukeOpen} onOpenChange={(v) => { if (!nukeProgress) setNukeOpen(v); }}>
         <DialogContent className="w-[380px]">
           <DialogHeader>
-            <DialogTitle className="text-destructive">Nuke this origin</DialogTitle>
-            <DialogDescription className="text-[11.5px] leading-snug">
-              This will permanently delete <strong>all</strong> cookies, LocalStorage, SessionStorage,
-              IndexedDB databases, and Cache Storage for <strong className="font-mono">{discovery.origin}</strong>.
-              This cannot be undone.
+            <DialogTitle>Nuke <span className="font-mono">{hostname}</span>?</DialogTitle>
+            <DialogDescription className="text-[11.5px] leading-relaxed">
+              Permanently deletes all cookies, LocalStorage, SessionStorage, IndexedDB
+              databases, and Cache Storage for this origin. Cannot be undone.
             </DialogDescription>
           </DialogHeader>
           {nukeDone ? (
-            <div className="py-2 text-center text-[12px] text-muted-foreground">
-              Origin cleared. Refresh the page to confirm.
-            </div>
+            <p className="py-1 text-center text-[12px] text-muted-foreground">
+              Done. Reload the page to confirm.
+            </p>
           ) : nukeProgress ? (
-            <div className="py-2 text-center text-[12px] text-muted-foreground">{nukeProgress}</div>
+            <p className="py-1 text-center text-[12px] text-muted-foreground">{nukeProgress}</p>
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-[11.5px] text-muted-foreground">
@@ -292,18 +296,18 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
           )}
         </DialogContent>
       </Dialog>
-    </section>
+    </div>
   );
 }
 
-function tile(label: string, value: string, sub: string) {
+function StatCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <article className="flex min-h-0 flex-col justify-between rounded-sm border border-border bg-card px-3 py-2.5">
-      <p className="section-label">{label}</p>
-      <div className="mt-1.5 flex items-baseline gap-2">
-        <strong className="font-mono text-[20px] font-medium leading-none tabular-nums">{value}</strong>
-        <span className="text-[11px] text-muted-foreground">{sub}</span>
-      </div>
-    </article>
+    <div className="flex flex-col gap-0.5 px-3 py-2">
+      <span className="section-label">{label}</span>
+      <span className="flex items-baseline gap-1.5">
+        <strong className="font-mono text-[16px] font-medium leading-tight tabular-nums">{value}</strong>
+        {sub && <span className="text-[10px] text-muted-foreground">{sub}</span>}
+      </span>
+    </div>
   );
 }

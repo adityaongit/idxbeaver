@@ -1202,6 +1202,7 @@ function App() {
               onOpenPicker={() => setDatabasePickerOpen(true)}
               storeSummaries={storeSummaries}
               onExpandDb={fetchDbSummaries}
+              showStoreSizes={prefs.showStoreSizes}
             />
           </aside>
         </ResizablePanel>
@@ -2552,7 +2553,8 @@ function StorageTree({
   activeDbKey,
   onOpenPicker,
   storeSummaries,
-  onExpandDb
+  onExpandDb,
+  showStoreSizes
 }: {
   discovery: StorageDiscovery | null;
   selected: SelectedNode;
@@ -2570,6 +2572,7 @@ function StorageTree({
   onOpenPicker: () => void;
   storeSummaries: Map<string, StoreSummary | "loading">;
   onExpandDb: (db: IndexedDbDatabaseInfo) => void;
+  showStoreSizes: boolean;
 }) {
   const [expandedDbKeys, setExpandedDbKeys] = useState<Set<string>>(new Set());
 
@@ -2709,6 +2712,7 @@ function StorageTree({
                             <Table2 className="size-3 shrink-0 text-muted-foreground" />
                             <span className="flex-1 truncate">{store.name}</span>
                             {(() => {
+                              if (!showStoreSizes) return <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{store.count ?? "?"}</span>;
                               const sKey = `${db.origin}::${db.name}::v${db.version}::${store.name}`;
                               const summary = storeSummaries.get(sKey);
                               if (summary === "loading") return <span className="font-mono text-[10px] text-muted-foreground/50">…</span>;

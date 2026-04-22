@@ -8,6 +8,7 @@ export type Prefs = {
   uiFontSize: number;
   showHiddenSystemDbs: boolean;
   confirmDestructive: boolean;
+  showStoreSizes: boolean;
 };
 
 export const DEFAULTS: Prefs = {
@@ -18,6 +19,7 @@ export const DEFAULTS: Prefs = {
   uiFontSize: 12,
   showHiddenSystemDbs: false,
   confirmDestructive: true,
+  showStoreSizes: true,
 };
 
 const STORAGE_KEY = "prefs.v1";
