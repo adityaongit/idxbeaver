@@ -417,6 +417,42 @@ function App() {
     }
   };
 
+  const saveIndexedCell = async (record: IndexedDbRecord, column: string, rawValue: string) => {
+    if (selected.kind !== "indexeddb") return;
+    let parsed: SerializableValue;
+    try {
+      parsed = JSON.parse(rawValue);
+    } catch {
+      parsed = rawValue;
+    }
+    const baseValue = record.value.value;
+    const isPlainObject = baseValue && typeof baseValue === "object" && !Array.isArray(baseValue);
+    const nextValue: SerializableValue =
+      column === "value" || !isPlainObject
+        ? parsed
+        : { ...(baseValue as Record<string, SerializableValue>), [column]: parsed };
+    try {
+      setBusy(true);
+      const response = await rpc({
+        type: "putIndexedDbRecord",
+        tabId,
+        frameId: selected.frameId,
+        dbName: selected.dbName,
+        dbVersion: selected.dbVersion,
+        storeName: selected.storeName,
+        key: record.key,
+        value: nextValue
+      });
+      setBusy(false);
+      if (!response.ok) throw new Error(response.error);
+      await loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName);
+      setNotice({ tone: "success", message: `Saved ${column}.` });
+    } catch (error) {
+      setBusy(false);
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
   const addIndexedRecord = async () => {
     if (selected.kind !== "indexeddb") return;
     try {
@@ -993,6 +1029,7 @@ function App() {
                       selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
                       onSelect={selectRecord}
                       onDelete={deleteIndexedRecord}
+                      onSaveCell={saveIndexedCell}
                     />
                     <DataFooter
                       totalRows={patternFilteredRows.length}
@@ -2648,7 +2685,8 @@ function DataGrid({
   filterText,
   selectedRecord,
   onSelect,
-  onDelete
+  onDelete,
+  onSaveCell
 }: {
   columns: string[];
   indexedRows: IndexedDbRecord[];
@@ -2656,8 +2694,29 @@ function DataGrid({
   selectedRecord: IndexedDbRecord | null;
   onSelect: (record: IndexedDbRecord) => void;
   onDelete: (record: IndexedDbRecord) => void;
+  onSaveCell?: (record: IndexedDbRecord, column: string, rawValue: string) => void | Promise<void>;
 }) {
   const visibleColumns = columns.length > 0 ? columns : ["value"];
+  const [editing, setEditing] = useState<{ rowKey: string; column: string } | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const beginEdit = (record: IndexedDbRecord, column: string) => {
+    if (!onSaveCell) return;
+    setEditing({ rowKey: JSON.stringify(record.key), column });
+    setDraft(cellEditInitial(record, column));
+  };
+  const cancelEdit = () => {
+    setEditing(null);
+    setDraft("");
+  };
+  const commitEdit = async (record: IndexedDbRecord) => {
+    if (!editing || !onSaveCell) return;
+    const column = editing.column;
+    setEditing(null);
+    await onSaveCell(record, column, draft);
+    setDraft("");
+  };
+
   const columnDefs = useMemo<ColumnDef<IndexedDbRecord>[]>(
     () => [
       {
@@ -2704,6 +2763,7 @@ function DataGrid({
         <tbody>
           {table.getRowModel().rows.map((row, rowIndex) => {
             const isSelected = sameIndexedRecord(selectedRecord, row.original);
+            const rowKey = JSON.stringify(row.original.key);
             return (
               <ContextMenu key={row.id}>
                 <ContextMenuTrigger asChild>
@@ -2715,14 +2775,36 @@ function DataGrid({
                     )}
                     onClick={() => onSelect(row.original)}
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <td
-                        key={cell.id}
-                        className="max-w-80 overflow-hidden text-ellipsis whitespace-nowrap border-b border-r border-border px-2 py-0.5 leading-5 last:border-r-0"
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
+                    {row.getVisibleCells().map((cell) => {
+                      const columnId = cell.column.id;
+                      const isEditing = editing?.rowKey === rowKey && editing.column === columnId;
+                      const isEditable = Boolean(onSaveCell) && columnId !== "key";
+                      return (
+                        <td
+                          key={cell.id}
+                          className={cn(
+                            "max-w-80 overflow-hidden whitespace-nowrap border-b border-r border-border leading-5 last:border-r-0",
+                            isEditing ? "p-0" : "text-ellipsis px-2 py-0.5"
+                          )}
+                          onDoubleClick={(event) => {
+                            if (!isEditable) return;
+                            event.stopPropagation();
+                            beginEdit(row.original, columnId);
+                          }}
+                        >
+                          {isEditing ? (
+                            <CellEditor
+                              value={draft}
+                              onChange={setDraft}
+                              onCommit={() => void commitEdit(row.original)}
+                              onCancel={cancelEdit}
+                            />
+                          ) : (
+                            flexRender(cell.column.columnDef.cell, cell.getContext())
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-40">
@@ -2826,6 +2908,75 @@ function KvGrid({
         </tbody>
       </table>
       {table.getRowModel().rows.length === 0 && <p className="p-3 text-[11px] text-muted-foreground">No keys match the filter.</p>}
+    </div>
+  );
+}
+
+function cellEditInitial(record: IndexedDbRecord, column: string) {
+  if (column === "value") {
+    const value = record.value.value;
+    return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  }
+  const value = record.value.value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const cell = (value as Record<string, unknown>)[column];
+  if (cell === undefined || cell === null) return "";
+  if (typeof cell === "string") return cell;
+  if (typeof cell === "number" || typeof cell === "boolean") return String(cell);
+  return JSON.stringify(cell);
+}
+
+function CellEditor({
+  value,
+  onChange,
+  onCommit,
+  onCancel
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, []);
+  return (
+    <div className="flex items-center gap-1 bg-background px-1 py-0.5" onClick={(event) => event.stopPropagation()}>
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onCommit();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          }
+        }}
+        className="h-5 min-w-0 flex-1 border-0 bg-transparent font-mono text-[11px] text-foreground outline-none ring-1 ring-primary/60 focus:ring-primary rounded-[2px] px-1"
+      />
+      <button
+        type="button"
+        onClick={onCommit}
+        className="rounded-[2px] bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
+        aria-label="Save cell"
+      >
+        Save
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-[2px] px-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+        aria-label="Cancel edit"
+      >
+        <X className="size-3" />
+      </button>
     </div>
   );
 }
