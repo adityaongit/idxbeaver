@@ -1,8 +1,41 @@
 import type { CookieRecord, FrameInfo, IndexedDbDatabaseInfo, PanelMessage, PanelReply, StorageRequest, StorageResponse } from "../shared/types";
+import { isIdempotent } from "../shared/rpcIds";
+
+const SESSION_PREFIX = "rpc:";
+
+function sessionSet(id: string, type: StorageRequest["type"], idempotent: boolean): void {
+  if (!chrome.storage?.session) return;
+  void chrome.storage.session.set({
+    [`${SESSION_PREFIX}${id}`]: { id, type, startedAt: Date.now(), idempotent }
+  });
+}
+
+function sessionDelete(id: string): void {
+  if (!chrome.storage?.session) return;
+  void chrome.storage.session.remove(`${SESSION_PREFIX}${id}`);
+}
+
+// On worker startup, check for orphaned in-flight entries from a previous
+// worker lifetime and notify connected panels so they can reconcile.
+chrome.runtime.onInstalled.addListener(() => { void cleanupOrphanedSession(); });
+chrome.runtime.onStartup.addListener(() => { void cleanupOrphanedSession(); });
+
+async function cleanupOrphanedSession(): Promise<void> {
+  if (!chrome.storage?.session) return;
+  const all = await chrome.storage.session.get(null);
+  const orphaned = Object.keys(all).filter((k) => k.startsWith(SESSION_PREFIX));
+  if (orphaned.length > 0) {
+    await chrome.storage.session.remove(orphaned);
+    // Broadcast PANEL_RESYNC so any open panels can re-trigger idempotent queries.
+    chrome.runtime.sendMessage({ type: "PANEL_RESYNC", orphanCount: orphaned.length }).catch(() => undefined);
+  }
+}
 
 chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener(async (message: PanelMessage) => {
+    sessionSet(message.id, message.request.type, isIdempotent(message.request));
     const response = await handleStorageRequest(message.request);
+    sessionDelete(message.id);
     const reply: PanelReply = { id: message.id, response };
     port.postMessage(reply);
   });
@@ -215,8 +248,14 @@ async function discoverAcrossFrames(tabId: number): Promise<StorageResponse> {
 }
 
 async function executeStorageRequest(request: StorageRequest): Promise<any> {
-  const serializeValue = (input: unknown, seen = new WeakSet<object>()): { type: string; preview: string; value: unknown } => {
-    const normalizeValue = (value: unknown): unknown => {
+  const uint8ToBase64 = (bytes: Uint8Array): string => {
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  };
+
+  const serializeValue = (input: unknown, seen: unknown[] = []): { type: string; preview: string; value: unknown } => {
+    const normalizeValue = (value: unknown, s: unknown[]): unknown => {
       if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
         return value;
       }
@@ -224,26 +263,32 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
       if (typeof value === "bigint") return { $type: "BigInt", value: value.toString() };
       if (typeof value === "function") return { $type: "Function" };
       if (typeof value !== "object") return String(value);
-      if (seen.has(value)) return { $type: "Circular" };
-      seen.add(value);
+      const refIdx = s.indexOf(value);
+      if (refIdx !== -1) return { $type: "Circular", ref: refIdx };
+      s.push(value);
       if (value instanceof Date) return { $type: "Date", value: value.toISOString() };
-      if (value instanceof RegExp) return { $type: "RegExp", value: value.toString() };
+      if (value instanceof RegExp) return { $type: "RegExp", src: value.source, flags: value.flags };
       if (value instanceof Map) {
-        return { $type: "Map", entries: Array.from(value.entries()).map(([key, item]) => [normalizeValue(key), normalizeValue(item)]) };
+        return { $type: "Map", entries: Array.from(value.entries()).map(([key, item]) => [normalizeValue(key, s), normalizeValue(item, s)]) };
       }
       if (value instanceof Set) {
-        return { $type: "Set", values: Array.from(value.values()).map((item) => normalizeValue(item)) };
+        return { $type: "Set", values: Array.from(value.values()).map((item) => normalizeValue(item, s)) };
       }
-      if (ArrayBuffer.isView(value)) return { $type: value.constructor.name, bytes: value.byteLength };
-      if (value instanceof ArrayBuffer) return { $type: "ArrayBuffer", bytes: value.byteLength };
+      if (value instanceof ArrayBuffer) {
+        return { $type: "ArrayBuffer", bytes: value.byteLength, b64: uint8ToBase64(new Uint8Array(value)) };
+      }
+      if (ArrayBuffer.isView(value)) {
+        const ctor = (value as unknown as { constructor: { name: string } }).constructor.name;
+        return { $type: ctor, bytes: (value as ArrayBufferView).byteLength, b64: uint8ToBase64(new Uint8Array((value as ArrayBufferView).buffer)) };
+      }
       if (typeof Blob !== "undefined" && value instanceof Blob) {
-        return { $type: "Blob", bytes: value.size, mime: value.type };
+        return { $type: "Blob", blobId: crypto.randomUUID(), bytes: (value as Blob).size, mime: (value as Blob).type };
       }
-      if (Array.isArray(value)) return value.map((item) => normalizeValue(item));
-      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, normalizeValue(item)]));
+      if (Array.isArray(value)) return value.map((item) => normalizeValue(item, s));
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, normalizeValue(item, s)]));
     };
 
-    const normalized = normalizeValue(input);
+    const normalized = normalizeValue(input, seen);
     const preview = (() => {
       if (normalized === null) return "null";
       if (typeof normalized === "string") return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
@@ -251,11 +296,17 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
       if (Array.isArray(normalized)) return `Array(${normalized.length})`;
       const objectValue = normalized as Record<string, unknown>;
       if (typeof objectValue.$type === "string") {
-        if (typeof objectValue.bytes === "number") return `<${objectValue.$type} ${objectValue.bytes} bytes>`;
+        if (typeof objectValue.bytes === "number") {
+          const b = objectValue.bytes as number;
+          const fmtB = b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${Math.round(b / 1024)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
+          return `<${objectValue.$type} ${fmtB}>`;
+        }
         if (typeof objectValue.value === "string") return `<${objectValue.$type} ${objectValue.value}>`;
+        if (typeof objectValue.src === "string") return `<${objectValue.$type} /${objectValue.src}/${(objectValue.flags as string) ?? ""}>`;
         return `<${objectValue.$type}>`;
       }
-      return `{ ${Object.keys(objectValue).slice(0, 4).join(", ")}${Object.keys(objectValue).length > 4 ? ", ..." : ""} }`;
+      const keys = Object.keys(objectValue).filter((k) => !k.startsWith("$"));
+      return `{ ${keys.slice(0, 4).join(", ")}${keys.length > 4 ? ", ..." : ""} }`;
     })();
 
     return {
@@ -792,6 +843,51 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
       }
       const est = await navigator.storage.estimate();
       return { ok: true, data: { usage: est.usage ?? null, quota: est.quota ?? null } };
+    }
+
+    if (request.type === "readIndexedDbStoreChunk") {
+      const db = await openDb(request.dbName);
+      const tx = db.transaction(request.storeName, "readonly");
+      const store = tx.objectStore(request.storeName);
+      const total = await requestToPromise(store.count()).catch(() => null);
+      const rows: Array<{ key: unknown; value: ReturnType<typeof serializeValue> }> = [];
+      let skipped = 0;
+
+      await new Promise<void>((resolve, reject) => {
+        const cursorRequest = store.openCursor();
+        cursorRequest.onerror = () => reject(cursorRequest.error ?? new Error("Unable to read records"));
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor || rows.length >= request.limit) {
+            resolve();
+            return;
+          }
+          if (skipped < request.offset) {
+            skipped++;
+            cursor.continue();
+            return;
+          }
+          rows.push({ key: serializeValue(cursor.primaryKey).value, value: serializeValue(cursor.value) });
+          cursor.continue();
+        };
+      });
+
+      db.close();
+      return { ok: true, data: { rows, columns: inferColumns(rows), total } };
+    }
+
+    if (request.type === "bulkPutIndexedDbRows") {
+      const db = await openDb(request.dbName);
+      const tx = db.transaction(request.storeName, "readwrite");
+      const store = tx.objectStore(request.storeName);
+      const hasInlineKey = store.keyPath !== null;
+      for (const row of request.rows) {
+        if (hasInlineKey) store.put(row.value);
+        else store.put(row.value, row.key as IDBValidKey);
+      }
+      await txDone(tx);
+      db.close();
+      return { ok: true, data: { success: true } };
     }
 
     return { ok: false, error: "Unsupported storage request." };
