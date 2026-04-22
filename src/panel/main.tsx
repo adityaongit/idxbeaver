@@ -657,10 +657,14 @@ function App() {
 
   const handleDuplicateRow = (record: IndexedDbRecord) => {
     if (!selectedStore) return;
+    const strat = keyStrategy(selectedStore);
+    // Auto-increment inline keys must be omitted so the store issues a new key.
+    const autoKeyPaths = strat.kind === "autoIncrementInline" ? new Set(strat.path) : new Set<string>();
     const value = record.value.value;
     const prefill: Record<string, string> = {};
     if (value && typeof value === "object" && !Array.isArray(value)) {
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (autoKeyPaths.has(k)) continue;
         if (typeof v === "string") prefill[k] = v;
         else if (v !== null && v !== undefined) prefill[k] = JSON.stringify(v);
       }

@@ -7,7 +7,6 @@ import {
   type ColumnDef,
   type ColumnOrderState,
   type ColumnPinningState,
-  type ColumnSizingState,
 } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../components/ui/context-menu";
@@ -175,7 +174,7 @@ export function DataGrid({
   // Column ops state
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>([]);
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: ["key"] });
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [columnSizing, setColumnSizing] = useState<Record<string, number>>({});
 
   // Drag state for column reorder
   const dragColRef = useRef<string | null>(null);
@@ -207,14 +206,14 @@ export function DataGrid({
     const key = `colwidths:${storageKey}`;
     if (typeof chrome !== "undefined" && chrome.storage?.local) {
       chrome.storage.local.get(key, (result) => {
-        const saved = result[key] as ColumnSizingState | undefined;
+        const saved = result[key] as Record<string, number> | undefined;
         if (saved) setColumnSizing(saved);
       });
     }
   }, [storageKey]);
 
   const persistColumnWidths = useCallback(
-    (sizing: ColumnSizingState) => {
+    (sizing: Record<string, number>) => {
       if (!storageKey || typeof chrome === "undefined" || !chrome.storage?.local) return;
       const key = `colwidths:${storageKey}`;
       chrome.storage.local.set({ [key]: sizing });
@@ -222,7 +221,7 @@ export function DataGrid({
     [storageKey]
   );
 
-  // Column resize handlers
+  // Column resize handlers — currentWidth is read from DOM offsetWidth at drag start
   const startResize = (e: React.MouseEvent, colId: string, currentWidth: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -356,14 +355,12 @@ export function DataGrid({
     return () => el?.removeEventListener("keydown", handler);
   }, [selectedKeys, indexedRows, onBulkDelete, selectedRecord, onDuplicate]);
 
-  // Column defs
+  // Column defs — no size here; minWidth is applied via columnSizing in style props
   const columnDefs = useMemo<ColumnDef<IndexedDbRecord>[]>(
     () => [
       {
         id: "key",
         header: "key",
-        size: columnSizing["key"] ?? KEY_COL_WIDTH,
-        enableResizing: true,
         accessorFn: (row) => JSON.stringify(row.key),
         cell: ({ getValue }) => (
           <span className="font-mono text-muted-foreground tabular-nums">{String(getValue())}</span>
@@ -372,8 +369,6 @@ export function DataGrid({
       ...visibleColumns.map<ColumnDef<IndexedDbRecord>>((col) => ({
         id: col,
         header: col,
-        size: columnSizing[col] ?? DEFAULT_COL_WIDTH,
-        enableResizing: true,
         accessorFn: (row) => renderColumn(row, col),
         cell: ({ row }) => {
           const rawValue = getCellRawValue(row.original, col);
@@ -382,7 +377,7 @@ export function DataGrid({
         },
       })),
     ],
-    [visibleColumns, columnSizing, schemaMap]
+    [visibleColumns, schemaMap]
   );
 
   const allColIds = useMemo(() => ["key", ...visibleColumns], [visibleColumns]);
@@ -393,20 +388,10 @@ export function DataGrid({
     state: {
       columnOrder: columnOrder.length > 0 ? columnOrder : allColIds,
       columnPinning,
-      columnSizing,
     },
     onColumnOrderChange: setColumnOrder,
     onColumnPinningChange: setColumnPinning,
-    onColumnSizingChange: (updater) => {
-      setColumnSizing((prev) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
-        persistColumnWidths(next);
-        return next;
-      });
-    },
     getCoreRowModel: getCoreRowModel(),
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -427,12 +412,7 @@ export function DataGrid({
       tabIndex={0}
       style={{ outline: "none" }}
     >
-      <table className="w-full border-collapse text-[11px]" style={{ tableLayout: "fixed" }}>
-        <colgroup>
-          {orderedHeaders.map((header) => (
-            <col key={header.id} style={{ width: header.getSize() }} />
-          ))}
-        </colgroup>
+      <table className="w-full border-collapse text-[11px]">
         <thead>
           <tr>
             {orderedHeaders.map((header) => {
@@ -444,7 +424,7 @@ export function DataGrid({
                   <ContextMenuTrigger asChild>
                     <th
                       className={cn(
-                        "sticky top-0 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[10px] font-medium lowercase tracking-wide text-muted-foreground backdrop-blur-sm last:border-r-0",
+                        "group/th sticky top-0 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[10px] font-medium lowercase tracking-wide text-muted-foreground backdrop-blur-sm last:border-r-0",
                         isPinned && "z-20",
                         !isPinned && "z-10",
                         dragOverCol === colId && "bg-primary/20"
@@ -452,10 +432,14 @@ export function DataGrid({
                       style={{
                         left: isPinned ? 0 : undefined,
                         position: isPinned ? "sticky" : undefined,
-                        width: header.getSize(),
+                        minWidth: columnSizing[colId] ?? undefined,
+                        whiteSpace: "nowrap",
                       }}
                       draggable={!isKey}
-                      onDragStart={() => { dragColRef.current = colId; }}
+                      onDragStart={(e) => {
+                        if ((e.target as HTMLElement).dataset.resizeHandle) { e.preventDefault(); return; }
+                        dragColRef.current = colId;
+                      }}
                       onDragOver={(e) => { e.preventDefault(); setDragOverCol(colId); }}
                       onDragLeave={() => setDragOverCol(null)}
                       onDrop={() => {
@@ -478,10 +462,11 @@ export function DataGrid({
                         </span>
                         {!isKey && (
                           <div
-                            className="w-1 cursor-col-resize rounded-full bg-border opacity-0 hover:opacity-100"
-                            onMouseDown={(e) => startResize(e, colId, header.getSize())}
+                            data-resize-handle="1"
+                            className="cursor-col-resize rounded-full bg-primary/60 opacity-0 transition-opacity group-hover/th:opacity-100"
+                            onMouseDown={(e) => startResize(e, colId, (e.currentTarget.closest("th") as HTMLElement).offsetWidth)}
                             onClick={(e) => e.stopPropagation()}
-                            style={{ height: 12, minWidth: 4 }}
+                            style={{ height: 12, minWidth: 3, width: 3 }}
                           />
                         )}
                       </div>
@@ -590,12 +575,15 @@ export function DataGrid({
                         <td
                           key={cell.id}
                           className={cn(
-                            "max-w-80 overflow-hidden whitespace-nowrap border-b border-r border-border leading-5 last:border-r-0",
+                            "overflow-hidden whitespace-nowrap border-b border-r border-border leading-5 last:border-r-0",
                             isEditing ? "p-0" : "text-ellipsis px-2 py-0.5",
                             isPinned && "sticky left-0 z-[2]",
                             isPinned && (isSelected ? "bg-primary/25" : isBulkSelected ? "bg-primary/15" : rowIdx % 2 === 1 ? "bg-muted/20" : "bg-background")
                           )}
-                          style={{ left: isPinned ? 0 : undefined }}
+                          style={{
+                            left: isPinned ? 0 : undefined,
+                            minWidth: columnSizing[colId] ?? undefined,
+                          }}
                           onDoubleClick={(e) => {
                             if (!isEditable) return;
                             e.stopPropagation();
