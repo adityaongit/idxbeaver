@@ -1260,101 +1260,122 @@ function App() {
             )}
 
             {activeTabId === "sql" && (
-              <section className="flex min-h-0 flex-1">
-                <aside className="flex w-48 shrink-0 flex-col border-r border-border bg-card">
-                  <div className="flex shrink-0 border-b border-border">
-                    <button
-                      type="button"
-                      onClick={() => setSqlSidePanel("history")}
-                      className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "history" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                    >
-                      History
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSqlSidePanel("saved")}
-                      className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "saved" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                    >
-                      Saved
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    {sqlSidePanel === "history" ? (
-                      <QueryHistoryPanel
-                        entries={historyEntries}
-                        origin={discovery?.origin ?? ""}
-                        onLoad={(text) => { setQueryText(text); }}
-                        onClear={() => void getHistory(discovery?.origin ?? "").then(setHistoryEntries)}
-                      />
-                    ) : (
-                      <SavedQueriesPanel
-                        queries={savedQueries}
-                        onLoad={(text) => { setQueryText(text); }}
-                        onMutated={() => void getSavedQueries(discovery?.origin ?? "").then(setSavedQueries)}
-                      />
-                    )}
-                  </div>
-                </aside>
-                <div className="flex min-h-0 flex-1 flex-col">
-                <div className="min-h-56 border-b border-border bg-card">
-                  <Suspense fallback={<div className="grid min-h-56 place-items-center text-[11px] text-muted-foreground">Loading editor…</div>}>
-                    <QueryEditor
-                      value={queryText}
-                      onChange={setQueryText}
-                      onRun={() => void runQuery()}
-                      suggestions={querySuggestionPool}
-                      theme={theme}
-                      databases={discovery?.indexedDb ?? []}
-                      inferredColumns={inferredSchema}
-                    />
-                  </Suspense>
-                </div>
-                <div className="flex items-center justify-between gap-3 border-b border-border bg-card/50 px-3 py-1.5 text-[11px] text-muted-foreground">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <span className="section-label mr-1">Examples</span>
-                    <QueryExampleButton onClick={() => setQueryText(exampleFindActive(selected))}>active</QueryExampleButton>
-                    <QueryExampleButton onClick={() => setQueryText(exampleTopByCreated(selected))}>top 10 by createdAt</QueryExampleButton>
-                    <QueryExampleButton onClick={() => setQueryText(exampleRegex(selected))}>email regex</QueryExampleButton>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-mono">
-                      {selected.kind === "indexeddb"
-                        ? `${selected.dbName} v${selected.dbVersion} · ${selected.storeName}`
-                        : queryDbContext
-                          ? `${queryDbContext.dbName} v${queryDbContext.dbVersion} · any store`
-                          : "no database opened"}
-                    </span>
-                    <Button size="xs" onClick={runQuery} disabled={busy || !queryDbContext}>
-                      Run
-                      <KbdGroup className="ml-1 opacity-70">
-                        <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">⌘</Kbd>
-                        <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">↵</Kbd>
-                      </KbdGroup>
-                    </Button>
-                  </div>
-                </div>
-                {queryResult ? (
-                  <>
-                    <p className="border-b border-border bg-muted/20 px-3 py-1 font-mono text-[10px] text-muted-foreground">{queryResult.plan}</p>
-                    <DataGrid
-                      columns={queryResult.columns}
-                      indexedRows={queryResult.rows.map((row) => ({ key: row.key, value: row.value }))}
-                      selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
-                      onSelect={selectRecord}
-                      onDelete={deleteIndexedRecord}
-                    />
-                  </>
-                ) : (
-                  <div className="grid min-h-52 place-items-center p-6">
-                    <div className="max-w-sm space-y-1.5 text-center text-[11px] text-muted-foreground">
-                      <p className="font-medium text-foreground">MongoDB-style query in JSON</p>
-                      <p>Required: <code className="font-mono text-foreground/80">store</code>. Optional: <code className="font-mono text-foreground/80">filter sort limit project</code>.</p>
-                      <p className="font-mono text-[10px] leading-relaxed">$eq · $ne · $gt · $gte · $lt · $lte · $in · $nin · $regex · $exists · $and · $or · $not</p>
+              <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+                <ResizablePanel defaultSize="22%" minSize="140px" maxSize="40%">
+                  <aside className="flex h-full flex-col bg-card">
+                    <div className="flex shrink-0 border-b border-border">
+                      <button
+                        type="button"
+                        onClick={() => setSqlSidePanel("history")}
+                        className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "history" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        History
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSqlSidePanel("saved")}
+                        className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "saved" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                      >
+                        Saved
+                      </button>
                     </div>
-                  </div>
-                )}
-                </div>
-              </section>
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                      {sqlSidePanel === "history" ? (
+                        <QueryHistoryPanel
+                          entries={historyEntries}
+                          origin={discovery?.origin ?? ""}
+                          onLoad={(text) => { setQueryText(text); }}
+                          onClear={() => void getHistory(discovery?.origin ?? "").then(setHistoryEntries)}
+                        />
+                      ) : (
+                        <SavedQueriesPanel
+                          queries={savedQueries}
+                          onLoad={(text) => { setQueryText(text); }}
+                          onMutated={() => void getSavedQueries(discovery?.origin ?? "").then(setSavedQueries)}
+                        />
+                      )}
+                    </div>
+                  </aside>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize="78%" minSize="300px">
+                  <ResizablePanelGroup orientation="vertical" className="h-full">
+                    <ResizablePanel defaultSize="45%" minSize="150px">
+                      <div className="flex h-full flex-col">
+                        <div className="min-h-0 flex-1 bg-card">
+                          <Suspense fallback={<div className="grid h-full place-items-center text-[11px] text-muted-foreground">Loading editor…</div>}>
+                            <QueryEditor
+                              value={queryText}
+                              onChange={setQueryText}
+                              onRun={() => void runQuery()}
+                              suggestions={querySuggestionPool}
+                              theme={theme}
+                              databases={discovery?.indexedDb ?? []}
+                              inferredColumns={inferredSchema}
+                            />
+                          </Suspense>
+                        </div>
+                        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card/50 px-3 py-1.5 text-[11px] text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className="section-label mr-1">Examples</span>
+                            <QueryExampleButton onClick={() => setQueryText(exampleFindActive(selected))}>active</QueryExampleButton>
+                            <QueryExampleButton onClick={() => setQueryText(exampleTopByCreated(selected))}>top 10 by createdAt</QueryExampleButton>
+                            <QueryExampleButton onClick={() => setQueryText(exampleRegex(selected))}>email regex</QueryExampleButton>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-mono">
+                              {selected.kind === "indexeddb"
+                                ? `${selected.dbName} v${selected.dbVersion} · ${selected.storeName}`
+                                : queryDbContext
+                                  ? `${queryDbContext.dbName} v${queryDbContext.dbVersion} · any store`
+                                  : "no database opened"}
+                            </span>
+                            <Button size="xs" variant="outline" onClick={() => setSaveQueryDialogOpen(true)}>
+                              Save
+                              <KbdGroup className="ml-1 opacity-70">
+                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">⌘</Kbd>
+                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">S</Kbd>
+                              </KbdGroup>
+                            </Button>
+                            <Button size="xs" onClick={() => void runQuery()} disabled={busy || !queryDbContext}>
+                              Run
+                              <KbdGroup className="ml-1 opacity-70">
+                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">⌘</Kbd>
+                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">↵</Kbd>
+                              </KbdGroup>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel defaultSize="55%" minSize="80px">
+                      <div className="flex h-full flex-col overflow-hidden">
+                        {queryResult ? (
+                          <>
+                            <p className="shrink-0 border-b border-border bg-muted/20 px-3 py-1 font-mono text-[10px] text-muted-foreground">{queryResult.plan}</p>
+                            <DataGrid
+                              columns={queryResult.columns}
+                              indexedRows={queryResult.rows.map((row) => ({ key: row.key, value: row.value }))}
+                              selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
+                              onSelect={selectRecord}
+                              onDelete={deleteIndexedRecord}
+                            />
+                          </>
+                        ) : (
+                          <div className="grid h-full place-items-center p-6">
+                            <div className="max-w-sm space-y-1.5 text-center text-[11px] text-muted-foreground">
+                              <p className="font-medium text-foreground">MongoDB-style query in JSON</p>
+                              <p>Required: <code className="font-mono text-foreground/80">store</code>. Optional: <code className="font-mono text-foreground/80">filter sort limit project</code>.</p>
+                              <p className="font-mono text-[10px] leading-relaxed">$eq · $ne · $gt · $gte · $lt · $lte · $in · $nin · $regex · $exists · $and · $or · $not</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             )}
           </section>
         </ResizablePanel>
