@@ -1,13 +1,12 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ChevronLeft, ChevronRight, Copy, Database, Moon, PanelBottom, PanelBottomDashed, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Plus, RefreshCw, Search, SlidersHorizontal, Sun, Table2, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, Database, Moon, PanelBottom, PanelBottomDashed, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Plus, RefreshCw, Search, Settings, SlidersHorizontal, Sun, Table2, Trash2, X } from "lucide-react";
 import { JsonView, collapseAllNested } from "react-json-view-lite";
 import "react-json-view-lite/dist/index.css";
 import { cn } from "@/lib/utils";
 import {
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
   useReactTable,
   type ColumnDef
 } from "@tanstack/react-table";
@@ -26,6 +25,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../components/ui/context-menu";
 import { parseMongoQuery } from "../shared/query";
+import { applyFilters, activeRuleCount, type FilterState, EMPTY_FILTER_STATE } from "../shared/filters";
+import { keyStrategy } from "../shared/indexed";
+import { getPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
+import { FilterBar } from "./FilterBar";
+import { StructureView } from "./StructureView";
+import { SettingsDialog } from "./SettingsDialog";
 import type {
   IndexedDbDatabaseInfo,
   IndexedDbRecord,
@@ -66,6 +71,12 @@ type QuerySuggestion = {
   label: string;
   insertText: string;
   kind: "store" | "field" | "operator";
+};
+
+type DraftRow = {
+  values: Record<string, string>;
+  outOfLineKey: string;
+  activeColumn: string;
 };
 
 const extensionRuntime =
@@ -115,22 +126,20 @@ function App() {
   const [tabs, setTabs] = useState<WorkspaceTab[]>([]);
   const [previewTab, setPreviewTab] = useState<WorkspaceTab | null>(null);
   const [activeTabId, setActiveTabId] = useState("overview");
-  const [filterText, setFilterText] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [prefs, setPrefsState] = useState<Prefs>(PREF_DEFAULTS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [visibleDbKeys, setVisibleDbKeys] = useState<string[]>([]);
-  // Tracks which DB the user last opened/expanded in the sidebar. Lets the
-  // Query tab run against any store in that DB before a specific store is
-  // selected in the tree.
   const [activeDbKey, setActiveDbKey] = useState<string | null>(null);
   const [databasePickerOpen, setDatabasePickerOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
-  const [insertRecordOpen, setInsertRecordOpen] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
-  const [filterBarOpen, setFilterBarOpen] = useState(false);
-  const [filterPattern, setFilterPattern] = useState("");
+  const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTER_STATE);
+  const [gridView, setGridView] = useState<"data" | "structure">("data");
+  const [draftRow, setDraftRow] = useState<DraftRow | null>(null);
   const [queryLimit, setQueryLimit] = useState(300);
   const [queryOffset, setQueryOffset] = useState(0);
   const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -152,6 +161,17 @@ function App() {
   useEffect(() => {
     void refreshDiscovery();
   }, [refreshDiscovery]);
+
+  useEffect(() => {
+    void getPrefs().then(setPrefsState);
+    return watchPrefs(setPrefsState);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--font-sans", prefs.uiFont);
+    document.documentElement.style.setProperty("--font-mono", prefs.cellFont);
+    document.documentElement.style.setProperty("font-size", `${prefs.uiFontSize}px`);
+  }, [prefs.uiFont, prefs.cellFont, prefs.uiFontSize]);
 
   // Keep visible DBs consistent with discovery, but never auto-select — the user
   // picks which databases to browse.
@@ -285,10 +305,10 @@ function App() {
   const openNode = (node: SelectedNode, options?: { persist?: boolean }) => {
     const persist = options?.persist ?? false;
     setSelected(node);
-    setFilterText("");
     setHiddenColumns(new Set());
-    setFilterBarOpen(false);
-    setFilterPattern("");
+    setFilterState(EMPTY_FILTER_STATE);
+    setGridView("data");
+    setDraftRow(null);
     setQueryOffset(0);
 
     if (node.kind === "indexeddb") {
@@ -453,11 +473,39 @@ function App() {
     }
   };
 
-  const addIndexedRecord = async () => {
-    if (selected.kind !== "indexeddb") return;
+  const startDraftRow = () => {
+    if (!selectedStore) return;
+    const activeColumn = tableColumns[0] ?? "value";
+    const values: Record<string, string> = {};
+    setDraftRow({ values, outOfLineKey: "", activeColumn });
+  };
+
+  const commitDraftRow = async () => {
+    if (selected.kind !== "indexeddb" || !draftRow || !selectedStore) return;
+    const strat = keyStrategy(selectedStore);
+
+    if (strat.kind === "inlineKeyPath") {
+      const keyCol = strat.path[0];
+      const keyVal = draftRow.values[keyCol] ?? "";
+      if (!keyVal.trim()) {
+        setNotice({ tone: "error", message: `Key path "${keyCol}" is required.` });
+        return;
+      }
+    }
+
+    const valueObj: Record<string, SerializableValue> = {};
+    for (const [col, raw] of Object.entries(draftRow.values)) {
+      try { valueObj[col] = JSON.parse(raw) as SerializableValue; }
+      catch { valueObj[col] = raw; }
+    }
+
+    let key: SerializableValue | undefined;
+    if (strat.kind === "outOfLine" && draftRow.outOfLineKey.trim()) {
+      try { key = JSON.parse(draftRow.outOfLineKey) as SerializableValue; }
+      catch { key = draftRow.outOfLineKey; }
+    }
+
     try {
-      const value = parseAndValidateJson(newValue);
-      const key = newKey.trim() ? (JSON.parse(newKey) as SerializableValue) : undefined;
       setBusy(true);
       const response = await rpc({
         type: "addIndexedDbRecord",
@@ -467,12 +515,11 @@ function App() {
         dbVersion: selected.dbVersion,
         storeName: selected.storeName,
         key,
-        value
+        value: Object.keys(valueObj).length > 0 ? valueObj : {}
       });
       setBusy(false);
       if (!response.ok) throw new Error(response.error);
-      setNewKey("");
-      setNewValue("{\n  \n}");
+      setDraftRow(null);
       await loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName);
       await refreshDiscovery();
       setNotice({ tone: "success", message: "Record added." });
@@ -672,14 +719,13 @@ function App() {
   };
 
   const allTableRows = tableResult?.rows ?? [];
-  const patternFilteredRows = useMemo(() => {
-    if (!filterPattern.trim()) return allTableRows;
-    const needle = filterPattern.toLowerCase();
-    return allTableRows.filter((row) => JSON.stringify(row).toLowerCase().includes(needle));
-  }, [allTableRows, filterPattern]);
+  const filteredTableRows = useMemo(
+    () => applyFilters(allTableRows, filterState),
+    [allTableRows, filterState]
+  );
   const pagedTableRows = useMemo(
-    () => patternFilteredRows.slice(queryOffset, queryOffset + queryLimit),
-    [patternFilteredRows, queryOffset, queryLimit]
+    () => filteredTableRows.slice(queryOffset, queryOffset + queryLimit),
+    [filteredTableRows, queryOffset, queryLimit]
   );
   const tableColumns = tableResult?.columns ?? [];
   const visibleTableColumns = useMemo(
@@ -689,10 +735,10 @@ function App() {
 
   const visibleExportRows = useMemo(() => {
     if (queryResult) return queryResult.rows.map((row) => row.projected);
-    if (tableResult) return tableResult.rows.map((row) => row.value.value);
+    if (tableResult) return filteredTableRows.map((row) => row.value.value);
     if (kvResult) return kvResult.rows.map((row) => ({ key: row.key, value: row.value }));
     return [];
-  }, [kvResult, queryResult, tableResult]);
+  }, [kvResult, queryResult, filteredTableRows, tableResult]);
 
   const exportVisible = (format: "json" | "csv") => {
     const fileName = `storage-studio-${Date.now()}.${format}`;
@@ -848,6 +894,14 @@ function App() {
           >
             {theme === "dark" ? <Sun /> : <Moon />}
           </Button>
+          <Button
+            size="icon-xs"
+            variant="outline"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+          >
+            <Settings />
+          </Button>
         </div>
       </header>
 
@@ -931,27 +985,12 @@ function App() {
               </TabsList>
             </Tabs>}
 
-            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/50 px-3 py-1.5">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="section-label shrink-0">
-                  {activeTabId === "sql" ? "Query" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "Store" : "KV"}
-                </span>
-                <span className="h-3 w-px bg-border" />
-                <h2 className="truncate text-[12px] font-medium tracking-tight">{activeTabId === "sql" ? "MongoDB-style query" : titleForSelection(selected)}</h2>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <label className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    className="h-6 w-52 rounded-sm pl-6 text-[11px]"
-                    value={filterText}
-                    onChange={(event) => setFilterText(event.target.value)}
-                    placeholder="Search…"
-                  />
-                </label>
-                <Button variant="outline" size="xs" onClick={() => exportVisible("json")} disabled={visibleExportRows.length === 0}>JSON</Button>
-                <Button variant="outline" size="xs" onClick={() => exportVisible("csv")} disabled={visibleExportRows.length === 0}>CSV</Button>
-              </div>
+            <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card/50 px-3 py-1.5">
+              <span className="section-label shrink-0">
+                {activeTabId === "sql" ? "Query" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "Store" : "KV"}
+              </span>
+              <span className="h-3 w-px bg-border" />
+              <h2 className="min-w-0 flex-1 truncate text-[12px] font-medium tracking-tight">{activeTabId === "sql" ? "MongoDB-style query" : titleForSelection(selected)}</h2>
             </header>
 
             {notice && (
@@ -989,15 +1028,27 @@ function App() {
                   <div className="flex h-full min-h-0 flex-col">
                     <section className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/40 px-3 py-1 text-[11px]">
                       <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                        <span className="font-mono tabular-nums text-foreground/80">{patternFilteredRows.length}</span>
-                        <span>rows</span>
-                        {filterPattern && (
+                        {gridView === "structure" ? (
                           <>
+                            <span className="font-mono tabular-nums text-foreground/80">{tableColumns.length}</span>
+                            <span>columns</span>
                             <span className="text-border">·</span>
-                            <span>filtered from {allTableRows.length}</span>
+                            <span className="font-mono tabular-nums text-foreground/80">{selectedStore?.indexes.length ?? 0}</span>
+                            <span>indexes</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-mono tabular-nums text-foreground/80">{filteredTableRows.length}</span>
+                            <span>rows</span>
+                            {activeRuleCount(filterState) > 0 && (
+                              <>
+                                <span className="text-border">·</span>
+                                <span>filtered from {allTableRows.length}</span>
+                              </>
+                            )}
                           </>
                         )}
-                        {selectedStore && (
+                        {selectedStore && gridView === "data" && (
                           <>
                             <span className="text-border">·</span>
                             <span>key</span>
@@ -1008,40 +1059,64 @@ function App() {
                         )}
                       </div>
                     </section>
-                    {filterBarOpen && (
+                    {filterState.open && (
                       <FilterBar
-                        value={filterPattern}
+                        state={filterState}
+                        columns={tableColumns}
                         onChange={(next) => {
-                          setFilterPattern(next);
+                          setFilterState(next);
                           setQueryOffset(0);
                         }}
-                        onClose={() => {
-                          setFilterBarOpen(false);
-                          setFilterPattern("");
-                          setQueryOffset(0);
-                        }}
+                        onClose={() => setFilterState((prev) => ({ ...prev, open: false }))}
                       />
                     )}
-                    <DataGrid
-                      columns={visibleTableColumns}
-                      indexedRows={pagedTableRows}
-                      filterText={filterText}
-                      selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
-                      onSelect={selectRecord}
-                      onDelete={deleteIndexedRecord}
-                      onSaveCell={saveIndexedCell}
-                    />
+                    {gridView === "structure" ? (
+                      <StructureView
+                        store={selectedStore}
+                        rows={tableResult?.rows ?? []}
+                        columns={tableColumns}
+                        onNotice={setNotice}
+                        onAddColumnFilter={(col) => {
+                          setGridView("data");
+                          setFilterState((prev) => ({
+                            ...prev,
+                            open: true,
+                            rules: [
+                              ...prev.rules,
+                              { id: crypto.randomUUID(), column: col, operator: "contains", value: "", active: true }
+                            ]
+                          }));
+                        }}
+                      />
+                    ) : (
+                      <DataGrid
+                        columns={visibleTableColumns}
+                        indexedRows={pagedTableRows}
+                        draftRow={draftRow}
+                        onDraftChange={setDraftRow}
+                        onCommitDraft={() => void commitDraftRow()}
+                        onCancelDraft={() => setDraftRow(null)}
+                        selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
+                        onSelect={selectRecord}
+                        onDelete={deleteIndexedRecord}
+                        onSaveCell={saveIndexedCell}
+                      />
+                    )}
                     <DataFooter
-                      totalRows={patternFilteredRows.length}
+                      totalRows={filteredTableRows.length}
                       offset={queryOffset}
                       limit={queryLimit}
                       selectedCount={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? 1 : 0}
-                      onAddRow={() => setInsertRecordOpen(true)}
+                      onAddRow={startDraftRow}
                       allColumns={tableColumns}
                       hiddenColumns={hiddenColumns}
                       onApplyColumns={setHiddenColumns}
-                      filtersActive={filterBarOpen}
-                      onToggleFilters={() => setFilterBarOpen((prev) => !prev)}
+                      filterRuleCount={activeRuleCount(filterState)}
+                      filtersOpen={filterState.open}
+                      onToggleFilters={() => setFilterState((prev) => ({ ...prev, open: !prev.open }))}
+                      view={gridView}
+                      onChangeView={setGridView}
+                      onExport={exportVisible}
                       onApplyPagination={(nextLimit, nextOffset) => {
                         setQueryLimit(nextLimit);
                         setQueryOffset(nextOffset);
@@ -1050,9 +1125,9 @@ function App() {
                         }
                       }}
                       onPrev={() => setQueryOffset((prev) => Math.max(0, prev - queryLimit))}
-                      onNext={() => setQueryOffset((prev) => (prev + queryLimit < patternFilteredRows.length ? prev + queryLimit : prev))}
+                      onNext={() => setQueryOffset((prev) => (prev + queryLimit < filteredTableRows.length ? prev + queryLimit : prev))}
                       canPrev={queryOffset > 0}
-                      canNext={queryOffset + queryLimit < patternFilteredRows.length}
+                      canNext={queryOffset + queryLimit < filteredTableRows.length}
                     />
                   </div>
                 </ResizablePanel>
@@ -1080,7 +1155,6 @@ function App() {
                 <ResizablePanel defaultSize="72%" minSize="260px">
                   <KvGrid
                     rows={kvResult?.rows ?? []}
-                    filterText={filterText}
                     selectedRecord={selected.kind === "kv" && selectedRecord && "parsed" in selectedRecord ? selectedRecord : null}
                     onSelect={selectRecord}
                     onDelete={deleteKv}
@@ -1151,7 +1225,6 @@ function App() {
                     <DataGrid
                       columns={queryResult.columns}
                       indexedRows={queryResult.rows.map((row) => ({ key: row.key, value: row.value }))}
-                      filterText={filterText}
                       selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
                       onSelect={selectRecord}
                       onDelete={deleteIndexedRecord}
@@ -1365,55 +1438,17 @@ function App() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={insertRecordOpen} onOpenChange={setInsertRecordOpen}>
-        <DialogContent
-          className="max-w-[min(460px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-md border-border bg-card p-0 text-card-foreground shadow-2xl"
-        >
-          <DialogHeader className="border-b border-border px-3 py-2">
-            <DialogTitle className="text-[13px] font-medium tracking-tight">Insert row</DialogTitle>
-            <DialogDescription className="text-[11px] leading-snug text-muted-foreground">
-              Add a JSON record to the selected object store.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 px-3 py-3">
-            <div className="flex items-center justify-between">
-              <span className="section-label">Key</span>
-              <span className="font-mono text-[10px] text-muted-foreground">optional</span>
-            </div>
-            <Input
-              className="h-7 rounded-sm font-mono text-[10px]"
-              value={newKey}
-              onChange={(event) => setNewKey(event.target.value)}
-              placeholder='optional key, e.g. 42 or "id"'
-            />
-            <div className="flex items-center justify-between pt-1">
-              <span className="section-label">Value</span>
-              <span className="font-mono text-[10px] text-muted-foreground">json</span>
-            </div>
-            <Textarea
-              className="min-h-28 rounded-sm font-mono text-[10px] leading-5"
-              value={newValue}
-              onChange={(event) => setNewValue(event.target.value)}
-              spellCheck={false}
-            />
-          </div>
-          <div className="flex items-center justify-end gap-1.5 border-t border-border bg-card px-3 py-2">
-            <Button variant="outline" size="xs" onClick={() => setInsertRecordOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              size="xs"
-              onClick={async () => {
-                await addIndexedRecord();
-                setInsertRecordOpen(false);
-              }}
-              disabled={busy || selected.kind !== "indexeddb"}
-            >
-              {busy ? "Working…" : "Insert record"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SettingsDialog
+        open={settingsOpen}
+        prefs={prefs}
+        onOpenChange={setSettingsOpen}
+        onPrefsChange={(next) => {
+          setPrefsState(next);
+          if (next.theme !== "system") {
+            setTheme(next.theme);
+          }
+        }}
+      />
     </main>
   );
 }
@@ -2306,7 +2341,7 @@ function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
   );
 }
 
-type PopoverKind = "columns" | "pagination" | null;
+type PopoverKind = "columns" | "pagination" | "export" | null;
 
 function DataFooter({
   totalRows,
@@ -2317,8 +2352,12 @@ function DataFooter({
   allColumns,
   hiddenColumns,
   onApplyColumns,
-  filtersActive,
+  filterRuleCount,
+  filtersOpen,
   onToggleFilters,
+  view,
+  onChangeView,
+  onExport,
   onApplyPagination,
   onPrev,
   onNext,
@@ -2333,8 +2372,12 @@ function DataFooter({
   allColumns: string[];
   hiddenColumns: Set<string>;
   onApplyColumns: (next: Set<string>) => void;
-  filtersActive: boolean;
+  filterRuleCount: number;
+  filtersOpen: boolean;
   onToggleFilters: () => void;
+  view: "data" | "structure";
+  onChangeView: (v: "data" | "structure") => void;
+  onExport: (format: "json" | "csv") => void;
   onApplyPagination: (nextLimit: number, nextOffset: number) => void;
   onPrev: () => void;
   onNext: () => void;
@@ -2368,55 +2411,101 @@ function DataFooter({
       <div className="flex items-center rounded-sm border border-border bg-background p-0.5">
         <button
           type="button"
-          className="rounded-[3px] bg-secondary px-2 py-0.5 text-[11px] font-medium text-foreground"
-          aria-pressed="true"
+          onClick={() => onChangeView("data")}
+          className={cn(
+            "rounded-[3px] px-2 py-0.5 text-[11px] font-medium",
+            view === "data" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+          aria-pressed={view === "data"}
         >
           Data
         </button>
         <button
           type="button"
-          disabled
-          className="rounded-[3px] px-2 py-0.5 text-[11px] font-medium text-muted-foreground/50"
-          title="Coming soon"
+          onClick={() => onChangeView("structure")}
+          className={cn(
+            "rounded-[3px] px-2 py-0.5 text-[11px] font-medium",
+            view === "structure" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+          aria-pressed={view === "structure"}
         >
           Structure
         </button>
       </div>
-      <Button size="xs" variant="outline" onClick={onAddRow} className="gap-1">
-        <Plus className="size-3" />
-        Row
-      </Button>
+      {view === "data" && (
+        <Button size="xs" variant="outline" onClick={onAddRow} className="gap-1">
+          <Plus className="size-3" />
+          Row
+        </Button>
+      )}
       <span className="ml-2 flex-1 truncate text-muted-foreground">{rowStatus}</span>
 
-      <div className="relative">
-        <Button
-          size="xs"
-          variant={openPopover === "columns" ? "secondary" : "outline"}
-          onClick={() => setOpenPopover((prev) => (prev === "columns" ? null : "columns"))}
-          disabled={allColumns.length === 0}
-        >
-          Columns{hiddenColumns.size > 0 ? ` (${allColumns.length - hiddenColumns.size}/${allColumns.length})` : ""}
-        </Button>
-        {openPopover === "columns" && (
-          <ColumnsPopover
-            allColumns={allColumns}
-            hiddenColumns={hiddenColumns}
-            onApply={(next) => {
-              onApplyColumns(next);
-              setOpenPopover(null);
-            }}
-            onClose={() => setOpenPopover(null)}
-          />
-        )}
-      </div>
+      {view === "data" && (
+        <>
+          <div className="relative">
+            <Button
+              size="xs"
+              variant={openPopover === "columns" ? "secondary" : "outline"}
+              onClick={() => setOpenPopover((prev) => (prev === "columns" ? null : "columns"))}
+              disabled={allColumns.length === 0}
+            >
+              Columns{hiddenColumns.size > 0 ? ` (${allColumns.length - hiddenColumns.size}/${allColumns.length})` : ""}
+            </Button>
+            {openPopover === "columns" && (
+              <ColumnsPopover
+                allColumns={allColumns}
+                hiddenColumns={hiddenColumns}
+                onApply={(next) => {
+                  onApplyColumns(next);
+                  setOpenPopover(null);
+                }}
+                onClose={() => setOpenPopover(null)}
+              />
+            )}
+          </div>
 
-      <Button
-        size="xs"
-        variant={filtersActive ? "default" : "outline"}
-        onClick={onToggleFilters}
-      >
-        Filters
-      </Button>
+          <Button
+            size="xs"
+            variant={filtersOpen ? "default" : "outline"}
+            onClick={onToggleFilters}
+          >
+            Filters{filterRuleCount > 0 ? ` (${filterRuleCount})` : ""}
+          </Button>
+
+          <div className="relative">
+            <Button
+              size="xs"
+              variant={openPopover === "export" ? "secondary" : "outline"}
+              onClick={() => setOpenPopover((prev) => (prev === "export" ? null : "export"))}
+              className="gap-1"
+            >
+              Export
+              <ChevronDown className="size-3" />
+            </Button>
+            {openPopover === "export" && (
+              <div
+                role="menu"
+                className="absolute bottom-[calc(100%+6px)] right-0 z-40 w-36 overflow-hidden rounded-md border border-border bg-card text-[11px] shadow-xl"
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
+                  onClick={() => { onExport("json"); setOpenPopover(null); }}
+                >
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
+                  onClick={() => { onExport("csv"); setOpenPopover(null); }}
+                >
+                  CSV
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="mx-0.5 h-4 w-px bg-border" />
       <div className="relative flex items-center rounded-sm border border-border">
@@ -2608,32 +2697,6 @@ function PaginationPopover({
   );
 }
 
-function FilterBar({
-  value,
-  onChange,
-  onClose
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="flex shrink-0 items-center gap-1.5 border-b border-border bg-card/60 px-2 py-1">
-      <span className="section-label">Filter</span>
-      <Input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Pattern (matches any field)"
-        className="h-6 flex-1 rounded-sm font-mono text-[11px]"
-        autoFocus
-      />
-      <Button size="xs" variant="outline" onClick={() => onChange("")}>Clear</Button>
-      <Button size="icon-xs" variant="outline" aria-label="Hide filter" onClick={onClose}>
-        <X className="size-3" />
-      </Button>
-    </div>
-  );
-}
 
 function PanelToggleButton({
   active,
@@ -2682,7 +2745,10 @@ function DestructiveActionButton({ className, ...props }: React.ComponentProps<t
 function DataGrid({
   columns,
   indexedRows,
-  filterText,
+  draftRow,
+  onDraftChange,
+  onCommitDraft,
+  onCancelDraft,
   selectedRecord,
   onSelect,
   onDelete,
@@ -2690,7 +2756,10 @@ function DataGrid({
 }: {
   columns: string[];
   indexedRows: IndexedDbRecord[];
-  filterText: string;
+  draftRow?: DraftRow | null;
+  onDraftChange?: (draft: DraftRow) => void;
+  onCommitDraft?: () => void;
+  onCancelDraft?: () => void;
   selectedRecord: IndexedDbRecord | null;
   onSelect: (record: IndexedDbRecord) => void;
   onDelete: (record: IndexedDbRecord) => void;
@@ -2737,12 +2806,9 @@ function DataGrid({
   const table = useReactTable({
     data: indexedRows,
     columns: columnDefs,
-    state: { globalFilter: filterText },
-    globalFilterFn: (row, _columnId, filterValue) => JSON.stringify(row.original).toLowerCase().includes(String(filterValue).toLowerCase()),
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel()
+    getCoreRowModel: getCoreRowModel()
   });
-  if (indexedRows.length === 0) return <p className="p-3 text-[11px] text-muted-foreground">No records loaded.</p>;
+  if (indexedRows.length === 0 && !draftRow) return <p className="p-3 text-[11px] text-muted-foreground">No records loaded.</p>;
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-background">
       <table className="w-full border-collapse text-[11px]">
@@ -2761,6 +2827,36 @@ function DataGrid({
           ))}
         </thead>
         <tbody>
+          {draftRow && onDraftChange && onCommitDraft && onCancelDraft && (
+            <tr className="border-b border-border bg-primary/10 ring-1 ring-inset ring-primary/30">
+              <td className="border-r border-border px-2 py-0.5">
+                <span className="font-mono text-[10px] text-primary">+</span>
+              </td>
+              {visibleColumns.map((col) => (
+                <td key={col} className="border-r border-border p-0 last:border-r-0">
+                  <input
+                    autoFocus={col === visibleColumns[0]}
+                    value={draftRow.values[col] ?? ""}
+                    onChange={(e) => onDraftChange({ ...draftRow, values: { ...draftRow.values, [col]: e.target.value } })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); onCommitDraft(); }
+                      else if (e.key === "Escape") { e.preventDefault(); onCancelDraft(); }
+                      else if (e.key === "Tab") {
+                        e.preventDefault();
+                        const colIdx = visibleColumns.indexOf(col);
+                        const nextCol = e.shiftKey
+                          ? visibleColumns[((colIdx - 1) + visibleColumns.length) % visibleColumns.length]
+                          : visibleColumns[(colIdx + 1) % visibleColumns.length];
+                        onDraftChange({ ...draftRow, activeColumn: nextCol });
+                      }
+                    }}
+                    placeholder={col}
+                    className="h-5 w-full border-0 bg-transparent px-2 font-mono text-[11px] text-foreground outline-none ring-1 ring-inset ring-primary/40 focus:ring-primary"
+                  />
+                </td>
+              ))}
+            </tr>
+          )}
           {table.getRowModel().rows.map((row, rowIndex) => {
             const isSelected = sameIndexedRecord(selectedRecord, row.original);
             const rowKey = JSON.stringify(row.original.key);
@@ -2817,20 +2913,18 @@ function DataGrid({
           })}
         </tbody>
       </table>
-      {table.getRowModel().rows.length === 0 && <p className="p-3 text-[11px] text-muted-foreground">No rows match the filter.</p>}
+      {table.getRowModel().rows.length === 0 && !draftRow && <p className="p-3 text-[11px] text-muted-foreground">No rows match the filter.</p>}
     </div>
   );
 }
 
 function KvGrid({
   rows,
-  filterText,
   selectedRecord,
   onSelect,
   onDelete
 }: {
   rows: KeyValueRecord[];
-  filterText: string;
   selectedRecord: KeyValueRecord | null;
   onSelect: (record: KeyValueRecord) => void;
   onDelete: (record: KeyValueRecord) => void;
@@ -2850,10 +2944,7 @@ function KvGrid({
   const table = useReactTable({
     data: rows,
     columns: columnDefs,
-    state: { globalFilter: filterText },
-    globalFilterFn: (row, _columnId, filterValue) => `${row.original.key} ${row.original.value} ${row.original.parsed.preview}`.toLowerCase().includes(String(filterValue).toLowerCase()),
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel()
+    getCoreRowModel: getCoreRowModel()
   });
   if (rows.length === 0) return <p className="p-3 text-[11px] text-muted-foreground">No keys found.</p>;
   return (
