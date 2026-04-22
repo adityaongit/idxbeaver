@@ -39,6 +39,8 @@ import { SettingsDialog } from "./SettingsDialog";
 import { QueryHistoryPanel } from "./QueryHistoryPanel";
 import { SavedQueriesPanel } from "./SavedQueriesPanel";
 import { CommandPalette } from "./CommandPalette";
+import { DataGrid, type DraftRow } from "./DataGrid";
+import { UndoStack, type UndoCommand } from "../shared/undo";
 import type {
   IndexedDbDatabaseInfo,
   IndexedDbRecord,
@@ -81,11 +83,6 @@ type QuerySuggestion = {
   kind: "store" | "field" | "operator";
 };
 
-type DraftRow = {
-  values: Record<string, string>;
-  outOfLineKey: string;
-  activeColumn: string;
-};
 
 const extensionRuntime =
   typeof chrome !== "undefined" &&
@@ -154,6 +151,7 @@ function App() {
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const undoStackRef = useRef(new UndoStack());
   const [saveQueryDialogOpen, setSaveQueryDialogOpen] = useState(false);
   const [saveQueryName, setSaveQueryName] = useState("");
   const [saveQueryTags, setSaveQueryTags] = useState("");
@@ -302,6 +300,8 @@ function App() {
       if (matchesShortcut(e, "mod+f") && selected.kind === "indexeddb") { e.preventDefault(); setFilterState((prev) => ({ ...prev, open: !prev.open })); return; }
       if (matchesShortcut(e, "mod+n") && selected.kind === "indexeddb") { e.preventDefault(); startDraftRow(); return; }
       if (matchesShortcut(e, "mod+e")) { e.preventDefault(); exportVisible("json"); return; }
+      if (matchesShortcut(e, "mod+z") && !e.shiftKey) { e.preventDefault(); void handleUndo(); return; }
+      if (matchesShortcut(e, "mod+shift+z")) { e.preventDefault(); void handleRedo(); return; }
     };
   });
   useEffect(() => {
@@ -549,11 +549,123 @@ function App() {
     }
   };
 
-  const startDraftRow = () => {
+  const startDraftRow = (prefill?: Record<string, string>) => {
     if (!selectedStore) return;
     const activeColumn = tableColumns[0] ?? "value";
-    const values: Record<string, string> = {};
+    const values: Record<string, string> = prefill ?? {};
     setDraftRow({ values, outOfLineKey: "", activeColumn });
+  };
+
+  const pushUndo = (cmd: UndoCommand) => {
+    if (selected.kind !== "indexeddb") return;
+    undoStackRef.current.push({
+      ...cmd,
+      storeName: selected.storeName,
+      dbName: selected.dbName,
+      dbVersion: selected.dbVersion,
+      frameId: selected.frameId,
+    });
+  };
+
+  const handleUndo = async () => {
+    const cmd = undoStackRef.current.undo();
+    if (!cmd) return;
+    try {
+      setBusy(true);
+      const response = await rpc({
+        type: "putIndexedDbRecord",
+        tabId,
+        frameId: cmd.frameId,
+        dbName: cmd.dbName,
+        dbVersion: cmd.dbVersion,
+        storeName: cmd.storeName,
+        key: cmd.key,
+        value: cmd.before,
+      });
+      setBusy(false);
+      if (!response.ok) throw new Error(response.error);
+      if (selected.kind === "indexeddb") {
+        await loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName);
+      }
+      setNotice({ tone: "success", message: `Undid: ${cmd.label}` });
+    } catch (error) {
+      setBusy(false);
+      undoStackRef.current.push(cmd);
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  const handleRedo = async () => {
+    const cmd = undoStackRef.current.redo();
+    if (!cmd) return;
+    try {
+      setBusy(true);
+      const response = await rpc({
+        type: "putIndexedDbRecord",
+        tabId,
+        frameId: cmd.frameId,
+        dbName: cmd.dbName,
+        dbVersion: cmd.dbVersion,
+        storeName: cmd.storeName,
+        key: cmd.key,
+        value: cmd.after,
+      });
+      setBusy(false);
+      if (!response.ok) throw new Error(response.error);
+      if (selected.kind === "indexeddb") {
+        await loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName);
+      }
+      setNotice({ tone: "success", message: `Redid: ${cmd.label}` });
+    } catch (error) {
+      setBusy(false);
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  const handleBulkDelete = (records: IndexedDbRecord[]) => {
+    if (selected.kind !== "indexeddb") return;
+    const sel = selected;
+    const label = `Delete ${records.length} record${records.length === 1 ? "" : "s"} from ${sel.storeName}`;
+    setPendingAction({
+      kind: "deleteIndexed",
+      label,
+      execute: async () => {
+        setBusy(true);
+        for (const record of records) {
+          const response = await rpc({
+            type: "deleteIndexedDbRecord",
+            tabId,
+            frameId: sel.frameId,
+            dbName: sel.dbName,
+            dbVersion: sel.dbVersion,
+            storeName: sel.storeName,
+            key: record.key,
+          });
+          if (!response.ok) {
+            setNotice({ tone: "error", message: response.error });
+            setBusy(false);
+            return;
+          }
+        }
+        setBusy(false);
+        await loadIndexedStore(sel.frameId, sel.dbName, sel.dbVersion, sel.storeName);
+        await refreshDiscovery();
+        setNotice({ tone: "success", message: `Deleted ${records.length} records.` });
+      },
+    });
+  };
+
+  const handleDuplicateRow = (record: IndexedDbRecord) => {
+    if (!selectedStore) return;
+    const value = record.value.value;
+    const prefill: Record<string, string> = {};
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof v === "string") prefill[k] = v;
+        else if (v !== null && v !== undefined) prefill[k] = JSON.stringify(v);
+      }
+    }
+    startDraftRow(prefill);
   };
 
   const commitDraftRow = async () => {
@@ -1177,6 +1289,11 @@ function App() {
                         onSelect={selectRecord}
                         onDelete={deleteIndexedRecord}
                         onSaveCell={saveIndexedCell}
+                        inferredSchema={inferredSchema}
+                        onBulkDelete={handleBulkDelete}
+                        onDuplicate={handleDuplicateRow}
+                        onPushUndo={pushUndo}
+                        storageKey={selected.kind === "indexeddb" ? `${selected.origin}::${selected.dbName}::${selected.storeName}` : undefined}
                       />
                     )}
                     <DataFooter
@@ -1360,6 +1477,7 @@ function App() {
                               selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
                               onSelect={selectRecord}
                               onDelete={deleteIndexedRecord}
+                              inferredSchema={inferredSchema}
                             />
                           </>
                         ) : (
@@ -1652,6 +1770,9 @@ function App() {
               { keys: "⌘S", label: "Save current query" },
               { keys: "⌘F", label: "Open filters" },
               { keys: "⌘N", label: "New inline row" },
+              { keys: "⌘D", label: "Duplicate selected row" },
+              { keys: "⌘Z", label: "Undo last cell edit" },
+              { keys: "⌘⇧Z", label: "Redo last cell edit" },
               { keys: "⌘E", label: "Export current view" },
               { keys: "⌘,", label: "Open settings" },
               { keys: "?", label: "Keyboard shortcuts" },
@@ -2960,181 +3081,6 @@ function DestructiveActionButton({ className, ...props }: React.ComponentProps<t
   return <Button variant="destructive" size="sm" className={`font-semibold ${className ?? ""}`} {...props} />;
 }
 
-function DataGrid({
-  columns,
-  indexedRows,
-  draftRow,
-  onDraftChange,
-  onCommitDraft,
-  onCancelDraft,
-  selectedRecord,
-  onSelect,
-  onDelete,
-  onSaveCell
-}: {
-  columns: string[];
-  indexedRows: IndexedDbRecord[];
-  draftRow?: DraftRow | null;
-  onDraftChange?: (draft: DraftRow) => void;
-  onCommitDraft?: () => void;
-  onCancelDraft?: () => void;
-  selectedRecord: IndexedDbRecord | null;
-  onSelect: (record: IndexedDbRecord) => void;
-  onDelete: (record: IndexedDbRecord) => void;
-  onSaveCell?: (record: IndexedDbRecord, column: string, rawValue: string) => void | Promise<void>;
-}) {
-  const visibleColumns = columns.length > 0 ? columns : ["value"];
-  const [editing, setEditing] = useState<{ rowKey: string; column: string } | null>(null);
-  const [draft, setDraft] = useState("");
-
-  const beginEdit = (record: IndexedDbRecord, column: string) => {
-    if (!onSaveCell) return;
-    setEditing({ rowKey: JSON.stringify(record.key), column });
-    setDraft(cellEditInitial(record, column));
-  };
-  const cancelEdit = () => {
-    setEditing(null);
-    setDraft("");
-  };
-  const commitEdit = async (record: IndexedDbRecord) => {
-    if (!editing || !onSaveCell) return;
-    const column = editing.column;
-    setEditing(null);
-    await onSaveCell(record, column, draft);
-    setDraft("");
-  };
-
-  const columnDefs = useMemo<ColumnDef<IndexedDbRecord>[]>(
-    () => [
-      {
-        id: "key",
-        header: "key",
-        accessorFn: (row) => JSON.stringify(row.key),
-        cell: ({ getValue }) => <span className="font-mono text-muted-foreground tabular-nums">{String(getValue())}</span>
-      },
-      ...visibleColumns.map<ColumnDef<IndexedDbRecord>>((column) => ({
-        id: column,
-        header: column,
-        accessorFn: (row) => renderColumn(row, column),
-        cell: ({ getValue }) => <span className="font-mono text-foreground">{String(getValue() ?? "")}</span>
-      }))
-    ],
-    [visibleColumns]
-  );
-  const table = useReactTable({
-    data: indexedRows,
-    columns: columnDefs,
-    getCoreRowModel: getCoreRowModel()
-  });
-  if (indexedRows.length === 0 && !draftRow) return <p className="p-3 text-[11px] text-muted-foreground">No records loaded.</p>;
-  return (
-    <div className="min-h-0 flex-1 overflow-auto bg-background">
-      <table className="w-full border-collapse text-[11px]">
-        <thead>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="sticky top-0 z-10 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[10px] font-medium lowercase tracking-wide text-muted-foreground backdrop-blur-sm last:border-r-0"
-                >
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                </th>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {draftRow && onDraftChange && onCommitDraft && onCancelDraft && (
-            <tr className="border-b border-border bg-primary/10 ring-1 ring-inset ring-primary/30">
-              <td className="border-r border-border px-2 py-0.5">
-                <span className="font-mono text-[10px] text-primary">+</span>
-              </td>
-              {visibleColumns.map((col) => (
-                <td key={col} className="border-r border-border p-0 last:border-r-0">
-                  <input
-                    autoFocus={col === visibleColumns[0]}
-                    value={draftRow.values[col] ?? ""}
-                    onChange={(e) => onDraftChange({ ...draftRow, values: { ...draftRow.values, [col]: e.target.value } })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); onCommitDraft(); }
-                      else if (e.key === "Escape") { e.preventDefault(); onCancelDraft(); }
-                      else if (e.key === "Tab") {
-                        e.preventDefault();
-                        const colIdx = visibleColumns.indexOf(col);
-                        const nextCol = e.shiftKey
-                          ? visibleColumns[((colIdx - 1) + visibleColumns.length) % visibleColumns.length]
-                          : visibleColumns[(colIdx + 1) % visibleColumns.length];
-                        onDraftChange({ ...draftRow, activeColumn: nextCol });
-                      }
-                    }}
-                    placeholder={col}
-                    className="h-5 w-full border-0 bg-transparent px-2 font-mono text-[11px] text-foreground outline-none ring-1 ring-inset ring-primary/40 focus:ring-primary"
-                  />
-                </td>
-              ))}
-            </tr>
-          )}
-          {table.getRowModel().rows.map((row, rowIndex) => {
-            const isSelected = sameIndexedRecord(selectedRecord, row.original);
-            const rowKey = JSON.stringify(row.original.key);
-            return (
-              <ContextMenu key={row.id}>
-                <ContextMenuTrigger asChild>
-                  <tr
-                    className={cn(
-                      "group/datarow cursor-default transition-colors",
-                      rowIndex % 2 === 1 && !isSelected && "bg-muted/20",
-                      isSelected ? "bg-primary/25" : "hover:bg-muted/60"
-                    )}
-                    onClick={() => onSelect(row.original)}
-                  >
-                    {row.getVisibleCells().map((cell) => {
-                      const columnId = cell.column.id;
-                      const isEditing = editing?.rowKey === rowKey && editing.column === columnId;
-                      const isEditable = Boolean(onSaveCell) && columnId !== "key";
-                      return (
-                        <td
-                          key={cell.id}
-                          className={cn(
-                            "max-w-80 overflow-hidden whitespace-nowrap border-b border-r border-border leading-5 last:border-r-0",
-                            isEditing ? "p-0" : "text-ellipsis px-2 py-0.5"
-                          )}
-                          onDoubleClick={(event) => {
-                            if (!isEditable) return;
-                            event.stopPropagation();
-                            beginEdit(row.original, columnId);
-                          }}
-                        >
-                          {isEditing ? (
-                            <CellEditor
-                              value={draft}
-                              onChange={setDraft}
-                              onCommit={() => void commitEdit(row.original)}
-                              onCancel={cancelEdit}
-                            />
-                          ) : (
-                            flexRender(cell.column.columnDef.cell, cell.getContext())
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-40">
-                  <ContextMenuItem variant="destructive" onSelect={() => onDelete(row.original)}>
-                    Delete record
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            );
-          })}
-        </tbody>
-      </table>
-      {table.getRowModel().rows.length === 0 && !draftRow && <p className="p-3 text-[11px] text-muted-foreground">No rows match the filter.</p>}
-    </div>
-  );
-}
 
 function KvGrid({
   rows,
@@ -3221,87 +3167,6 @@ function KvGrid({
   );
 }
 
-function cellEditInitial(record: IndexedDbRecord, column: string) {
-  if (column === "value") {
-    const value = record.value.value;
-    return typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  }
-  const value = record.value.value;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-  const cell = (value as Record<string, unknown>)[column];
-  if (cell === undefined || cell === null) return "";
-  if (typeof cell === "string") return cell;
-  if (typeof cell === "number" || typeof cell === "boolean") return String(cell);
-  return JSON.stringify(cell);
-}
-
-function CellEditor({
-  value,
-  onChange,
-  onCommit,
-  onCancel
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  onCommit: () => void;
-  onCancel: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    input.focus();
-    input.select();
-  }, []);
-  return (
-    <div className="flex items-center gap-1 bg-background px-1 py-0.5" onClick={(event) => event.stopPropagation()}>
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            onCommit();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            onCancel();
-          }
-        }}
-        className="h-5 min-w-0 flex-1 border-0 bg-transparent font-mono text-[11px] text-foreground outline-none ring-1 ring-primary/60 focus:ring-primary rounded-[2px] px-1"
-      />
-      <button
-        type="button"
-        onClick={onCommit}
-        className="rounded-[2px] bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-        aria-label="Save cell"
-      >
-        Save
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="rounded-[2px] px-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-        aria-label="Cancel edit"
-      >
-        <X className="size-3" />
-      </button>
-    </div>
-  );
-}
-
-function renderColumn(record: IndexedDbRecord, column: string) {
-  if (column === "value") return record.value.preview;
-  const value = record.value.value;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-  const cell = (value as Record<string, unknown>)[column];
-  if (cell && typeof cell === "object" && "preview" in cell && "value" in cell) {
-    return String((cell as { preview: string }).preview);
-  }
-  if (cell === null || typeof cell === "string" || typeof cell === "number" || typeof cell === "boolean") return String(cell);
-  if (typeof cell === "undefined") return "";
-  return JSON.stringify(cell);
-}
 
 function titleForSelection(selected: SelectedNode) {
   if (selected.kind === "overview") return "Origin dashboard";
@@ -3322,9 +3187,5 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function sameIndexedRecord(left: IndexedDbRecord | null, right: IndexedDbRecord) {
-  if (!left) return false;
-  return JSON.stringify(left.key) === JSON.stringify(right.key);
-}
 
 createRoot(document.getElementById("root")!).render(<App />);

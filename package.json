@@ -24,6 +24,7 @@
     "@fontsource-variable/geist-mono": "^5.2.7",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.24",
     "@types/chrome": "^0.1.33",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
