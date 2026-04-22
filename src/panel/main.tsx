@@ -28,9 +28,17 @@ import { parseMongoQuery } from "../shared/query";
 import { applyFilters, activeRuleCount, type FilterState, EMPTY_FILTER_STATE } from "../shared/filters";
 import { keyStrategy } from "../shared/indexed";
 import { getPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
+import { inferSchema } from "../shared/schemaInfer";
+import type { InferredColumn } from "../shared/schemaInfer";
+import { appendHistory, getHistory, saveQuery, getSavedQueries } from "../shared/persisted";
+import type { HistoryEntry, SavedQuery } from "../shared/persisted";
+import { matchesShortcut } from "./shortcuts";
 import { FilterBar } from "./FilterBar";
 import { StructureView } from "./StructureView";
 import { SettingsDialog } from "./SettingsDialog";
+import { QueryHistoryPanel } from "./QueryHistoryPanel";
+import { SavedQueriesPanel } from "./SavedQueriesPanel";
+import { CommandPalette } from "./CommandPalette";
 import type {
   IndexedDbDatabaseInfo,
   IndexedDbRecord,
@@ -142,6 +150,14 @@ function App() {
   const [draftRow, setDraftRow] = useState<DraftRow | null>(null);
   const [queryLimit, setQueryLimit] = useState(300);
   const [queryOffset, setQueryOffset] = useState(0);
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [saveQueryDialogOpen, setSaveQueryDialogOpen] = useState(false);
+  const [saveQueryName, setSaveQueryName] = useState("");
+  const [saveQueryTags, setSaveQueryTags] = useState("");
+  const [sqlSidePanel, setSqlSidePanel] = useState<"history" | "saved">("history");
   const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -166,6 +182,13 @@ function App() {
     void getPrefs().then(setPrefsState);
     return watchPrefs(setPrefsState);
   }, []);
+
+  useEffect(() => {
+    const origin = discovery?.origin;
+    if (!origin) return;
+    void getHistory(origin).then(setHistoryEntries);
+    void getSavedQueries(origin).then(setSavedQueries);
+  }, [discovery?.origin]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--font-sans", prefs.uiFont);
@@ -265,6 +288,27 @@ function App() {
       document.body.classList.remove("dark");
     };
   }, [theme]);
+
+  const globalShortcutRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    globalShortcutRef.current = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (matchesShortcut(e, "mod+k")) { e.preventDefault(); setCommandPaletteOpen(true); return; }
+      if (matchesShortcut(e, "mod+,")) { e.preventDefault(); setSettingsOpen(true); return; }
+      if (matchesShortcut(e, "mod+t")) { e.preventDefault(); setDatabasePickerOpen(true); return; }
+      if (matchesShortcut(e, "?")) { e.preventDefault(); setHelpOpen(true); return; }
+      if (matchesShortcut(e, "mod+s") && activeTabId === "sql") { e.preventDefault(); setSaveQueryDialogOpen(true); return; }
+      if (matchesShortcut(e, "mod+f") && selected.kind === "indexeddb") { e.preventDefault(); setFilterState((prev) => ({ ...prev, open: !prev.open })); return; }
+      if (matchesShortcut(e, "mod+n") && selected.kind === "indexeddb") { e.preventDefault(); startDraftRow(); return; }
+      if (matchesShortcut(e, "mod+e")) { e.preventDefault(); exportVisible("json"); return; }
+    };
+  });
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => globalShortcutRef.current(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const loadIndexedStore = useCallback(
     async (frameId: number, dbName: string, dbVersion: number, storeName: string, limit?: number) => {
@@ -386,8 +430,17 @@ function App() {
       return;
     }
 
+    const t0 = performance.now();
+    const origin = discovery?.origin ?? "";
+    let parsedQuery: ReturnType<typeof parseMongoQuery>;
     try {
-      const query = parseMongoQuery(queryText);
+      parsedQuery = parseMongoQuery(queryText);
+    } catch (error) {
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+
+    try {
       setBusy(true);
       const response = await rpc({
         type: "runIndexedDbQuery",
@@ -395,21 +448,44 @@ function App() {
         frameId: queryDbContext.frameId,
         dbName: queryDbContext.dbName,
         dbVersion: queryDbContext.dbVersion,
-        query
+        query: parsedQuery
       });
+      const durationMs = Math.round(performance.now() - t0);
       setBusy(false);
-      if (!response.ok) {
+      const ok = response.ok;
+      const rowCount = ok ? (response.data as QueryResult).rows.length : null;
+      void appendHistory({
+        origin,
+        dbName: queryDbContext.dbName,
+        storeName: (parsedQuery as { store?: string }).store ?? null,
+        queryText,
+        ok,
+        rowCount,
+        durationMs
+      }).then(() => void getHistory(origin).then(setHistoryEntries));
+      if (!ok) {
         setNotice({ tone: "error", message: response.error });
         return;
       }
       setQueryResult(response.data as QueryResult);
       setTableResult(null);
       setSelectedRecord(null);
-      setNotice({ tone: "success", message: "Query completed." });
+      setNotice({ tone: "success", message: `Query completed · ${rowCount} rows · ${durationMs}ms` });
     } catch (error) {
       setBusy(false);
       setNotice({ tone: "error", message: error instanceof Error ? error.message : String(error) });
     }
+  };
+
+  const handleSaveQuery = async (name: string, tags: string[]) => {
+    const origin = discovery?.origin ?? "";
+    await saveQuery({ origin, name, queryText, tags });
+    const updated = await getSavedQueries(origin);
+    setSavedQueries(updated);
+    setSaveQueryDialogOpen(false);
+    setSaveQueryName("");
+    setSaveQueryTags("");
+    setNotice({ tone: "success", message: `Saved query "${name}".` });
   };
 
   const saveIndexedRecord = async () => {
@@ -728,6 +804,7 @@ function App() {
     [filteredTableRows, queryOffset, queryLimit]
   );
   const tableColumns = tableResult?.columns ?? [];
+  const inferredSchema = useMemo<InferredColumn[]>(() => inferSchema(allTableRows), [allTableRows]);
   const visibleTableColumns = useMemo(
     () => tableColumns.filter((column) => !hiddenColumns.has(column)),
     [tableColumns, hiddenColumns]
@@ -1183,7 +1260,42 @@ function App() {
             )}
 
             {activeTabId === "sql" && (
-              <section className="flex min-h-0 flex-1 flex-col">
+              <section className="flex min-h-0 flex-1">
+                <aside className="flex w-48 shrink-0 flex-col border-r border-border bg-card">
+                  <div className="flex shrink-0 border-b border-border">
+                    <button
+                      type="button"
+                      onClick={() => setSqlSidePanel("history")}
+                      className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "history" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      History
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSqlSidePanel("saved")}
+                      className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "saved" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Saved
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-hidden">
+                    {sqlSidePanel === "history" ? (
+                      <QueryHistoryPanel
+                        entries={historyEntries}
+                        origin={discovery?.origin ?? ""}
+                        onLoad={(text) => { setQueryText(text); }}
+                        onClear={() => void getHistory(discovery?.origin ?? "").then(setHistoryEntries)}
+                      />
+                    ) : (
+                      <SavedQueriesPanel
+                        queries={savedQueries}
+                        onLoad={(text) => { setQueryText(text); }}
+                        onMutated={() => void getSavedQueries(discovery?.origin ?? "").then(setSavedQueries)}
+                      />
+                    )}
+                  </div>
+                </aside>
+                <div className="flex min-h-0 flex-1 flex-col">
                 <div className="min-h-56 border-b border-border bg-card">
                   <Suspense fallback={<div className="grid min-h-56 place-items-center text-[11px] text-muted-foreground">Loading editor…</div>}>
                     <QueryEditor
@@ -1192,6 +1304,8 @@ function App() {
                       onRun={() => void runQuery()}
                       suggestions={querySuggestionPool}
                       theme={theme}
+                      databases={discovery?.indexedDb ?? []}
+                      inferredColumns={inferredSchema}
                     />
                   </Suspense>
                 </div>
@@ -1239,6 +1353,7 @@ function App() {
                     </div>
                   </div>
                 )}
+                </div>
               </section>
             )}
           </section>
@@ -1449,6 +1564,88 @@ function App() {
           }
         }}
       />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        databases={discovery?.indexedDb ?? []}
+        savedQueries={savedQueries}
+        onOpenNode={(node, opts) => { openNode(node, opts); setCommandPaletteOpen(false); }}
+        onLoadQuery={(text) => { setQueryText(text); setActiveTabId("sql"); setCommandPaletteOpen(false); }}
+        onOpenSettings={() => { setSettingsOpen(true); setCommandPaletteOpen(false); }}
+        onOpenPicker={() => { setDatabasePickerOpen(true); setCommandPaletteOpen(false); }}
+        onToggleFilters={() => { setFilterState((prev) => ({ ...prev, open: !prev.open })); setCommandPaletteOpen(false); }}
+        onNewRow={() => { startDraftRow(); setCommandPaletteOpen(false); }}
+        onExport={(format) => { exportVisible(format); setCommandPaletteOpen(false); }}
+      />
+
+      <Dialog open={saveQueryDialogOpen} onOpenChange={setSaveQueryDialogOpen}>
+        <DialogContent
+          className="max-w-[min(360px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-md border-border bg-card p-0 text-card-foreground shadow-2xl"
+          showCloseButton={false}
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>Save query</DialogTitle>
+            <DialogDescription>Give this query a name and optional tags.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 border-b border-border px-3 py-3">
+            <p className="text-[13px] font-medium tracking-tight">Save query</p>
+            <Input
+              autoFocus
+              placeholder="Query name…"
+              value={saveQueryName}
+              onChange={(e) => setSaveQueryName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && saveQueryName.trim()) void handleSaveQuery(saveQueryName.trim(), saveQueryTags.split(",").map((t) => t.trim()).filter(Boolean)); }}
+              className="h-7 rounded-sm text-[11px]"
+            />
+            <Input
+              placeholder="Tags (comma-separated, optional)…"
+              value={saveQueryTags}
+              onChange={(e) => setSaveQueryTags(e.target.value)}
+              className="h-7 rounded-sm text-[11px]"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-1.5 bg-card px-3 py-2">
+            <Button variant="outline" size="xs" onClick={() => setSaveQueryDialogOpen(false)}>Cancel</Button>
+            <Button size="xs" onClick={() => void handleSaveQuery(saveQueryName.trim(), saveQueryTags.split(",").map((t) => t.trim()).filter(Boolean))} disabled={!saveQueryName.trim()}>
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent
+          className="max-w-[min(400px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-md border-border bg-card p-0 text-card-foreground shadow-2xl"
+          showCloseButton={false}
+        >
+          <DialogHeader className="border-b border-border px-3 py-2.5">
+            <DialogTitle className="text-[13px] font-semibold tracking-tight">Keyboard shortcuts</DialogTitle>
+            <DialogDescription className="sr-only">All available keyboard shortcuts.</DialogDescription>
+          </DialogHeader>
+          <div className="divide-y divide-border">
+            {[
+              { keys: "⌘K", label: "Command palette" },
+              { keys: "⌘T", label: "Open database picker" },
+              { keys: "⌘↵", label: "Run query" },
+              { keys: "⌘S", label: "Save current query" },
+              { keys: "⌘F", label: "Open filters" },
+              { keys: "⌘N", label: "New inline row" },
+              { keys: "⌘E", label: "Export current view" },
+              { keys: "⌘,", label: "Open settings" },
+              { keys: "?", label: "Keyboard shortcuts" },
+            ].map(({ keys, label }) => (
+              <div key={keys} className="flex items-center justify-between px-3 py-1.5">
+                <span className="text-[11px] text-foreground">{label}</span>
+                <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{keys}</kbd>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end border-t border-border px-3 py-2">
+            <Button variant="outline" size="xs" onClick={() => setHelpOpen(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
