@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ChevronRight, Copy, Database, Moon, PanelBottom, PanelLeft, PanelRight, Plus, RefreshCw, Search, Sun, Table2, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Database, Moon, PanelBottom, PanelBottomDashed, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Plus, RefreshCw, Search, SlidersHorizontal, Sun, Table2, Trash2, X } from "lucide-react";
 import { JsonView, collapseAllNested } from "react-json-view-lite";
 import "react-json-view-lite/dist/index.css";
 import { cn } from "@/lib/utils";
@@ -126,7 +126,13 @@ function App() {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
-  const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
+  const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
+  const [insertRecordOpen, setInsertRecordOpen] = useState(false);
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+  const [filterBarOpen, setFilterBarOpen] = useState(false);
+  const [filterPattern, setFilterPattern] = useState("");
+  const [queryLimit, setQueryLimit] = useState(300);
+  const [queryOffset, setQueryOffset] = useState(0);
   const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -227,7 +233,7 @@ function App() {
 
   useEffect(() => {
     if (canToggleBottomPanel) return;
-    setBottomPanelCollapsed(false);
+    setBottomPanelCollapsed(true);
   }, [canToggleBottomPanel]);
 
   useEffect(() => {
@@ -241,12 +247,12 @@ function App() {
   }, [theme]);
 
   const loadIndexedStore = useCallback(
-    async (frameId: number, dbName: string, dbVersion: number, storeName: string) => {
+    async (frameId: number, dbName: string, dbVersion: number, storeName: string, limit?: number) => {
       setBusy(true);
       setQueryResult(null);
       setKvResult(null);
       setSelectedRecord(null);
-      const response = await rpc({ type: "readIndexedDbStore", tabId, frameId, dbName, dbVersion, storeName, limit: 500 });
+      const response = await rpc({ type: "readIndexedDbStore", tabId, frameId, dbName, dbVersion, storeName, limit: limit ?? 500 });
       setBusy(false);
       if (!response.ok) {
         setNotice({ tone: "error", message: response.error });
@@ -280,6 +286,10 @@ function App() {
     const persist = options?.persist ?? false;
     setSelected(node);
     setFilterText("");
+    setHiddenColumns(new Set());
+    setFilterBarOpen(false);
+    setFilterPattern("");
+    setQueryOffset(0);
 
     if (node.kind === "indexeddb") {
       setActiveDbKey(dbKeyFromSelected(node));
@@ -625,6 +635,22 @@ function App() {
     });
   };
 
+  const allTableRows = tableResult?.rows ?? [];
+  const patternFilteredRows = useMemo(() => {
+    if (!filterPattern.trim()) return allTableRows;
+    const needle = filterPattern.toLowerCase();
+    return allTableRows.filter((row) => JSON.stringify(row).toLowerCase().includes(needle));
+  }, [allTableRows, filterPattern]);
+  const pagedTableRows = useMemo(
+    () => patternFilteredRows.slice(queryOffset, queryOffset + queryLimit),
+    [patternFilteredRows, queryOffset, queryLimit]
+  );
+  const tableColumns = tableResult?.columns ?? [];
+  const visibleTableColumns = useMemo(
+    () => tableColumns.filter((column) => !hiddenColumns.has(column)),
+    [tableColumns, hiddenColumns]
+  );
+
   const visibleExportRows = useMemo(() => {
     if (queryResult) return queryResult.rows.map((row) => row.projected);
     if (tableResult) return tableResult.rows.map((row) => row.value.value);
@@ -750,7 +776,7 @@ function App() {
             onClick={() => togglePanel("left")}
             label={leftPanelCollapsed ? "Show left panel" : "Hide left panel"}
           >
-            <PanelLeft />
+            {leftPanelCollapsed ? <PanelLeftDashed /> : <PanelLeft />}
           </PanelToggleButton>
           <PanelToggleButton
             active={!bottomPanelCollapsed && canToggleBottomPanel}
@@ -764,14 +790,14 @@ function App() {
             }
             disabled={!canToggleBottomPanel}
           >
-            <PanelBottom />
+            {bottomPanelCollapsed || !canToggleBottomPanel ? <PanelBottomDashed /> : <PanelBottom />}
           </PanelToggleButton>
           <PanelToggleButton
             active={!rightPanelCollapsed}
             onClick={() => togglePanel("right")}
             label={rightPanelCollapsed ? "Show right panel" : "Hide right panel"}
           >
-            <PanelRight />
+            {rightPanelCollapsed ? <PanelRightDashed /> : <PanelRight />}
           </PanelToggleButton>
           <div className="mx-0.5 h-4 w-px bg-border" />
           <Button variant="outline" size="xs" onClick={refreshDiscovery} disabled={busy}>
@@ -927,8 +953,14 @@ function App() {
                   <div className="flex h-full min-h-0 flex-col">
                     <section className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/40 px-3 py-1 text-[11px]">
                       <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                        <span className="font-mono tabular-nums text-foreground/80">{tableResult?.total ?? tableResult?.rows.length ?? 0}</span>
+                        <span className="font-mono tabular-nums text-foreground/80">{patternFilteredRows.length}</span>
                         <span>rows</span>
+                        {filterPattern && (
+                          <>
+                            <span className="text-border">·</span>
+                            <span>filtered from {allTableRows.length}</span>
+                          </>
+                        )}
                         {selectedStore && (
                           <>
                             <span className="text-border">·</span>
@@ -940,13 +972,50 @@ function App() {
                         )}
                       </div>
                     </section>
+                    {filterBarOpen && (
+                      <FilterBar
+                        value={filterPattern}
+                        onChange={(next) => {
+                          setFilterPattern(next);
+                          setQueryOffset(0);
+                        }}
+                        onClose={() => {
+                          setFilterBarOpen(false);
+                          setFilterPattern("");
+                          setQueryOffset(0);
+                        }}
+                      />
+                    )}
                     <DataGrid
-                      columns={tableResult?.columns ?? []}
-                      indexedRows={tableResult?.rows ?? []}
+                      columns={visibleTableColumns}
+                      indexedRows={pagedTableRows}
                       filterText={filterText}
                       selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
                       onSelect={selectRecord}
                       onDelete={deleteIndexedRecord}
+                    />
+                    <DataFooter
+                      totalRows={patternFilteredRows.length}
+                      offset={queryOffset}
+                      limit={queryLimit}
+                      selectedCount={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? 1 : 0}
+                      onAddRow={() => setInsertRecordOpen(true)}
+                      allColumns={tableColumns}
+                      hiddenColumns={hiddenColumns}
+                      onApplyColumns={setHiddenColumns}
+                      filtersActive={filterBarOpen}
+                      onToggleFilters={() => setFilterBarOpen((prev) => !prev)}
+                      onApplyPagination={(nextLimit, nextOffset) => {
+                        setQueryLimit(nextLimit);
+                        setQueryOffset(nextOffset);
+                        if (selected.kind === "indexeddb" && nextLimit > (tableResult?.rows.length ?? 0)) {
+                          void loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName, Math.max(nextLimit + nextOffset, 500));
+                        }
+                      }}
+                      onPrev={() => setQueryOffset((prev) => Math.max(0, prev - queryLimit))}
+                      onNext={() => setQueryOffset((prev) => (prev + queryLimit < patternFilteredRows.length ? prev + queryLimit : prev))}
+                      canPrev={queryOffset > 0}
+                      canNext={queryOffset + queryLimit < patternFilteredRows.length}
                     />
                   </div>
                 </ResizablePanel>
@@ -955,18 +1024,15 @@ function App() {
                   panelRef={bottomPanelRef}
                   collapsible
                   collapsedSize="0%"
-                  defaultSize="22%"
+                  defaultSize="0%"
                   minSize="130px"
                   onResize={(size) => setBottomPanelCollapsed(isCollapsedPanelSize(size))}
                 >
-                  <section className="flex h-full flex-col gap-2 overflow-auto bg-card p-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="section-label">Add record</h3>
-                      <span className="font-mono text-[10px] text-muted-foreground">json</span>
+                  <section className="grid h-full place-items-center bg-card/40 p-3 text-center">
+                    <div className="space-y-1 text-[11px] text-muted-foreground">
+                      <p className="section-label">History</p>
+                      <p>Recent queries and mutations will appear here.</p>
                     </div>
-                    <Input className="h-7 rounded-sm font-mono text-[10px]" value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder='optional key, e.g. 42 or "id"' />
-                    <Textarea className="min-h-20 rounded-sm font-mono text-[10px] leading-5" value={newValue} onChange={(event) => setNewValue(event.target.value)} spellCheck={false} />
-                    <Button size="xs" onClick={addIndexedRecord} className="self-start">Insert record</Button>
                   </section>
                 </ResizablePanel>
               </ResizablePanelGroup>
@@ -988,7 +1054,7 @@ function App() {
                   panelRef={bottomPanelRef}
                   collapsible
                   collapsedSize="0%"
-                  defaultSize="28%"
+                  defaultSize="0%"
                   minSize="130px"
                   onResize={(size) => setBottomPanelCollapsed(isCollapsedPanelSize(size))}
                 >
@@ -1257,6 +1323,56 @@ function App() {
             </Button>
             <Button variant="destructive" size="xs" onClick={() => void confirmPendingAction()} disabled={busy}>
               {busy ? "Working…" : "Confirm"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={insertRecordOpen} onOpenChange={setInsertRecordOpen}>
+        <DialogContent
+          className="max-w-[min(460px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-md border-border bg-card p-0 text-card-foreground shadow-2xl"
+        >
+          <DialogHeader className="border-b border-border px-3 py-2">
+            <DialogTitle className="text-[13px] font-medium tracking-tight">Insert row</DialogTitle>
+            <DialogDescription className="text-[11px] leading-snug text-muted-foreground">
+              Add a JSON record to the selected object store.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 px-3 py-3">
+            <div className="flex items-center justify-between">
+              <span className="section-label">Key</span>
+              <span className="font-mono text-[10px] text-muted-foreground">optional</span>
+            </div>
+            <Input
+              className="h-7 rounded-sm font-mono text-[10px]"
+              value={newKey}
+              onChange={(event) => setNewKey(event.target.value)}
+              placeholder='optional key, e.g. 42 or "id"'
+            />
+            <div className="flex items-center justify-between pt-1">
+              <span className="section-label">Value</span>
+              <span className="font-mono text-[10px] text-muted-foreground">json</span>
+            </div>
+            <Textarea
+              className="min-h-28 rounded-sm font-mono text-[10px] leading-5"
+              value={newValue}
+              onChange={(event) => setNewValue(event.target.value)}
+              spellCheck={false}
+            />
+          </div>
+          <div className="flex items-center justify-end gap-1.5 border-t border-border bg-card px-3 py-2">
+            <Button variant="outline" size="xs" onClick={() => setInsertRecordOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="xs"
+              onClick={async () => {
+                await addIndexedRecord();
+                setInsertRecordOpen(false);
+              }}
+              disabled={busy || selected.kind !== "indexeddb"}
+            >
+              {busy ? "Working…" : "Insert record"}
             </Button>
           </div>
         </DialogContent>
@@ -2153,6 +2269,335 @@ function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
   );
 }
 
+type PopoverKind = "columns" | "pagination" | null;
+
+function DataFooter({
+  totalRows,
+  offset,
+  limit,
+  selectedCount,
+  onAddRow,
+  allColumns,
+  hiddenColumns,
+  onApplyColumns,
+  filtersActive,
+  onToggleFilters,
+  onApplyPagination,
+  onPrev,
+  onNext,
+  canPrev,
+  canNext
+}: {
+  totalRows: number;
+  offset: number;
+  limit: number;
+  selectedCount: number;
+  onAddRow: () => void;
+  allColumns: string[];
+  hiddenColumns: Set<string>;
+  onApplyColumns: (next: Set<string>) => void;
+  filtersActive: boolean;
+  onToggleFilters: () => void;
+  onApplyPagination: (nextLimit: number, nextOffset: number) => void;
+  onPrev: () => void;
+  onNext: () => void;
+  canPrev: boolean;
+  canNext: boolean;
+}) {
+  const [openPopover, setOpenPopover] = useState<PopoverKind>(null);
+  const wrapperRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!openPopover) return;
+    const handler = (event: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(event.target as Node)) setOpenPopover(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openPopover]);
+
+  const visibleRangeStart = totalRows === 0 ? 0 : offset + 1;
+  const visibleRangeEnd = Math.min(offset + limit, totalRows);
+  const rowStatus =
+    selectedCount > 0
+      ? `${selectedCount} of ${totalRows} rows selected`
+      : totalRows === 0
+        ? "0 rows"
+        : `${visibleRangeStart}–${visibleRangeEnd} of ${totalRows} rows`;
+
+  return (
+    <footer ref={wrapperRef} className="relative flex shrink-0 items-center gap-1.5 border-t border-border bg-card/60 px-2 py-1 text-[11px]">
+      <div className="flex items-center rounded-sm border border-border bg-background p-0.5">
+        <button
+          type="button"
+          className="rounded-[3px] bg-secondary px-2 py-0.5 text-[11px] font-medium text-foreground"
+          aria-pressed="true"
+        >
+          Data
+        </button>
+        <button
+          type="button"
+          disabled
+          className="rounded-[3px] px-2 py-0.5 text-[11px] font-medium text-muted-foreground/50"
+          title="Coming soon"
+        >
+          Structure
+        </button>
+      </div>
+      <Button size="xs" variant="outline" onClick={onAddRow} className="gap-1">
+        <Plus className="size-3" />
+        Row
+      </Button>
+      <span className="ml-2 flex-1 truncate text-muted-foreground">{rowStatus}</span>
+
+      <div className="relative">
+        <Button
+          size="xs"
+          variant={openPopover === "columns" ? "secondary" : "outline"}
+          onClick={() => setOpenPopover((prev) => (prev === "columns" ? null : "columns"))}
+          disabled={allColumns.length === 0}
+        >
+          Columns{hiddenColumns.size > 0 ? ` (${allColumns.length - hiddenColumns.size}/${allColumns.length})` : ""}
+        </Button>
+        {openPopover === "columns" && (
+          <ColumnsPopover
+            allColumns={allColumns}
+            hiddenColumns={hiddenColumns}
+            onApply={(next) => {
+              onApplyColumns(next);
+              setOpenPopover(null);
+            }}
+            onClose={() => setOpenPopover(null)}
+          />
+        )}
+      </div>
+
+      <Button
+        size="xs"
+        variant={filtersActive ? "default" : "outline"}
+        onClick={onToggleFilters}
+      >
+        Filters
+      </Button>
+
+      <div className="mx-0.5 h-4 w-px bg-border" />
+      <div className="relative flex items-center rounded-sm border border-border">
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={!canPrev}
+          className="grid h-5 w-5 place-items-center text-foreground/80 disabled:text-muted-foreground/40"
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="size-3" />
+        </button>
+        <span className="h-4 w-px bg-border" />
+        <button
+          type="button"
+          onClick={() => setOpenPopover((prev) => (prev === "pagination" ? null : "pagination"))}
+          className={cn(
+            "grid h-5 w-5 place-items-center",
+            openPopover === "pagination" ? "bg-secondary text-foreground" : "text-foreground/80"
+          )}
+          aria-label="Pagination settings"
+        >
+          <SlidersHorizontal className="size-3" />
+        </button>
+        <span className="h-4 w-px bg-border" />
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!canNext}
+          className="grid h-5 w-5 place-items-center text-foreground/80 disabled:text-muted-foreground/40"
+          aria-label="Next page"
+        >
+          <ChevronRight className="size-3" />
+        </button>
+        {openPopover === "pagination" && (
+          <PaginationPopover
+            initialLimit={limit}
+            initialOffset={offset}
+            onApply={(nextLimit, nextOffset) => {
+              onApplyPagination(nextLimit, nextOffset);
+              setOpenPopover(null);
+            }}
+            onClose={() => setOpenPopover(null)}
+          />
+        )}
+      </div>
+    </footer>
+  );
+}
+
+function ColumnsPopover({
+  allColumns,
+  hiddenColumns,
+  onApply,
+  onClose
+}: {
+  allColumns: string[];
+  hiddenColumns: Set<string>;
+  onApply: (next: Set<string>) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<Set<string>>(() => new Set(hiddenColumns));
+  const [search, setSearch] = useState("");
+  const toggle = (column: string) => {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      if (next.has(column)) next.delete(column);
+      else next.add(column);
+      return next;
+    });
+  };
+  const needle = search.trim().toLowerCase();
+  const filtered = needle ? allColumns.filter((column) => column.toLowerCase().includes(needle)) : allColumns;
+  return (
+    <div
+      role="dialog"
+      className="absolute bottom-[calc(100%+6px)] right-0 z-40 w-64 rounded-md border border-border bg-card p-2 text-[11px] shadow-xl"
+    >
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="section-label">Visible columns</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Close"
+        >
+          <X className="size-3" />
+        </button>
+      </div>
+      <label className="relative mb-1.5 block">
+        <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search columns…"
+          className="h-6 rounded-sm pl-6 text-[11px]"
+          autoFocus
+        />
+      </label>
+      <div className="max-h-56 space-y-1 overflow-auto rounded-sm border border-border bg-background p-1.5">
+        {allColumns.length === 0 ? (
+          <p className="px-1 py-0.5 text-muted-foreground">No columns available.</p>
+        ) : filtered.length === 0 ? (
+          <p className="px-1 py-0.5 text-muted-foreground">No matches.</p>
+        ) : (
+          filtered.map((column) => {
+            const isVisible = !draft.has(column);
+            return (
+              <label key={column} className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 hover:bg-muted/60">
+                <input
+                  type="checkbox"
+                  checked={isVisible}
+                  onChange={() => toggle(column)}
+                  className="size-3 accent-primary"
+                />
+                <span className="truncate font-mono">{column}</span>
+              </label>
+            );
+          })
+        )}
+      </div>
+      <div className="mt-2 flex items-center justify-end gap-1.5">
+        <Button size="xs" variant="outline" onClick={() => setDraft(new Set())}>Show all</Button>
+        <Button size="xs" onClick={() => onApply(draft)}>Apply</Button>
+      </div>
+    </div>
+  );
+}
+
+function PaginationPopover({
+  initialLimit,
+  initialOffset,
+  onApply,
+  onClose
+}: {
+  initialLimit: number;
+  initialOffset: number;
+  onApply: (nextLimit: number, nextOffset: number) => void;
+  onClose: () => void;
+}) {
+  const [limitInput, setLimitInput] = useState(String(initialLimit));
+  const [offsetInput, setOffsetInput] = useState(String(initialOffset));
+  const submit = () => {
+    const parsedLimit = Math.max(1, Number.parseInt(limitInput, 10) || initialLimit);
+    const parsedOffset = Math.max(0, Number.parseInt(offsetInput, 10) || 0);
+    onApply(parsedLimit, parsedOffset);
+  };
+  return (
+    <div
+      role="dialog"
+      className="absolute bottom-[calc(100%+6px)] right-0 z-40 w-56 rounded-md border border-border bg-card p-2 text-[11px] shadow-xl"
+    >
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="section-label">Page</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Close"
+        >
+          <X className="size-3" />
+        </button>
+      </div>
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-2">
+          <span className="w-12 text-muted-foreground">Limit</span>
+          <Input
+            className="h-6 flex-1 rounded-sm font-mono text-[11px]"
+            value={limitInput}
+            onChange={(event) => setLimitInput(event.target.value)}
+            inputMode="numeric"
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="w-12 text-muted-foreground">Offset</span>
+          <Input
+            className="h-6 flex-1 rounded-sm font-mono text-[11px]"
+            value={offsetInput}
+            onChange={(event) => setOffsetInput(event.target.value)}
+            inputMode="numeric"
+            placeholder="0"
+          />
+        </label>
+      </div>
+      <div className="mt-2 flex items-center justify-end">
+        <Button size="xs" onClick={submit}>Go</Button>
+      </div>
+    </div>
+  );
+}
+
+function FilterBar({
+  value,
+  onChange,
+  onClose
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 border-b border-border bg-card/60 px-2 py-1">
+      <span className="section-label">Filter</span>
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Pattern (matches any field)"
+        className="h-6 flex-1 rounded-sm font-mono text-[11px]"
+        autoFocus
+      />
+      <Button size="xs" variant="outline" onClick={() => onChange("")}>Clear</Button>
+      <Button size="icon-xs" variant="outline" aria-label="Hide filter" onClick={onClose}>
+        <X className="size-3" />
+      </Button>
+    </div>
+  );
+}
+
 function PanelToggleButton({
   active,
   children,
@@ -2171,7 +2616,10 @@ function PanelToggleButton({
       type="button"
       size="icon-xs"
       variant={active ? "secondary" : "outline"}
-      className={active ? "border border-border" : undefined}
+      className={cn(
+        "border border-border",
+        active ? "border-primary/60 text-primary" : "text-muted-foreground"
+      )}
       aria-pressed={active}
       aria-label={label}
       disabled={disabled}
