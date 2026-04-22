@@ -163,7 +163,9 @@ export type StorageRequest =
   | { type: "deleteCacheEntry"; tabId: number; frameId: number; cacheName: string; url: string; requestMethod: string }
   | { type: "clearCache"; tabId: number; frameId: number; cacheName: string }
   | { type: "readStoreSummary"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string }
-  | { type: "storageEstimate"; tabId: number };
+  | { type: "storageEstimate"; tabId: number }
+  | { type: "readIndexedDbStoreChunk"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; offset: number; limit: number }
+  | { type: "bulkPutIndexedDbRows"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; rows: Array<{ key: SerializableValue; value: SerializableValue }> };
 
 export interface StoreSummary {
   rowCount: number | null;

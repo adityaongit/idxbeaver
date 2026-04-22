@@ -1,6 +1,7 @@
 // Extension-owned IndexedDB for persistent query history, saved queries,
-// and snapshots (Plan 15). Runs in the panel page context — no manifest
-// permission needed.
+// and snapshots. Runs in the panel page context — no manifest permission needed.
+
+import type { IndexedDbRecord } from "./types";
 
 export interface HistoryEntry {
   id: string;
@@ -24,29 +25,55 @@ export interface SavedQuery {
   updatedAt: number;
 }
 
+export type SnapshotScope = "origin" | "database" | "store";
+
+export interface SnapshotManifest {
+  id: string;
+  origin: string;
+  scope: SnapshotScope;
+  dbName?: string;
+  dbVersion?: number;
+  storeName?: string;
+  createdAt: number;
+  label?: string;
+  bytes: number;
+  entryCount: number;
+}
+
+export interface SnapshotRowChunk {
+  id: string;
+  snapshotId: string;
+  seq: number;
+  rows: IndexedDbRecord[];
+}
+
 const DB_NAME = "storage-studio";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const HISTORY_LIMIT = 100;
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
-      if (!db.objectStoreNames.contains("history")) {
+      const oldVersion = event.oldVersion;
+      if (oldVersion < 1) {
         const hist = db.createObjectStore("history", { keyPath: "id" });
         hist.createIndex("origin", "origin");
         hist.createIndex("createdAt", "createdAt");
-      }
-      if (!db.objectStoreNames.contains("saved_queries")) {
         const saved = db.createObjectStore("saved_queries", { keyPath: "id" });
         saved.createIndex("origin", "origin");
         saved.createIndex("updatedAt", "updatedAt");
-      }
-      if (!db.objectStoreNames.contains("snapshots")) {
         const snaps = db.createObjectStore("snapshots", { keyPath: "id" });
         snaps.createIndex("origin", "origin");
         snaps.createIndex("createdAt", "createdAt");
+      }
+      if (oldVersion < 2) {
+        if (!db.objectStoreNames.contains("snapshot_chunks")) {
+          const chunks = db.createObjectStore("snapshot_chunks", { keyPath: "id" });
+          chunks.createIndex("snapshotId", "snapshotId");
+          chunks.createIndex("snapshotSeq", ["snapshotId", "seq"]);
+        }
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -184,4 +211,52 @@ export async function getSavedQueries(origin: string): Promise<SavedQuery[]> {
   const store = t.objectStore("saved_queries");
   const entries = await getAllByIndex<SavedQuery>(store, "origin", IDBKeyRange.only(origin));
   return entries.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+// --- Snapshots ---
+
+export async function saveSnapshotManifest(manifest: Omit<SnapshotManifest, "id" | "createdAt">): Promise<SnapshotManifest> {
+  const db = await openDb();
+  const full: SnapshotManifest = { ...manifest, id: crypto.randomUUID(), createdAt: Date.now() };
+  await tx(db, "snapshots", "readwrite", (t) => t.objectStore("snapshots").put(full));
+  return full;
+}
+
+export async function appendSnapshotChunk(snapshotId: string, seq: number, rows: IndexedDbRecord[]): Promise<void> {
+  const db = await openDb();
+  const chunk: SnapshotRowChunk = { id: crypto.randomUUID(), snapshotId, seq, rows };
+  await tx(db, "snapshot_chunks", "readwrite", (t) => t.objectStore("snapshot_chunks").put(chunk));
+}
+
+export async function listSnapshots(origin: string): Promise<SnapshotManifest[]> {
+  const db = await openDb();
+  const t = db.transaction("snapshots", "readonly");
+  const store = t.objectStore("snapshots");
+  const entries = await getAllByIndex<SnapshotManifest>(store, "origin", IDBKeyRange.only(origin));
+  return entries.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function getSnapshotRows(snapshotId: string): Promise<IndexedDbRecord[]> {
+  const db = await openDb();
+  const t = db.transaction("snapshot_chunks", "readonly");
+  const store = t.objectStore("snapshot_chunks");
+  const chunks = await getAllByIndex<SnapshotRowChunk>(store, "snapshotId", IDBKeyRange.only(snapshotId));
+  chunks.sort((a, b) => a.seq - b.seq);
+  return chunks.flatMap((c) => c.rows);
+}
+
+export async function deleteSnapshot(snapshotId: string): Promise<void> {
+  const db = await openDb();
+  const t = db.transaction(["snapshots", "snapshot_chunks"], "readwrite");
+  t.objectStore("snapshots").delete(snapshotId);
+  const chunks = await getAllByIndex<SnapshotRowChunk>(
+    t.objectStore("snapshot_chunks"),
+    "snapshotId",
+    IDBKeyRange.only(snapshotId)
+  );
+  for (const chunk of chunks) t.objectStore("snapshot_chunks").delete(chunk.id);
+  await new Promise<void>((resolve, reject) => {
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+  });
 }
