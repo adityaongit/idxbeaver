@@ -40,8 +40,13 @@ import { QueryHistoryPanel } from "./QueryHistoryPanel";
 import { SavedQueriesPanel } from "./SavedQueriesPanel";
 import { CommandPalette } from "./CommandPalette";
 import { DataGrid, type DraftRow } from "./DataGrid";
+import { CacheView } from "./CacheView";
+import { OriginDashboard } from "./OriginDashboard";
 import { UndoStack, type UndoCommand } from "../shared/undo";
 import type {
+  CacheEntrySummary,
+  CookieReadResult,
+  CookieRecord,
   IndexedDbDatabaseInfo,
   IndexedDbRecord,
   KeyValueRecord,
@@ -52,8 +57,10 @@ import type {
   StorageDiscovery,
   StorageRequest,
   StorageResponse,
+  StoreSummary,
   TableReadResult
 } from "../shared/types";
+import { CookieGrid } from "./CookieGrid";
 import "./styles.css";
 
 const QueryEditor = lazy(async () => import("./QueryEditor").then((module) => ({ default: module.QueryEditor })));
@@ -61,7 +68,9 @@ const QueryEditor = lazy(async () => import("./QueryEditor").then((module) => ({
 type SelectedNode =
   | { kind: "overview" }
   | { kind: "indexeddb"; dbName: string; dbVersion: number; storeName: string; origin: string; frameId: number }
-  | { kind: "kv"; surface: "localStorage" | "sessionStorage" };
+  | { kind: "kv"; surface: "localStorage" | "sessionStorage" }
+  | { kind: "cache"; cacheName: string; frameId: number }
+  | { kind: "cookies" };
 
 type Notice = { tone: "success" | "error" | "info"; message: string } | null;
 type PendingAction =
@@ -75,7 +84,9 @@ type PendingAction =
 
 type WorkspaceTab =
   | { id: string; title: string; node: { kind: "indexeddb"; dbName: string; dbVersion: number; storeName: string; origin: string; frameId: number } }
-  | { id: string; title: string; node: { kind: "kv"; surface: "localStorage" | "sessionStorage" } };
+  | { id: string; title: string; node: { kind: "kv"; surface: "localStorage" | "sessionStorage" } }
+  | { id: string; title: string; node: { kind: "cache"; cacheName: string; frameId: number } }
+  | { id: string; title: string; node: { kind: "cookies" } };
 
 type QuerySuggestion = {
   label: string;
@@ -156,6 +167,9 @@ function App() {
   const [saveQueryName, setSaveQueryName] = useState("");
   const [saveQueryTags, setSaveQueryTags] = useState("");
   const [sqlSidePanel, setSqlSidePanel] = useState<"history" | "saved">("history");
+  const [cacheEntries, setCacheEntries] = useState<CacheEntrySummary[]>([]);
+  const [cookieRows, setCookieRows] = useState<CookieRecord[]>([]);
+  const [storeSummaries, setStoreSummaries] = useState<Map<string, StoreSummary | "loading">>(new Map());
   const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -169,6 +183,7 @@ function App() {
       return;
     }
     setDiscovery(response.data as StorageDiscovery);
+    setStoreSummaries(new Map());
     setNotice({ tone: "success", message: "Storage refreshed." });
   }, [rpc]);
 
@@ -262,7 +277,7 @@ function App() {
     return all;
   }, [previewTab, tabs]);
 
-  const canToggleBottomPanel = activeTabId !== "sql" && selected.kind !== "overview";
+  const canToggleBottomPanel = activeTabId !== "sql" && selected.kind !== "overview" && selected.kind !== "cache" && selected.kind !== "cookies";
   const pendingActionTitle =
     pendingAction?.kind === "clearKv" ? "Clear all keys?"
     : pendingAction?.kind === "deleteKv" ? "Delete key?"
@@ -346,6 +361,65 @@ function App() {
     [rpc]
   );
 
+  const loadCacheEntries = useCallback(
+    async (frameId: number, cacheName: string) => {
+      setBusy(true);
+      setCacheEntries([]);
+      const response = await rpc({ type: "readCacheEntries", tabId, frameId, cacheName, limit: 500, offset: 0 });
+      setBusy(false);
+      if (!response.ok) {
+        setNotice({ tone: "error", message: response.error });
+        return;
+      }
+      setCacheEntries(response.data as CacheEntrySummary[]);
+      setNotice({ tone: "info", message: `Loaded ${cacheName}.` });
+    },
+    [rpc]
+  );
+
+  const loadCookies = useCallback(
+    async (url: string) => {
+      setBusy(true);
+      setCookieRows([]);
+      const response = await rpc({ type: "readCookies", tabId, url });
+      setBusy(false);
+      if (!response.ok) {
+        setNotice({ tone: "error", message: response.error });
+        return;
+      }
+      setCookieRows((response.data as CookieReadResult).rows);
+      setNotice({ tone: "info", message: "Loaded cookies." });
+    },
+    [rpc]
+  );
+
+  const invalidateStoreSummary = useCallback((origin: string, dbName: string, dbVersion: number, storeName: string) => {
+    const key = `${origin}::${dbName}::v${dbVersion}::${storeName}`;
+    setStoreSummaries((prev) => {
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const fetchDbSummaries = useCallback(async (db: IndexedDbDatabaseInfo) => {
+    const keys = db.stores.map((s) => `${db.origin}::${db.name}::v${db.version}::${s.name}`);
+    setStoreSummaries((prev) => {
+      const next = new Map(prev);
+      for (const key of keys) {
+        if (!next.has(key)) next.set(key, "loading");
+      }
+      return next;
+    });
+    await Promise.all(db.stores.map(async (store) => {
+      const key = `${db.origin}::${db.name}::v${db.version}::${store.name}`;
+      const response = await rpc({ type: "readStoreSummary", tabId, frameId: db.frameId, dbName: db.name, dbVersion: db.version, storeName: store.name });
+      if (response.ok) {
+        setStoreSummaries((prev) => new Map(prev).set(key, response.data as StoreSummary));
+      }
+    }));
+  }, [rpc]);
+
   const openNode = (node: SelectedNode, options?: { persist?: boolean }) => {
     const persist = options?.persist ?? false;
     setSelected(node);
@@ -360,6 +434,8 @@ function App() {
       void loadIndexedStore(node.frameId, node.dbName, node.dbVersion, node.storeName);
     }
     if (node.kind === "kv") void loadKv(node.surface);
+    if (node.kind === "cache") void loadCacheEntries(node.frameId, node.cacheName);
+    if (node.kind === "cookies") void loadCookies(discovery?.url ?? discovery?.origin ?? "");
 
     if (node.kind === "overview") {
       setPreviewTab(null);
@@ -372,7 +448,7 @@ function App() {
     }
 
     const tab = tabForNode(node);
-    if (node.kind === "kv") {
+    if (node.kind === "kv" || node.kind === "cache" || node.kind === "cookies") {
       setPreviewTab(null);
       setTabs((current) => (current.some((item) => item.id === tab.id) ? current : [...current, tab]));
       setActiveTabId(tab.id);
@@ -1124,6 +1200,8 @@ function App() {
               onActivateDb={setActiveDbKey}
               activeDbKey={activeDbKey}
               onOpenPicker={() => setDatabasePickerOpen(true)}
+              storeSummaries={storeSummaries}
+              onExpandDb={fetchDbSummaries}
             />
           </aside>
         </ResizablePanel>
@@ -1180,7 +1258,7 @@ function App() {
 
             <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card/50 px-3 py-1.5">
               <span className="section-label shrink-0">
-                {activeTabId === "sql" ? "Query" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "Store" : "KV"}
+                {activeTabId === "sql" ? "Query" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "Store" : selected.kind === "cache" ? "Cache" : selected.kind === "cookies" ? "Cookies" : "KV"}
               </span>
               <span className="h-3 w-px bg-border" />
               <h2 className="min-w-0 flex-1 truncate text-[12px] font-medium tracking-tight">{activeTabId === "sql" ? "MongoDB-style query" : titleForSelection(selected)}</h2>
@@ -1213,7 +1291,15 @@ function App() {
               </div>
             )}
 
-            {activeTabId === "overview" && <Overview discovery={discovery} />}
+            {activeTabId === "overview" && (
+              <OriginDashboard
+                discovery={discovery}
+                storeSummaries={storeSummaries}
+                rpc={rpc as (req: StorageRequest) => Promise<{ ok: boolean; data?: unknown; error?: string }>}
+                tabId={tabId}
+                onNukeComplete={refreshDiscovery}
+              />
+            )}
 
             {activeTabId !== "sql" && selected.kind === "indexeddb" && (
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
@@ -1378,6 +1464,61 @@ function App() {
                   </section>
                 </ResizablePanel>
               </ResizablePanelGroup>
+            )}
+
+            {activeTabId !== "sql" && selected.kind === "cache" && (
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <CacheView
+                  rpc={rpc}
+                  cacheName={selected.cacheName}
+                  tabId={tabId}
+                  frameId={selected.frameId}
+                  onNotice={(tone, message) => setNotice({ tone, message })}
+                />
+              </div>
+            )}
+
+            {activeTabId !== "sql" && selected.kind === "cookies" && (
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <CookieGrid
+                  rows={cookieRows}
+                  onSaveValue={async (record, newValue) => {
+                    const url = discovery?.url ?? discovery?.origin ?? "";
+                    const resp = await rpc({
+                      type: "setCookie",
+                      tabId,
+                      url,
+                      details: { url, name: record.name, value: newValue, domain: record.domain || undefined, path: record.path || "/" },
+                    });
+                    if (!resp.ok) { setNotice({ tone: "error", message: resp.error }); return; }
+                    await loadCookies(url);
+                    await refreshDiscovery();
+                    setNotice({ tone: "success", message: `Saved cookie "${record.name}".` });
+                  }}
+                  onDelete={async (record) => {
+                    const url = discovery?.url ?? discovery?.origin ?? "";
+                    const cookieUrl = `${record.secure ? "https" : "http"}://${record.domain.startsWith(".") ? record.domain.slice(1) : record.domain}${record.path}`;
+                    const resp = await rpc({ type: "removeCookie", tabId, url: cookieUrl || url, name: record.name });
+                    if (!resp.ok) { setNotice({ tone: "error", message: resp.error }); return; }
+                    await loadCookies(url);
+                    await refreshDiscovery();
+                    setNotice({ tone: "success", message: `Deleted cookie "${record.name}".` });
+                  }}
+                  onAddRow={async (draft) => {
+                    const url = discovery?.url ?? discovery?.origin ?? "";
+                    const resp = await rpc({
+                      type: "setCookie",
+                      tabId,
+                      url,
+                      details: { url, name: draft.name, value: draft.value, domain: draft.domain || undefined, path: draft.path || "/" },
+                    });
+                    if (!resp.ok) { setNotice({ tone: "error", message: resp.error }); return; }
+                    await loadCookies(url);
+                    await refreshDiscovery();
+                    setNotice({ tone: "success", message: `Added cookie "${draft.name}".` });
+                  }}
+                />
+              </div>
             )}
 
             {activeTabId === "sql" && (
@@ -2201,6 +2342,8 @@ function findSerializableJsonError(value: SerializableValue, path = "$"): string
 
 function tabForNode(node: Exclude<SelectedNode, { kind: "overview" }>): WorkspaceTab {
   if (node.kind === "kv") return { id: node.surface, title: node.surface, node };
+  if (node.kind === "cache") return { id: `cache::${node.cacheName}`, title: node.cacheName, node };
+  if (node.kind === "cookies") return { id: "cookies", title: "Cookies", node };
   return {
     id: `${node.origin}::${node.dbName}::v${node.dbVersion}:${node.storeName}`,
     title: node.storeName,
@@ -2328,9 +2471,26 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
           { frameId: 1, origin: "https://child.example.test", url: "https://child.example.test/iframe" }
         ],
         localStorage: { count: 4, bytes: 2048 },
-        sessionStorage: { count: 2, bytes: 420 }
+        sessionStorage: { count: 2, bytes: 420 },
+        cookies: { count: 0, bytes: 0 },
+        cacheStorage: { caches: [{ name: "v1-assets", entryCount: null }, { name: "api-responses", entryCount: null }] },
+        url: "https://app.example.test/"
       }
     };
+  }
+
+  if (request.type === "readCacheEntries") {
+    return {
+      ok: true,
+      data: [
+        { url: "https://app.example.test/bundle.js", method: "GET", status: 200, statusText: "OK", contentType: "application/javascript", contentLength: 102400, dateHeader: "Mon, 01 Jan 2024 00:00:00 GMT" },
+        { url: "https://app.example.test/styles.css", method: "GET", status: 200, statusText: "OK", contentType: "text/css", contentLength: 8192, dateHeader: "Mon, 01 Jan 2024 00:00:00 GMT" }
+      ]
+    };
+  }
+
+  if (request.type === "readCacheResponse") {
+    return { ok: true, data: { contentType: "application/javascript", kind: "text", preview: "// bundle preview" } };
   }
 
   if (request.type === "readIndexedDbStore" || request.type === "runIndexedDbQuery") {
@@ -2390,7 +2550,9 @@ function StorageTree({
   onHideDatabase,
   onActivateDb,
   activeDbKey,
-  onOpenPicker
+  onOpenPicker,
+  storeSummaries,
+  onExpandDb
 }: {
   discovery: StorageDiscovery | null;
   selected: SelectedNode;
@@ -2406,6 +2568,8 @@ function StorageTree({
   onActivateDb: (key: string | null) => void;
   activeDbKey: string | null;
   onOpenPicker: () => void;
+  storeSummaries: Map<string, StoreSummary | "loading">;
+  onExpandDb: (db: IndexedDbDatabaseInfo) => void;
 }) {
   const [expandedDbKeys, setExpandedDbKeys] = useState<Set<string>>(new Set());
 
@@ -2491,8 +2655,12 @@ function StorageTree({
                       onActivateDb(key);
                       setExpandedDbKeys((current) => {
                         const next = new Set(current);
-                        if (next.has(key)) next.delete(key);
-                        else next.add(key);
+                        if (next.has(key)) {
+                          next.delete(key);
+                        } else {
+                          next.add(key);
+                          onExpandDb(db);
+                        }
                         return next;
                       });
                     }}
@@ -2540,9 +2708,22 @@ function StorageTree({
                           >
                             <Table2 className="size-3 shrink-0 text-muted-foreground" />
                             <span className="flex-1 truncate">{store.name}</span>
-                            <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
-                              {store.count ?? "?"}
-                            </span>
+                            {(() => {
+                              const sKey = `${db.origin}::${db.name}::v${db.version}::${store.name}`;
+                              const summary = storeSummaries.get(sKey);
+                              if (summary === "loading") return <span className="font-mono text-[10px] text-muted-foreground/50">…</span>;
+                              if (summary) {
+                                const bytes = summary.approxBytes;
+                                const bStr = bytes !== null ? (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)}M` : bytes >= 1024 ? `${(bytes / 1024).toFixed(0)}K` : `${bytes}B`) : null;
+                                return (
+                                  <span className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground tabular-nums">
+                                    <span>{summary.rowCount?.toLocaleString() ?? "?"}</span>
+                                    {bStr && <span className="text-muted-foreground/50">·{bStr}</span>}
+                                  </span>
+                                );
+                              }
+                              return <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{store.count ?? "?"}</span>;
+                            })()}
                           </button>
                         </ContextMenuTrigger>
                         <ContextMenuContent className="w-52">
@@ -2582,7 +2763,33 @@ function StorageTree({
           label="SessionStorage"
           trailing={<span className="font-mono text-[10px] text-muted-foreground tabular-nums">{discovery.sessionStorage.count}</span>}
         />
+        <TreeItem
+          active={selected.kind === "cookies"}
+          onClick={() => openNode({ kind: "cookies" }, { persist: true })}
+          icon={<Database className="size-3" />}
+          label="Cookies"
+          trailing={<span className="font-mono text-[10px] text-muted-foreground tabular-nums">{discovery.cookies?.count ?? 0}</span>}
+        />
       </TreeSection>
+
+      {discovery.cacheStorage && discovery.cacheStorage.caches.length > 0 && (
+        <TreeSection label="Cache Storage" count={discovery.cacheStorage.caches.length}>
+          {discovery.cacheStorage.caches.map((cache) => (
+            <TreeItem
+              key={cache.name}
+              active={selected.kind === "cache" && selected.cacheName === cache.name}
+              onClick={() => openNode({ kind: "cache", cacheName: cache.name, frameId: 0 }, { persist: true })}
+              icon={<Database className="size-3" />}
+              label={cache.name}
+              trailing={
+                cache.entryCount !== null
+                  ? <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{cache.entryCount}</span>
+                  : undefined
+              }
+            />
+          ))}
+        </TreeSection>
+      )}
     </nav>
   );
 }
@@ -3175,6 +3382,8 @@ function KvGrid({
 function titleForSelection(selected: SelectedNode) {
   if (selected.kind === "overview") return "Origin dashboard";
   if (selected.kind === "kv") return selected.surface;
+  if (selected.kind === "cache") return selected.cacheName;
+  if (selected.kind === "cookies") return "Cookies";
   return selected.storeName;
 }
 

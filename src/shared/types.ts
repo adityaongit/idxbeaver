@@ -1,5 +1,25 @@
 export type StorageSurface = "indexeddb" | "localStorage" | "sessionStorage";
 
+export interface CacheEntrySummary {
+  url: string;
+  method: string;
+  status: number;
+  statusText: string;
+  contentType: string;
+  contentLength: number | null;
+  dateHeader: string | null;
+}
+
+export interface CacheResponseBody {
+  contentType: string;
+  kind: "text" | "json" | "image" | "binary";
+  preview: string;
+}
+
+export interface CacheNamesResult {
+  caches: { name: string; entryCount: number | null }[];
+}
+
 export type SerializableValue =
   | null
   | string
@@ -41,11 +61,26 @@ export interface IndexedDbDatabaseInfo {
   frameId: number;
 }
 
+export interface CookieRecord {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  expirationDate: number | undefined;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: string;
+  session: boolean;
+}
+
 export interface StorageDiscovery {
   origin: string;
+  url: string;
   indexedDb: IndexedDbDatabaseInfo[];
   localStorage: StorageKvSummary;
   sessionStorage: StorageKvSummary;
+  cookies: StorageKvSummary;
+  cacheStorage: { caches: { name: string; entryCount: number | null }[] };
   frames: FrameInfo[];
 }
 
@@ -117,13 +152,45 @@ export type StorageRequest =
   | { type: "readKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage" }
   | { type: "setKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage"; key: string; value: string }
   | { type: "removeKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage"; key: string }
-  | { type: "clearKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage" };
+  | { type: "clearKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage" }
+  | { type: "readCookies"; tabId: number; url: string }
+  | { type: "setCookie"; tabId: number; url: string; details: chrome.cookies.SetDetails }
+  | { type: "removeCookie"; tabId: number; url: string; name: string }
+  | { type: "clearCookies"; tabId: number; url: string }
+  | { type: "readCacheNames"; tabId: number; frameId: number }
+  | { type: "readCacheEntries"; tabId: number; frameId: number; cacheName: string; limit: number; offset: number }
+  | { type: "readCacheResponse"; tabId: number; frameId: number; cacheName: string; url: string; requestMethod: string }
+  | { type: "deleteCacheEntry"; tabId: number; frameId: number; cacheName: string; url: string; requestMethod: string }
+  | { type: "clearCache"; tabId: number; frameId: number; cacheName: string }
+  | { type: "readStoreSummary"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string }
+  | { type: "storageEstimate"; tabId: number };
+
+export interface StoreSummary {
+  rowCount: number | null;
+  approxBytes: number | null;
+  sampledRows: number;
+}
+
+export interface StorageEstimateResult {
+  usage: number | null;
+  quota: number | null;
+}
+
+export interface CookieReadResult {
+  rows: CookieRecord[];
+}
 
 export type StorageResponse =
   | { ok: true; data: StorageDiscovery }
   | { ok: true; data: TableReadResult }
   | { ok: true; data: KvReadResult }
   | { ok: true; data: QueryResult }
+  | { ok: true; data: CookieReadResult }
+  | { ok: true; data: CacheEntrySummary[] }
+  | { ok: true; data: CacheResponseBody }
+  | { ok: true; data: CacheNamesResult }
+  | { ok: true; data: StoreSummary }
+  | { ok: true; data: StorageEstimateResult }
   | { ok: true; data: { success: true } }
   | { ok: false; error: string };
 

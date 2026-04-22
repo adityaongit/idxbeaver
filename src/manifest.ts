@@ -12,7 +12,7 @@ export default defineManifest({
     service_worker: "src/background/index.ts",
     type: "module"
   },
-  permissions: ["activeTab", "scripting", "storage", "webNavigation"],
+  permissions: ["activeTab", "scripting", "storage", "webNavigation", "cookies"],
   host_permissions: ["<all_urls>"],
   web_accessible_resources: [
     {

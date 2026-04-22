@@ -1,4 +1,4 @@
-import type { FrameInfo, IndexedDbDatabaseInfo, PanelMessage, PanelReply, StorageRequest, StorageResponse } from "../shared/types";
+import type { CookieRecord, FrameInfo, IndexedDbDatabaseInfo, PanelMessage, PanelReply, StorageRequest, StorageResponse } from "../shared/types";
 
 chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener(async (message: PanelMessage) => {
@@ -12,6 +12,42 @@ async function handleStorageRequest(request: StorageRequest): Promise<StorageRes
   try {
     if (request.type === "discover") {
       return await discoverAcrossFrames(request.tabId);
+    }
+
+    // Cookie RPCs — handled directly in the service worker via chrome.cookies API.
+    if (request.type === "readCookies") {
+      const cookies = await chrome.cookies.getAll({ url: request.url });
+      const rows: CookieRecord[] = cookies.map((c) => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path,
+        expirationDate: c.expirationDate,
+        httpOnly: c.httpOnly,
+        secure: c.secure,
+        sameSite: c.sameSite ?? "unspecified",
+        session: c.session,
+      }));
+      return { ok: true, data: { rows } };
+    }
+
+    if (request.type === "setCookie") {
+      await chrome.cookies.set(request.details);
+      return { ok: true, data: { success: true } };
+    }
+
+    if (request.type === "removeCookie") {
+      await chrome.cookies.remove({ url: request.url, name: request.name });
+      return { ok: true, data: { success: true } };
+    }
+
+    if (request.type === "clearCookies") {
+      const cookies = await chrome.cookies.getAll({ url: request.url });
+      for (const cookie of cookies) {
+        const cookieUrl = `${cookie.secure ? "https" : "http"}://${cookie.domain.startsWith(".") ? cookie.domain.slice(1) : cookie.domain}${cookie.path}`;
+        await chrome.cookies.remove({ url: cookieUrl, name: cookie.name });
+      }
+      return { ok: true, data: { success: true } };
     }
 
     // RPCs that target a specific frame (IndexedDB per-origin partition).
@@ -65,6 +101,7 @@ async function discoverAcrossFrames(tabId: number): Promise<StorageResponse> {
   const frameInfos: FrameInfo[] = [];
   const frameErrors: string[] = [];
   let topOrigin = "";
+  let topUrl = "";
   let topLocalStorage = { count: 0, bytes: 0 };
   let topSessionStorage = { count: 0, bytes: 0 };
 
@@ -104,6 +141,7 @@ async function discoverAcrossFrames(tabId: number): Promise<StorageResponse> {
 
     if (frame.frameId === 0) {
       topOrigin = payload.origin;
+      topUrl = frame.url ?? payload.origin;
       topLocalStorage = payload.localStorage;
       topSessionStorage = payload.sessionStorage;
     }
@@ -123,13 +161,54 @@ async function discoverAcrossFrames(tabId: number): Promise<StorageResponse> {
     console.warn("[idxbeaver] discovery errors:", frameErrors);
   }
 
+  // Get cookie count for the top frame URL.
+  let topCookies = { count: 0, bytes: 0 };
+  if (topUrl) {
+    try {
+      const cookies = await chrome.cookies.getAll({ url: topUrl });
+      const bytes = cookies.reduce((sum, c) => sum + c.name.length + c.value.length, 0);
+      topCookies = { count: cookies.length, bytes };
+    } catch {
+      // cookies permission may not be available
+    }
+  }
+
+  // Get cache storage names for the top frame.
+  let topCacheStorage: { caches: { name: string; entryCount: number | null }[] } = { caches: [] };
+  if (targetFrames.length > 0) {
+    try {
+      const topFrame = targetFrames.find((f) => f.frameId === 0) ?? targetFrames[0];
+      const [cacheExec] = await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [topFrame.frameId] },
+        world: "MAIN",
+        func: async () => {
+          try {
+            if (typeof caches === "undefined") return { caches: [] };
+            const names = await caches.keys();
+            return { caches: names.map((n: string) => ({ name: n, entryCount: null })) };
+          } catch {
+            return { caches: [] };
+          }
+        }
+      });
+      if (cacheExec?.result) {
+        topCacheStorage = cacheExec.result as { caches: { name: string; entryCount: number | null }[] };
+      }
+    } catch {
+      // Cache API not available
+    }
+  }
+
   return {
     ok: true,
     data: {
       origin: topOrigin,
+      url: topUrl,
       indexedDb,
       localStorage: topLocalStorage,
       sessionStorage: topSessionStorage,
+      cookies: topCookies,
+      cacheStorage: topCacheStorage,
       frames: frameInfos
     }
   };
@@ -576,6 +655,143 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
       const storage = request.surface === "localStorage" ? localStorage : sessionStorage;
       storage.clear();
       return { ok: true, data: { success: true } };
+    }
+
+    if (request.type === "readCacheNames") {
+      if (typeof caches === "undefined") return { ok: true, data: { caches: [] } };
+      const names = await caches.keys();
+      return { ok: true, data: { caches: names.map((n: string) => ({ name: n, entryCount: null })) } };
+    }
+
+    if (request.type === "readCacheEntries") {
+      if (typeof caches === "undefined") return { ok: true, data: [] };
+      const cache = await caches.open(request.cacheName);
+      const allRequests = await cache.keys();
+      const sliced = allRequests.slice(request.offset, request.offset + request.limit);
+      const entries: Array<{
+        url: string;
+        method: string;
+        status: number;
+        statusText: string;
+        contentType: string;
+        contentLength: number | null;
+        dateHeader: string | null;
+      }> = [];
+      for (const req of sliced) {
+        const resp = await cache.match(req);
+        if (!resp) continue;
+        const contentType = resp.headers.get("content-type") ?? "";
+        const contentLengthStr = resp.headers.get("content-length");
+        const contentLength = contentLengthStr ? parseInt(contentLengthStr, 10) : null;
+        entries.push({
+          url: req.url,
+          method: req.method,
+          status: resp.status,
+          statusText: resp.statusText,
+          contentType: contentType.split(";")[0].trim(),
+          contentLength: contentLength !== null && isFinite(contentLength) ? contentLength : null,
+          dateHeader: resp.headers.get("date")
+        });
+      }
+      return { ok: true, data: entries };
+    }
+
+    if (request.type === "readCacheResponse") {
+      if (typeof caches === "undefined") return { ok: false, error: "Cache API not available." };
+      const cache = await caches.open(request.cacheName);
+      const allRequests = await cache.keys();
+      const matchedReq = allRequests.find((r: Request) => r.url === request.url && r.method === request.requestMethod);
+      if (!matchedReq) return { ok: false, error: "Cache entry not found." };
+      const resp = await cache.match(matchedReq);
+      if (!resp) return { ok: false, error: "Cache entry not found." };
+      const contentType = (resp.headers.get("content-type") ?? "").split(";")[0].trim();
+      let kind: "text" | "json" | "image" | "binary";
+      let preview: string;
+      if (contentType === "application/json" || contentType.endsWith("+json")) {
+        kind = "json";
+        const text = await resp.clone().text().catch(() => "");
+        const limited = text.slice(0, 204800);
+        try {
+          preview = JSON.stringify(JSON.parse(limited), null, 2);
+        } catch {
+          preview = limited;
+        }
+      } else if (contentType.startsWith("text/")) {
+        kind = "text";
+        preview = (await resp.clone().text().catch(() => "")).slice(0, 204800);
+      } else if (contentType.startsWith("image/")) {
+        kind = "image";
+        const buf = await resp.clone().arrayBuffer().catch(() => new ArrayBuffer(0));
+        if (buf.byteLength > 2097152) {
+          preview = `data:${contentType};base64,(too large — ${buf.byteLength} bytes)`;
+        } else {
+          const bytes = new Uint8Array(buf);
+          let binary = "";
+          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+          preview = `data:${contentType};base64,${btoa(binary)}`;
+        }
+      } else {
+        kind = "binary";
+        const buf = await resp.clone().arrayBuffer().catch(() => new ArrayBuffer(0));
+        preview = `${Math.round(buf.byteLength / 1024)} KB binary`;
+      }
+      return { ok: true, data: { contentType, kind, preview } };
+    }
+
+    if (request.type === "deleteCacheEntry") {
+      if (typeof caches === "undefined") return { ok: false, error: "Cache API not available." };
+      const cache = await caches.open(request.cacheName);
+      const allRequests = await cache.keys();
+      const matchedReq = allRequests.find((r: Request) => r.url === request.url && r.method === request.requestMethod);
+      if (matchedReq) {
+        await cache.delete(matchedReq);
+      }
+      return { ok: true, data: { success: true } };
+    }
+
+    if (request.type === "clearCache") {
+      if (typeof caches === "undefined") return { ok: false, error: "Cache API not available." };
+      await caches.delete(request.cacheName);
+      return { ok: true, data: { success: true } };
+    }
+
+    if (request.type === "readStoreSummary") {
+      const db = await openDb(request.dbName, request.dbVersion);
+      const tx = db.transaction(request.storeName, "readonly");
+      const store = tx.objectStore(request.storeName);
+      const rowCount: number = await new Promise((resolve, reject) => {
+        const req = store.count();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      const sampleRows: unknown[] = [];
+      await new Promise<void>((resolve) => {
+        const cursor = store.openCursor();
+        cursor.onsuccess = (e) => {
+          const c = (e.target as IDBRequest<IDBCursorWithValue | null>).result;
+          if (!c || sampleRows.length >= 100) { resolve(); return; }
+          sampleRows.push(c.value);
+          c.continue();
+        };
+        cursor.onerror = () => resolve();
+      });
+      db.close();
+      let approxBytes: number | null = null;
+      if (sampleRows.length > 0) {
+        try {
+          const sampleBytes = sampleRows.reduce((sum: number, row) => sum + JSON.stringify(row).length * 2, 0);
+          approxBytes = Math.round((sampleBytes / sampleRows.length) * rowCount);
+        } catch { approxBytes = null; }
+      }
+      return { ok: true, data: { rowCount, approxBytes, sampledRows: sampleRows.length } };
+    }
+
+    if (request.type === "storageEstimate") {
+      if (!navigator.storage || typeof navigator.storage.estimate !== "function") {
+        return { ok: true, data: { usage: null, quota: null } };
+      }
+      const est = await navigator.storage.estimate();
+      return { ok: true, data: { usage: est.usage ?? null, quota: est.quota ?? null } };
     }
 
     return { ok: false, error: "Unsupported storage request." };
