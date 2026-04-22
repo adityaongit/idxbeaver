@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ChevronDown, ChevronLeft, ChevronRight, Copy, Database, Moon, PanelBottom, PanelBottomDashed, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Plus, RefreshCw, Search, Settings, SlidersHorizontal, Sun, Table2, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, Database, Moon, PanelBottom, PanelBottomDashed, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Plus, RefreshCw, Search, Settings, SlidersHorizontal, Sun, Table2, X } from "lucide-react";
 import { JsonView, collapseAllNested } from "react-json-view-lite";
 import "react-json-view-lite/dist/index.css";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { parseMongoQuery } from "../shared/query";
 import { applyFilters, activeRuleCount, type FilterState, EMPTY_FILTER_STATE } from "../shared/filters";
 import { keyStrategy } from "../shared/indexed";
-import { getPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
+import { getPrefs, setPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
 import { inferSchema } from "../shared/schemaInfer";
 import type { InferredColumn } from "../shared/schemaInfer";
 import { appendHistory, getHistory, saveQuery, getSavedQueries } from "../shared/persisted";
@@ -36,6 +36,10 @@ import { matchesShortcut } from "./shortcuts";
 import { FilterBar } from "./FilterBar";
 import { StructureView } from "./StructureView";
 import { SettingsDialog } from "./SettingsDialog";
+import { DestructiveDialog, type DestructivePlan } from "./DestructiveDialog";
+import { SnapshotsDialog, captureSnapshotForStore, type SnapshotTarget } from "./SnapshotsDialog";
+import { ImportDialog } from "./ImportDialog";
+import { toNdjson, toSqlInsert, downloadBlob } from "../shared/export";
 import { QueryHistoryPanel } from "./QueryHistoryPanel";
 import { SavedQueriesPanel } from "./SavedQueriesPanel";
 import { CommandPalette } from "./CommandPalette";
@@ -43,6 +47,7 @@ import { DataGrid, type DraftRow } from "./DataGrid";
 import { CacheView } from "./CacheView";
 import { OriginDashboard } from "./OriginDashboard";
 import { UndoStack, type UndoCommand } from "../shared/undo";
+import { isIdempotent, PortLostError } from "../shared/rpcIds";
 import type {
   CacheEntrySummary,
   CookieReadResult,
@@ -73,14 +78,7 @@ type SelectedNode =
   | { kind: "cookies" };
 
 type Notice = { tone: "success" | "error" | "info"; message: string } | null;
-type PendingAction =
-  | { kind: "deleteIndexed"; label: string; execute: () => Promise<void> }
-  | { kind: "deleteKv"; label: string; execute: () => Promise<void> }
-  | { kind: "clearKv"; label: string; execute: () => Promise<void> }
-  | { kind: "deleteDatabase"; label: string; execute: () => Promise<void> }
-  | { kind: "deleteStore"; label: string; execute: () => Promise<void> }
-  | { kind: "clearStore"; label: string; execute: () => Promise<void> }
-  | null;
+type PendingAction = DestructivePlan | null;
 
 type WorkspaceTab =
   | { id: string; title: string; node: { kind: "indexeddb"; dbName: string; dbVersion: number; storeName: string; origin: string; frameId: number } }
@@ -173,6 +171,9 @@ function App() {
   const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+  const [snapshotTarget, setSnapshotTarget] = useState<SnapshotTarget | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const refreshDiscovery = useCallback(async () => {
     setBusy(true);
@@ -195,6 +196,30 @@ function App() {
     void getPrefs().then(setPrefsState);
     return watchPrefs(setPrefsState);
   }, []);
+
+  // Resolve prefs.theme → actual dark/light value.
+  // "system" defers to chrome.devtools.panels.themeName ("dark" → dark, anything else → light).
+  useEffect(() => {
+    if (prefs.theme !== "system") {
+      setTheme(prefs.theme);
+      return;
+    }
+    const devtools = typeof chrome !== "undefined" ? chrome.devtools?.panels as { themeName?: string } | undefined : undefined;
+    const devTheme = devtools?.themeName === "dark" ? "dark" : "light";
+    setTheme(devTheme);
+  }, [prefs.theme]);
+
+  // Re-discover after service-worker restart so stale state is reconciled.
+  useEffect(() => {
+    if (!extensionRuntime) return;
+    const listener = (message: unknown) => {
+      if (message && typeof message === "object" && (message as { type?: string }).type === "PANEL_RESYNC") {
+        void refreshDiscovery();
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, [refreshDiscovery]);
 
   useEffect(() => {
     const origin = discovery?.origin;
@@ -278,15 +303,6 @@ function App() {
   }, [previewTab, tabs]);
 
   const canToggleBottomPanel = activeTabId !== "sql" && selected.kind !== "overview" && selected.kind !== "cache" && selected.kind !== "cookies";
-  const pendingActionTitle =
-    pendingAction?.kind === "clearKv" ? "Clear all keys?"
-    : pendingAction?.kind === "deleteKv" ? "Delete key?"
-    : pendingAction?.kind === "deleteIndexed" ? "Delete record?"
-    : pendingAction?.kind === "deleteDatabase" ? "Delete database?"
-    : pendingAction?.kind === "deleteStore" ? "Delete object store?"
-    : pendingAction?.kind === "clearStore" ? "Clear object store?"
-    : "Confirm action";
-
   useEffect(() => {
     if (canToggleBottomPanel) return;
     setBottomPanelCollapsed(true);
@@ -701,10 +717,12 @@ function App() {
   const handleBulkDelete = (records: IndexedDbRecord[]) => {
     if (selected.kind !== "indexeddb") return;
     const sel = selected;
-    const label = `Delete ${records.length} record${records.length === 1 ? "" : "s"} from ${sel.storeName}`;
     setPendingAction({
-      kind: "deleteIndexed",
-      label,
+      title: `Delete ${records.length} record${records.length === 1 ? "" : "s"}?`,
+      verb: "delete",
+      noun: `${records.length} record${records.length === 1 ? "" : "s"} from ${sel.storeName}`,
+      confirmText: "",
+      preview: [{ label: "Records", value: records.length }],
       execute: async () => {
         setBusy(true);
         for (const record of records) {
@@ -801,8 +819,11 @@ function App() {
     if (selected.kind !== "indexeddb") return;
     const sel = selected;
     setPendingAction({
-      kind: "deleteIndexed",
-      label: `Delete record ${JSON.stringify(record.key)} from ${sel.storeName}`,
+      title: "Delete record?",
+      verb: "delete",
+      noun: `record from ${sel.storeName}`,
+      confirmText: "",
+      preview: [{ label: "Key", value: JSON.stringify(record.key) }],
       execute: async () => {
         setBusy(true);
         const response = await rpc({
@@ -871,8 +892,11 @@ function App() {
   const deleteKv = async (record: KeyValueRecord) => {
     if (selected.kind !== "kv") return;
     setPendingAction({
-      kind: "deleteKv",
-      label: `Delete key ${record.key} from ${selected.surface}`,
+      title: "Delete key?",
+      verb: "delete",
+      noun: `key "${record.key}" from ${selected.surface}`,
+      confirmText: "",
+      preview: [{ label: "Key", value: record.key }],
       execute: async () => {
         setBusy(true);
         const response = await rpc({ type: "removeKeyValue", tabId, surface: selected.surface, key: record.key });
@@ -891,8 +915,11 @@ function App() {
   const clearKv = async () => {
     if (selected.kind !== "kv") return;
     setPendingAction({
-      kind: "clearKv",
-      label: `Clear all keys from ${selected.surface}`,
+      title: `Clear ${selected.surface}?`,
+      verb: "clear",
+      noun: selected.surface,
+      confirmText: selected.surface,
+      preview: kvResult ? [{ label: "Keys", value: kvResult.rows.length }] : [],
       execute: async () => {
         setBusy(true);
         const response = await rpc({ type: "clearKeyValue", tabId, surface: selected.surface });
@@ -910,8 +937,14 @@ function App() {
 
   const requestDeleteDatabase = (db: IndexedDbDatabaseInfo) => {
     setPendingAction({
-      kind: "deleteDatabase",
-      label: `Permanently delete the database "${db.name}" (v${db.version}) in ${shortOrigin(db.origin)}.`,
+      title: `Delete database "${db.name}"?`,
+      verb: "delete",
+      noun: `${db.name} v${db.version} in ${shortOrigin(db.origin)}`,
+      confirmText: db.name,
+      preview: [
+        { label: "Object stores", value: db.stores.length },
+        { label: "Version", value: db.version },
+      ],
       execute: async () => {
         setBusy(true);
         const response = await rpc({ type: "deleteIndexedDbDatabase", tabId, frameId: db.frameId, dbName: db.name });
@@ -931,9 +964,31 @@ function App() {
   };
 
   const requestDeleteStore = (db: IndexedDbDatabaseInfo, storeName: string) => {
+    const storeTarget: Extract<SnapshotTarget, { scope: "store" }> = {
+      scope: "store", origin: db.origin, dbName: db.name, dbVersion: db.version, storeName, frameId: db.frameId
+    };
     setPendingAction({
-      kind: "deleteStore",
-      label: `Permanently delete object store "${storeName}" from "${db.name}" in ${shortOrigin(db.origin)}.`,
+      title: `Delete store "${storeName}"?`,
+      verb: "delete",
+      noun: `${storeName} from ${db.name}`,
+      confirmText: storeName,
+      preview: (() => {
+        const sKey = `${db.origin}::${db.name}::v${db.version}::${storeName}`;
+        const summary = storeSummaries.get(sKey);
+        const rows: { label: string; value: string | number }[] = [];
+        if (summary && summary !== "loading") {
+          if (summary.rowCount !== null) rows.push({ label: "Rows", value: summary.rowCount });
+          if (summary.approxBytes !== null) rows.push({ label: "Size", value: formatBytes(summary.approxBytes) });
+        }
+        return rows;
+      })(),
+      snapshotOffer: {
+        defaultEnabled: true,
+        snapshotScope: "store",
+        onSnapshot: async () => {
+          await captureSnapshotForStore(rpc as Parameters<typeof captureSnapshotForStore>[0], tabId, storeTarget, `before delete ${storeName}`);
+        },
+      },
       execute: async () => {
         setBusy(true);
         const response = await rpc({
@@ -959,9 +1014,33 @@ function App() {
   };
 
   const requestClearStore = (db: IndexedDbDatabaseInfo, storeName: string) => {
+    const storeTarget: Extract<SnapshotTarget, { scope: "store" }> = {
+      scope: "store", origin: db.origin, dbName: db.name, dbVersion: db.version, storeName, frameId: db.frameId
+    };
     setPendingAction({
-      kind: "clearStore",
-      label: `Delete every record in "${storeName}" (keeps the store).`,
+      title: `Clear store "${storeName}"?`,
+      verb: "clear",
+      noun: storeName,
+      confirmText: storeName,
+      preview: (() => {
+        const sKey = `${db.origin}::${db.name}::v${db.version}::${storeName}`;
+        const summary = storeSummaries.get(sKey);
+        const rows: { label: string; value: string | number }[] = [];
+        if (summary && summary !== "loading") {
+          if (summary.rowCount !== null) rows.push({ label: "Rows", value: summary.rowCount });
+          if (summary.approxBytes !== null) rows.push({ label: "Size", value: formatBytes(summary.approxBytes) });
+        } else if (tableResult && selected.kind === "indexeddb" && selected.storeName === storeName) {
+          rows.push({ label: "Rows (loaded)", value: tableResult.rows.length });
+        }
+        return rows;
+      })(),
+      snapshotOffer: {
+        defaultEnabled: true,
+        snapshotScope: "store",
+        onSnapshot: async () => {
+          await captureSnapshotForStore(rpc as Parameters<typeof captureSnapshotForStore>[0], tabId, storeTarget, `before clear ${storeName}`);
+        },
+      },
       execute: async () => {
         setBusy(true);
         const response = await rpc({
@@ -1009,17 +1088,66 @@ function App() {
     return [];
   }, [kvResult, queryResult, filteredTableRows, tableResult]);
 
-  const exportVisible = (format: "json" | "csv") => {
-    const fileName = `storage-studio-${Date.now()}.${format}`;
-    const content = format === "json" ? JSON.stringify(visibleExportRows, null, 2) : toCsv(visibleExportRows);
-    const blob = new Blob([content], { type: format === "json" ? "application/json" : "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = fileName;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  const exportVisible = (format: "json" | "csv" | "ndjson" | "sql") => {
+    const storeName = selected.kind === "indexeddb" ? selected.storeName : "export";
+    let content: string;
+    let mimeType: string;
+    let ext: string;
+    switch (format) {
+      case "ndjson":
+        content = toNdjson(visibleExportRows);
+        mimeType = "application/x-ndjson";
+        ext = "ndjson";
+        break;
+      case "sql":
+        content = toSqlInsert(storeName, visibleExportRows);
+        mimeType = "text/plain";
+        ext = "sql";
+        break;
+      case "csv":
+        content = toCsv(visibleExportRows);
+        mimeType = "text/csv";
+        ext = "csv";
+        break;
+      default:
+        content = JSON.stringify(visibleExportRows, null, 2);
+        mimeType = "application/json";
+        ext = "json";
+    }
+    const fileName = `storage-studio-${Date.now()}.${ext}`;
+    downloadBlob(new Blob([content], { type: mimeType }), fileName);
     setNotice({ tone: "success", message: `Exported ${fileName}.` });
+  };
+
+  const exportEntireStore = async (format: "json" | "csv" | "ndjson" | "sql") => {
+    if (selected.kind !== "indexeddb") return;
+    const sel = selected;
+    setBusy(true);
+    const allRows: IndexedDbRecord[] = [];
+    let offset = 0;
+    const CHUNK = 5000;
+    while (true) {
+      const res = await rpc({ type: "readIndexedDbStoreChunk", tabId, frameId: sel.frameId, dbName: sel.dbName, dbVersion: sel.dbVersion, storeName: sel.storeName, offset, limit: CHUNK });
+      if (!res.ok) { setNotice({ tone: "error", message: res.error }); setBusy(false); return; }
+      const data = res.data as { rows: IndexedDbRecord[] };
+      allRows.push(...data.rows);
+      if (data.rows.length < CHUNK) break;
+      offset += CHUNK;
+    }
+    setBusy(false);
+    const rows = allRows.map((r) => r.value.value);
+    let content: string;
+    let mimeType: string;
+    let ext: string;
+    switch (format) {
+      case "ndjson": content = toNdjson(rows); mimeType = "application/x-ndjson"; ext = "ndjson"; break;
+      case "sql": content = toSqlInsert(sel.storeName, rows); mimeType = "text/plain"; ext = "sql"; break;
+      case "csv": content = toCsv(rows); mimeType = "text/csv"; ext = "csv"; break;
+      default: content = JSON.stringify(rows, null, 2); mimeType = "application/json"; ext = "json";
+    }
+    const fileName = `${sel.storeName}-${Date.now()}.${ext}`;
+    downloadBlob(new Blob([content], { type: mimeType }), fileName);
+    setNotice({ tone: "success", message: `Exported ${fileName} (${allRows.length} rows).` });
   };
 
   const selectRecord = (record: IndexedDbRecord | KeyValueRecord) => {
@@ -1033,11 +1161,12 @@ function App() {
     setEditDraft("parsed" in record ? record.value : JSON.stringify(record.value.value, null, 2));
   };
 
-  const confirmPendingAction = async () => {
-    if (!pendingAction) return;
-    const action = pendingAction;
+  const confirmPendingAction = async (plan: DestructivePlan, snapshotFirst: boolean) => {
     setPendingAction(null);
-    await action.execute();
+    if (snapshotFirst && plan.snapshotOffer) {
+      await plan.snapshotOffer.onSnapshot();
+    }
+    await plan.execute();
   };
 
   const updateVisibleDbKeys = useCallback(
@@ -1158,7 +1287,10 @@ function App() {
           <Button
             size="icon-xs"
             variant="outline"
-            onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+            onClick={() => {
+              const next = theme === "dark" ? "light" : "dark";
+              void setPrefs({ theme: next }).then(setPrefsState);
+            }}
             aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           >
             {theme === "dark" ? <Sun /> : <Moon />}
@@ -1196,6 +1328,10 @@ function App() {
               onRequestDeleteDatabase={requestDeleteDatabase}
               onRequestDeleteStore={requestDeleteStore}
               onRequestClearStore={requestClearStore}
+              onSnapshotStore={(db, storeName) => {
+                setSnapshotTarget({ scope: "store", origin: db.origin, dbName: db.name, dbVersion: db.version, storeName, frameId: db.frameId });
+                setSnapshotsOpen(true);
+              }}
               onHideDatabase={hideDatabaseFromView}
               onActivateDb={setActiveDbKey}
               activeDbKey={activeDbKey}
@@ -1401,7 +1537,8 @@ function App() {
                       onToggleFilters={() => setFilterState((prev) => ({ ...prev, open: !prev.open }))}
                       view={gridView}
                       onChangeView={setGridView}
-                      onExport={exportVisible}
+                      onExport={(fmt, scope) => scope === "store" ? void exportEntireStore(fmt) : exportVisible(fmt)}
+                      onImport={selected.kind === "indexeddb" ? () => setImportOpen(true) : undefined}
                       onApplyPagination={(nextLimit, nextOffset) => {
                         setQueryLimit(nextLimit);
                         setQueryOffset(nextOffset);
@@ -1809,34 +1946,49 @@ function App() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(pendingAction)} onOpenChange={(open) => !open && setPendingAction(null)}>
-        <DialogContent
-          className="max-w-[min(380px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-md border-border bg-card p-0 text-card-foreground shadow-2xl"
-          showCloseButton={false}
-        >
-          <DialogHeader className="sr-only">
-            <DialogTitle>{pendingActionTitle}</DialogTitle>
-            <DialogDescription>{pendingAction?.label}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-1.5 border-b border-border px-3 py-3">
-            <div className="flex items-start gap-2">
-              <Trash2 className="mt-0.5 size-4 shrink-0 text-destructive" />
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium tracking-tight text-foreground">{pendingActionTitle}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{pendingAction?.label}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center justify-end gap-1.5 bg-card px-3 py-2">
-            <Button variant="outline" size="xs" onClick={() => setPendingAction(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" size="xs" onClick={() => void confirmPendingAction()} disabled={busy}>
-              {busy ? "Working…" : "Confirm"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DestructiveDialog
+        plan={pendingAction}
+        busy={busy}
+        requireTypedConfirm={prefs.confirmDestructive}
+        onClose={() => setPendingAction(null)}
+        onExecute={(plan, snapshotFirst) => void confirmPendingAction(plan, snapshotFirst)}
+      />
+
+      <SnapshotsDialog
+        open={snapshotsOpen}
+        target={snapshotTarget}
+        rpc={rpc as Parameters<typeof SnapshotsDialog>[0]["rpc"]}
+        tabId={tabId}
+        onClose={() => setSnapshotsOpen(false)}
+        onRestoreComplete={async () => {
+          if (snapshotTarget?.scope === "store" && selected.kind === "indexeddb") {
+            await loadIndexedStore(snapshotTarget.frameId, snapshotTarget.dbName, snapshotTarget.dbVersion, snapshotTarget.storeName);
+          }
+          await refreshDiscovery();
+          setNotice({ tone: "success", message: "Restore complete." });
+        }}
+      />
+
+      {selected.kind === "indexeddb" && (
+        <ImportDialog
+          open={importOpen}
+          storeName={selected.storeName}
+          dbName={selected.dbName}
+          dbVersion={selected.dbVersion}
+          frameId={selected.frameId}
+          tabId={tabId}
+          rpc={rpc as Parameters<typeof ImportDialog>[0]["rpc"]}
+          hasExistingRows={(tableResult?.rows.length ?? 0) > 0}
+          onClose={() => setImportOpen(false)}
+          onComplete={async () => {
+            if (selected.kind === "indexeddb") {
+              await loadIndexedStore(selected.frameId, selected.dbName, selected.dbVersion, selected.storeName);
+            }
+            await refreshDiscovery();
+            setNotice({ tone: "success", message: "Import complete." });
+          }}
+        />
+      )}
 
       <SettingsDialog
         open={settingsOpen}
@@ -2367,15 +2519,28 @@ function isCollapsedPanelSize(size: PanelSize) {
   return size.asPercentage === 0 || size.inPixels === 0;
 }
 
+interface PendingRequest {
+  resolve: (response: StorageResponse) => void;
+  request: StorageRequest;
+  idempotent: boolean;
+}
+
+const MAX_RECONNECT_ATTEMPTS = 3;
+const BASE_RECONNECT_DELAY_MS = 250;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function useStorageRpc() {
   const portRef = useRef<chrome.runtime.Port | null>(null);
-  const pendingRef = useRef(new Map<string, (response: StorageResponse) => void>());
+  const pendingRef = useRef(new Map<string, PendingRequest>());
 
   useEffect(() => {
     if (!extensionRuntime) return;
-    const port = connectPort(portRef, pendingRef);
+    openPort(portRef, pendingRef);
     return () => {
-      port.disconnect();
+      portRef.current?.disconnect();
       portRef.current = null;
     };
   }, []);
@@ -2384,8 +2549,9 @@ function useStorageRpc() {
     if (!extensionRuntime) return Promise.resolve(mockStorageResponse(request));
     const id = crypto.randomUUID();
     return new Promise<StorageResponse>((resolve) => {
-      pendingRef.current.set(id, resolve);
-      const port = portRef.current ?? connectPort(portRef, pendingRef);
+      const entry: PendingRequest = { resolve, request, idempotent: isIdempotent(request) };
+      pendingRef.current.set(id, entry);
+      const port = portRef.current ?? openPort(portRef, pendingRef);
       try {
         port.postMessage({ id, request });
       } catch (error) {
@@ -2397,29 +2563,57 @@ function useStorageRpc() {
   }, []);
 }
 
-function connectPort(
+function openPort(
   portRef: React.MutableRefObject<chrome.runtime.Port | null>,
-  pendingRef: React.MutableRefObject<Map<string, (response: StorageResponse) => void>>
-) {
+  pendingRef: React.MutableRefObject<Map<string, PendingRequest>>
+): chrome.runtime.Port {
   const port = chrome.runtime.connect({ name: "storage-studio-panel" });
   portRef.current = port;
+
   port.onMessage.addListener((reply: PanelReply) => {
-    const resolve = pendingRef.current.get(reply.id);
-    if (!resolve) return;
+    const entry = pendingRef.current.get(reply.id);
+    if (!entry) return;
     pendingRef.current.delete(reply.id);
-    resolve(reply.response);
+    entry.resolve(reply.response);
   });
+
   port.onDisconnect.addListener(() => {
-    if (portRef.current === port) {
-      portRef.current = null;
-    }
-    const disconnectError = chrome.runtime.lastError?.message ?? "IdxBeaver disconnected from the background worker.";
-    for (const resolve of pendingRef.current.values()) {
-      resolve({ ok: false, error: disconnectError });
+    if (portRef.current === port) portRef.current = null;
+    void attemptReconnect(portRef, pendingRef, 0);
+  });
+
+  return port;
+}
+
+async function attemptReconnect(
+  portRef: React.MutableRefObject<chrome.runtime.Port | null>,
+  pendingRef: React.MutableRefObject<Map<string, PendingRequest>>,
+  attempt: number
+): Promise<void> {
+  if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+    for (const entry of pendingRef.current.values()) {
+      entry.resolve({ ok: false, error: "Service worker unavailable after reconnect attempts." });
     }
     pendingRef.current.clear();
-  });
-  return port;
+    return;
+  }
+
+  await sleep(BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt));
+
+  try {
+    const port = openPort(portRef, pendingRef);
+    // Re-send idempotent requests; reject non-idempotent ones immediately.
+    for (const [id, entry] of Array.from(pendingRef.current)) {
+      if (entry.idempotent) {
+        try { port.postMessage({ id, request: entry.request }); } catch { /* handled by next disconnect */ }
+      } else {
+        pendingRef.current.delete(id);
+        entry.resolve({ ok: false, error: new PortLostError().message });
+      }
+    }
+  } catch {
+    await attemptReconnect(portRef, pendingRef, attempt + 1);
+  }
 }
 
 function mockStorageResponse(request: StorageRequest): StorageResponse {
@@ -2548,6 +2742,7 @@ function StorageTree({
   onRequestDeleteDatabase,
   onRequestDeleteStore,
   onRequestClearStore,
+  onSnapshotStore,
   onHideDatabase,
   onActivateDb,
   activeDbKey,
@@ -2566,6 +2761,7 @@ function StorageTree({
   onRequestDeleteDatabase: (db: IndexedDbDatabaseInfo) => void;
   onRequestDeleteStore: (db: IndexedDbDatabaseInfo, storeName: string) => void;
   onRequestClearStore: (db: IndexedDbDatabaseInfo, storeName: string) => void;
+  onSnapshotStore: (db: IndexedDbDatabaseInfo, storeName: string) => void;
   onHideDatabase: (key: string) => void;
   onActivateDb: (key: string | null) => void;
   activeDbKey: string | null;
@@ -2733,6 +2929,9 @@ function StorageTree({
                         <ContextMenuContent className="w-52">
                           <ContextMenuItem onSelect={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}>
                             Open in tab
+                          </ContextMenuItem>
+                          <ContextMenuItem onSelect={() => onSnapshotStore(db, store.name)}>
+                            Snapshot…
                           </ContextMenuItem>
                           <ContextMenuItem onSelect={() => onRequestClearStore(db, store.name)}>
                             Clear store
@@ -2912,6 +3111,7 @@ function DataFooter({
   view,
   onChangeView,
   onExport,
+  onImport,
   onApplyPagination,
   onPrev,
   onNext,
@@ -2931,7 +3131,8 @@ function DataFooter({
   onToggleFilters: () => void;
   view: "data" | "structure";
   onChangeView: (v: "data" | "structure") => void;
-  onExport: (format: "json" | "csv") => void;
+  onExport: (format: "json" | "csv" | "ndjson" | "sql", scope: "view" | "store") => void;
+  onImport?: () => void;
   onApplyPagination: (nextLimit: number, nextOffset: number) => void;
   onPrev: () => void;
   onNext: () => void;
@@ -3039,22 +3240,31 @@ function DataFooter({
             {openPopover === "export" && (
               <div
                 role="menu"
-                className="absolute bottom-[calc(100%+6px)] right-0 z-40 w-36 overflow-hidden rounded-md border border-border bg-card text-[11px] shadow-xl"
+                className="absolute bottom-[calc(100%+6px)] right-0 z-40 w-48 overflow-hidden rounded-md border border-border bg-card text-[11px] shadow-xl"
               >
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
-                  onClick={() => { onExport("json"); setOpenPopover(null); }}
-                >
-                  JSON
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
-                  onClick={() => { onExport("csv"); setOpenPopover(null); }}
-                >
-                  CSV
-                </button>
+                <div className="border-b border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Current view</div>
+                {(["json", "csv", "ndjson", "sql"] as const).map((fmt) => (
+                  <button key={fmt} type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
+                    onClick={() => { onExport(fmt, "view"); setOpenPopover(null); }}>
+                    {fmt.toUpperCase()}
+                  </button>
+                ))}
+                <div className="border-b border-t border-border px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Entire store</div>
+                {(["json", "csv", "ndjson", "sql"] as const).map((fmt) => (
+                  <button key={`store-${fmt}`} type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
+                    onClick={() => { onExport(fmt, "store"); setOpenPopover(null); }}>
+                    {fmt.toUpperCase()}
+                  </button>
+                ))}
+                {onImport && (
+                  <>
+                    <div className="border-t border-border" />
+                    <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
+                      onClick={() => { onImport(); setOpenPopover(null); }}>
+                      Import…
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

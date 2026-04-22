@@ -188,6 +188,18 @@
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
   }
+
+  /* Keyboard-only focus rings — hidden for mouse users, visible for keyboard. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Suppress the default :focus outline since :focus-visible handles it. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 }
 
 /* ----------------------------------------------------------------------------
