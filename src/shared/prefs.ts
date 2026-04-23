@@ -13,10 +13,10 @@ export type Prefs = {
 
 export const DEFAULTS: Prefs = {
   theme: "system",
-  uiFont: "Outfit, system-ui, sans-serif",
-  cellFont: "monospace",
-  cellFontSize: 11,
-  uiFontSize: 12,
+  uiFont: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif",
+  cellFont: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+  cellFontSize: 18,
+  uiFontSize: 18,
   showHiddenSystemDbs: false,
   confirmDestructive: true,
   showStoreSizes: true,

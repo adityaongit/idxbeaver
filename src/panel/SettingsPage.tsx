@@ -6,17 +6,18 @@ import { ArrowLeft, RotateCcw } from "lucide-react";
 import { DEFAULTS, setPrefs, type Prefs, type Theme } from "../shared/prefs";
 
 const UI_FONTS = [
-  { label: "Outfit (default)", value: "Outfit, system-ui, sans-serif" },
+  { label: "System (default)", value: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif" },
   { label: "Inter", value: "Inter Variable, system-ui, sans-serif" },
-  { label: "System UI", value: "system-ui, sans-serif" },
+  { label: "Outfit", value: "Outfit, system-ui, sans-serif" },
   { label: "Custom", value: "custom" },
 ];
 
 const CELL_FONTS = [
-  { label: "Monospace (default)", value: "monospace" },
+  { label: "SF Mono / Menlo (default)", value: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace" },
+  { label: "System Sans", value: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif" },
   { label: "Geist Mono", value: "Geist Mono Variable, ui-monospace, monospace" },
   { label: "JetBrains Mono", value: "JetBrains Mono, ui-monospace, monospace" },
-  { label: "SF Mono / Menlo", value: "ui-monospace, Menlo, monospace" },
+  { label: "Inter", value: "Inter Variable, system-ui, sans-serif" },
   { label: "Custom", value: "custom" },
 ];
 
