@@ -3,121 +3,203 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.9911 0 0);
-  --foreground: oklch(0.2046 0 0);
-  --card: oklch(0.9911 0 0);
-  --card-foreground: oklch(0.2046 0 0);
-  --popover: oklch(0.9911 0 0);
-  --popover-foreground: oklch(0.4386 0 0);
-  --primary: oklch(0.8348 0.1302 160.9080);
-  --primary-foreground: oklch(0.2626 0.0147 166.4589);
-  --secondary: oklch(0.9940 0 0);
-  --secondary-foreground: oklch(0.2046 0 0);
-  --muted: oklch(0.9461 0 0);
-  --muted-foreground: oklch(0.2435 0 0);
-  --accent: oklch(0.9461 0 0);
-  --accent-foreground: oklch(0.2435 0 0);
-  --destructive: oklch(0.5523 0.1927 32.7272);
-  --destructive-foreground: oklch(0.9934 0.0032 17.2118);
-  --border: oklch(0.84 0 0);
-  --input: oklch(0.94 0 0);
-  --ring: oklch(0.8348 0.1302 160.9080);
-  --chart-1: oklch(0.8348 0.1302 160.9080);
-  --chart-2: oklch(0.6231 0.1880 259.8145);
+  /* Surfaces — TablePlus light: pure whites + cool greys */
+  --background: #FFFFFF;
+  --foreground: #1D1D1F;
+  --card: #F2F2F2;
+  --card-foreground: #1D1D1F;
+  --popover: #FFFFFF;
+  --popover-foreground: #1D1D1F;
+
+  /* Sidebar — single column, TablePlus light grey */
+  --sidebar: #EDEDED;
+  --sidebar-inner: #EDEDED;
+  --sidebar-foreground: #1D1D1F;
+  --sidebar-primary: #0A84FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #D6E4F7;
+  --sidebar-accent-foreground: #1D1D1F;
+  --sidebar-border: #D1D1D1;
+  --sidebar-ring: #0A84FF;
+  --sidebar-row-hover: rgba(0, 0, 0, 0.05);
+  --sidebar-row-active: #D6E4F7;
+
+  /* Brand + accent — macOS blue (was mint green) */
+  --primary: #0A84FF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #ECECEC;
+  --secondary-foreground: #1D1D1F;
+  --muted: #E8E8E8;
+  --muted-foreground: #6E6E73;
+  --accent: #D6E4F7;
+  --accent-foreground: #1D1D1F;
+  --destructive: #E5484D;
+  --destructive-foreground: #FFFFFF;
+  --border: #D1D1D1;
+  --input: #D1D1D1;
+  --ring: #0A84FF;
+
+  /* Data-grid rows — TablePlus light mode sampling */
+  --row-even: #FFFFFF;
+  --row-odd: #F5F5F5;
+  --row-hover: #E8F0FB;
+  --row-selected: #D6E4F7;
+  --row-selected-border: #0A84FF;
+
+  /* Hairlines, titlebar */
+  --hairline: rgba(0, 0, 0, 0.1);
+  --titlebar-bg: #E5E5E5;
+
+  /* Icons — blue-tinted, no green */
+  --icon-store: #4A90E2;
+  --icon-db: #6E6E73;
+  --icon-dim: #A1A1A6;
+
+  /* Charts — blue-first palette */
+  --chart-1: #0A84FF;
+  --chart-2: #4A90E2;
   --chart-3: oklch(0.6056 0.2189 292.7172);
   --chart-4: oklch(0.7686 0.1647 70.0804);
-  --chart-5: oklch(0.6959 0.1491 162.4796);
-  --sidebar: oklch(0.9911 0 0);
-  --sidebar-foreground: oklch(0.5452 0 0);
-  --sidebar-primary: oklch(0.8348 0.1302 160.9080);
-  --sidebar-primary-foreground: oklch(0.2626 0.0147 166.4589);
-  --sidebar-accent: oklch(0.9461 0 0);
-  --sidebar-accent-foreground: oklch(0.2435 0 0);
-  --sidebar-border: oklch(0.9037 0 0);
-  --sidebar-ring: oklch(0.8348 0.1302 160.9080);
-  --font-sans: Outfit, sans-serif;
+  --chart-5: #5AC8FA;
+
+  /* Typography — system stack, TablePlus-style native feel */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: monospace;
-  --radius: 0.5rem;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-brand: "Outfit", var(--font-sans);
+
+  /* Radius — slightly tighter than before */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Shadows — explicit rgba for predictability */
   --shadow-x: 0px;
   --shadow-y: 1px;
   --shadow-blur: 3px;
   --shadow-spread: 0px;
-  --shadow-opacity: 0.17;
+  --shadow-opacity: 0.08;
   --shadow-color: #000000;
-  --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
-  --shadow-xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
-  --shadow-sm: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow-md: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 2px 4px -1px hsl(0 0% 0% / 0.17);
-  --shadow-lg: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17);
-  --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
-  --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
-  --tracking-normal: 0.025em;
+  --shadow-2xs: 0 1px 0 rgba(0, 0, 0, 0.03);
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.24);
+
+  /* Tracking + spacing */
+  --tracking-normal: 0em;
   --spacing: 0.25rem;
 
-  --json-string: oklch(0.48 0.14 151);
-  --json-number: oklch(0.52 0.14 257);
-  --json-boolean: oklch(0.52 0.16 292);
-  --json-null: oklch(0.55 0 0);
+  /* JSON token colors (light) */
+  --json-string: #C2185B;
+  --json-number: #1976D2;
+  --json-boolean: #7B1FA2;
+  --json-null: #6E6E73;
+  --json-key: #0A5FA8;
+  --json-punct: #6E6E73;
+
+  /* SQL token colors (light) */
+  --sql-keyword: #AF00DB;
+  --sql-string: #A31515;
+  --sql-number: #098658;
+  --sql-comment: #2E7D32;
+  --sql-ident: #1D1D1F;
+  --sql-punct: #6E6E73;
 }
 
 .dark {
-  --background: oklch(0.1822 0 0);
-  --foreground: oklch(0.9288 0.0126 255.5078);
-  --card: oklch(0.2046 0 0);
-  --card-foreground: oklch(0.9288 0.0126 255.5078);
-  --popover: oklch(0.2603 0 0);
-  --popover-foreground: oklch(0.7348 0 0);
-  --primary: oklch(0.4365 0.1044 156.7556);
-  --primary-foreground: oklch(0.9213 0.0135 167.1556);
-  --secondary: oklch(0.2603 0 0);
-  --secondary-foreground: oklch(0.9851 0 0);
-  --muted: oklch(0.2393 0 0);
-  --muted-foreground: oklch(0.7122 0 0);
-  --accent: oklch(0.3132 0 0);
-  --accent-foreground: oklch(0.9851 0 0);
-  --destructive: oklch(0.7176 0.1862 26.1026);
-  --destructive-foreground: oklch(0.9368 0.0045 34.3092);
-  --border: oklch(0.2809 0 0);
-  --input: oklch(0.2603 0 0);
-  --ring: oklch(0.8003 0.1821 151.7110);
-  --chart-1: oklch(0.8003 0.1821 151.7110);
-  --chart-2: oklch(0.7137 0.1434 254.6240);
+  /* Surfaces — TablePlus dark sampling */
+  --background: #1E1E1E;
+  --foreground: #E8E8E8;
+  --card: #2A2A2A;
+  --card-foreground: #E8E8E8;
+  --popover: #2A2A2A;
+  --popover-foreground: #E8E8E8;
+
+  /* Sidebar — single, slightly darker than content */
+  --sidebar: #252525;
+  --sidebar-inner: #252525;
+  --sidebar-foreground: #C8C8C8;
+  --sidebar-primary: #0A84FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #0D3E7A;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #363636;
+  --sidebar-ring: #0A84FF;
+  --sidebar-row-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-row-active: #0D3E7A;
+
+  /* Brand + accent — blue, no green */
+  --primary: #0A84FF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2F2F2F;
+  --secondary-foreground: #E8E8E8;
+  --muted: #2A2A2A;
+  --muted-foreground: #9A9A9E;
+  --accent: #0D3E7A;
+  --accent-foreground: #FFFFFF;
+  --destructive: #FF6369;
+  --destructive-foreground: #FFFFFF;
+  --border: #363636;
+  --input: #3E3E3E;
+  --ring: #0A84FF;
+
+  /* Data-grid rows */
+  --row-even: #1E1E1E;
+  --row-odd: #232323;
+  --row-hover: #2B3B56;
+  --row-selected: #0D3E7A;
+  --row-selected-border: #0A84FF;
+
+  /* Hairlines */
+  --hairline: rgba(255, 255, 255, 0.1);
+  --titlebar-bg: #2A2A2A;
+
+  /* Icons */
+  --icon-store: #5AC8FA;
+  --icon-db: #9A9A9E;
+  --icon-dim: #6E6E73;
+
+  --chart-1: #0A84FF;
+  --chart-2: #5AC8FA;
   --chart-3: oklch(0.7090 0.1592 293.5412);
   --chart-4: oklch(0.8369 0.1644 84.4286);
-  --chart-5: oklch(0.7845 0.1325 181.9120);
-  --sidebar: oklch(0.1822 0 0);
-  --sidebar-foreground: oklch(0.6301 0 0);
-  --sidebar-primary: oklch(0.4365 0.1044 156.7556);
-  --sidebar-primary-foreground: oklch(0.9213 0.0135 167.1556);
-  --sidebar-accent: oklch(0.3132 0 0);
-  --sidebar-accent-foreground: oklch(0.9851 0 0);
-  --sidebar-border: oklch(0.2809 0 0);
-  --sidebar-ring: oklch(0.8003 0.1821 151.7110);
-  --font-sans: Outfit, sans-serif;
-  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: monospace;
-  --radius: 0.5rem;
-  --shadow-x: 0px;
-  --shadow-y: 1px;
-  --shadow-blur: 3px;
-  --shadow-spread: 0px;
-  --shadow-opacity: 0.17;
-  --shadow-color: #000000;
-  --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
-  --shadow-xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
-  --shadow-sm: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow-md: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 2px 4px -1px hsl(0 0% 0% / 0.17);
-  --shadow-lg: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17);
-  --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
-  --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
+  --chart-5: #64D2FF;
 
-  --json-string: oklch(0.80 0.14 151);
-  --json-number: oklch(0.78 0.13 70);
-  --json-boolean: oklch(0.76 0.12 262);
-  --json-null: oklch(0.60 0 0);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-brand: "Outfit", var(--font-sans);
+
+  --radius: 6px;
+
+  --shadow-2xs: 0 1px 0 rgba(0, 0, 0, 0.25);
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.7);
+
+  --json-string: #FF7AB6;
+  --json-number: #78D2FA;
+  --json-boolean: #D09CFE;
+  --json-null: #9A9A9E;
+  --json-key: #7FD1FF;
+  --json-punct: #9A9A9E;
+
+  --sql-keyword: #C792EA;
+  --sql-string: #ECC48D;
+  --sql-number: #F78C6C;
+  --sql-comment: #7EC699;
+  --sql-ident: #E8E8E8;
+  --sql-punct: #9A9A9E;
 }
 
 @theme inline {
@@ -146,6 +228,7 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
+  --color-sidebar-inner: var(--sidebar-inner);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
@@ -158,10 +241,10 @@
   --font-mono: var(--font-mono);
   --font-serif: var(--font-serif);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
 
   --shadow-2xs: var(--shadow-2xs);
   --shadow-xs: var(--shadow-xs);
@@ -186,17 +269,20 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
     letter-spacing: var(--tracking-normal);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Keyboard-only focus rings — hidden for mouse users, visible for keyboard. */
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
 
-  /* Suppress the default :focus outline since :focus-visible handles it. */
   :focus:not(:focus-visible) {
     outline: none;
   }
@@ -207,7 +293,11 @@
  * -------------------------------------------------------------------------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.4 0 0 / 0.5) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+}
+
+.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
 
 .dark *::-webkit-scrollbar,
@@ -219,21 +309,21 @@
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: oklch(0.6 0 0 / 0.3);
+  background-color: rgba(0, 0, 0, 0.22);
   border-radius: 10px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.6 0 0 / 0.5);
+  background-color: rgba(0, 0, 0, 0.36);
 }
 .dark *::-webkit-scrollbar-thumb {
-  background-color: oklch(0.45 0 0 / 0.45);
+  background-color: rgba(255, 255, 255, 0.22);
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .dark *::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.55 0 0 / 0.65);
+  background-color: rgba(255, 255, 255, 0.36);
 }
 
 /* ----------------------------------------------------------------------------
@@ -242,24 +332,47 @@
 
 .section-label {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
 
+/* TablePlus-style row heights */
+.tp-row {
+  height: 22px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tp-row-sm {
+  height: 20px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tp-toolbar {
+  height: 28px;
+}
+
+/* Data-grid row treatments — explicit RGB tokens, no color-mix */
+.table-row-zebra:nth-child(odd) {
+  background-color: var(--row-odd);
+}
 .table-row-zebra:nth-child(even) {
-  background-color: color-mix(in srgb, var(--muted) 35%, transparent);
+  background-color: var(--row-even);
 }
 
 .table-row-hover:hover {
-  background-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background-color: var(--row-hover);
 }
 
 .table-row-selected {
-  background-color: color-mix(in srgb, var(--primary) 25%, transparent) !important;
-  box-shadow: inset 2px 0 0 0 var(--primary);
+  background-color: var(--row-selected) !important;
+  box-shadow: inset 2px 0 0 0 var(--row-selected-border);
 }
 
 .mono,
@@ -371,6 +484,16 @@
   color: var(--json-null);
 }
 
+.text-json-key { color: var(--json-key); font-weight: 500; }
+.text-json-punct { color: var(--json-punct); }
+
+.text-sql-keyword { color: var(--sql-keyword); font-weight: 600; }
+.text-sql-string { color: var(--sql-string); }
+.text-sql-number { color: var(--sql-number); }
+.text-sql-comment { color: var(--sql-comment); font-style: italic; }
+.text-sql-ident { color: var(--sql-ident); }
+.text-sql-punct { color: var(--sql-punct); }
+
 /* ----------------------------------------------------------------------------
  * Open databases picker — operator-panel aesthetic. Tight rows, left rail on
  * active ("in view") rows, quiet hover, section rhythm driven by spacing not
@@ -389,9 +512,6 @@
   flex-direction: column;
 }
 
-/* Rows are flat by default — typography and the left rail do the work, not
- * a filled background. Interaction states only change text color, so the
- * list reads as a list and not a pile of pills. */
 .db-picker__row {
   background-color: transparent !important;
   transition: color 120ms ease;
@@ -403,8 +523,6 @@
   color: var(--foreground);
 }
 
-/* The "in view" accent rail — tells you at a glance the DB is already loaded
- * into the sidebar. Kept thin (2px) so it reads as a mark, not a bar. */
 .db-picker__row--active {
   padding-left: 14px;
 }
@@ -421,8 +539,6 @@
   opacity: 0.85;
 }
 
-/* Keep the generated checkmark out of this picker — we use our own trailing
- * controls (version chip + X) so the cmdk default is redundant. */
 .db-picker [data-slot="command-item"] > svg:last-child[class*="ml-auto"] {
   display: none;
 }
