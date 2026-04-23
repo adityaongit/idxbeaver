@@ -96,13 +96,11 @@ function CellEditor({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || ((e.metaKey || e.ctrlKey) && e.key === "s")) {
-            e.preventDefault();
-            onCommit();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            onCancel();
-          } else if (e.key === "Tab") {
+          const mod = e.metaKey || e.ctrlKey;
+          if (e.key === "Enter") { e.preventDefault(); onCommit(); }
+          else if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+          else if (mod && e.key === "Enter") { e.preventDefault(); onCommit(); }
+          else if (e.key === "Tab") {
             e.preventDefault();
             if (e.shiftKey) onTabPrev?.();
             else onTabNext?.();

@@ -8,6 +8,7 @@ export const SHORTCUTS = [
   { id: "new-row",         keys: "mod+shift+n",     label: "New inline row" },
   { id: "export",          keys: "mod+shift+e",     label: "Export current view" },
   { id: "delete-selected", keys: "mod+backspace",   label: "Delete selected row" },
+  { id: "commit-cell",     keys: "enter",           label: "Commit cell edit" },
   { id: "cancel",          keys: "escape",          label: "Cancel / close" },
   { id: "settings",        keys: "mod+,",           label: "Open settings" },
   { id: "help",            keys: "?",               label: "Keyboard shortcuts" },
