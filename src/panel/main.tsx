@@ -1256,7 +1256,7 @@ function App() {
   return (
     <main className={`${theme} flex h-screen min-w-[1100px] flex-col bg-background text-foreground`}>
       <header className="relative flex shrink-0 items-center gap-1.5 border-b border-border bg-card px-2 py-1.5">
-        {/* Left: logo + DB picker */}
+        {/* Left: logo + DB picker + Query toggle */}
         <div className="flex shrink-0 items-center gap-0.5">
           <span className="mr-1 grid h-5 w-5 place-items-center rounded-sm bg-foreground/90 text-[9px] font-semibold tracking-wider text-background">
             IB
@@ -1269,6 +1269,16 @@ function App() {
             title="Open database picker"
           >
             <Database />
+          </Button>
+          <div className="mx-1 h-4 w-px bg-border" />
+          <Button
+            size="xs"
+            variant={activeTabId === "sql" ? "secondary" : "ghost"}
+            onClick={() => setActiveTabId("sql")}
+            className="h-6 px-2 font-mono text-[10px] uppercase tracking-widest"
+            title="Open query editor"
+          >
+            Query
           </Button>
         </div>
 
@@ -1392,20 +1402,8 @@ function App() {
 
         <ResizablePanel defaultSize="57%" minSize="520px">
           <section className="flex h-full min-w-0 flex-col bg-background">
-            {discovery && (
+            {renderedTabs.length > 0 && (
               <div className="flex shrink-0 items-stretch border-b border-border bg-card">
-                {/* Query tab — always present */}
-                <button
-                  onClick={() => setActiveTabId("sql")}
-                  className={[
-                    "flex shrink-0 items-center border-r border-border/50 px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors",
-                    activeTabId === "sql"
-                      ? "bg-background text-foreground"
-                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
-                  ].join(" ")}
-                >
-                  sql
-                </button>
                 {renderedTabs.map((tab) => {
                   const isActive = tab.value === activeTabId;
                   const select = () => {
