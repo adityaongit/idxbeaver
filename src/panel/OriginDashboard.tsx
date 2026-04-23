@@ -136,23 +136,11 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-      {/* Origin header bar */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/40 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="section-label shrink-0">Origin</span>
-          <span className="truncate font-mono text-[11px] text-foreground/80">{discovery.origin}</span>
-        </div>
-        {quota !== null && (
-          <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
-            {fmtBytes(totalBytes)} / {fmtBytes(quota)}
-          </span>
-        )}
-      </div>
-
       <div className="flex flex-col gap-4 p-3">
         {/* Compact stats row */}
-        <div className="grid grid-cols-4 divide-x divide-border rounded-sm border border-border bg-card text-[11px]">
+        <div className={`grid divide-x divide-border rounded-sm border border-border bg-card text-[11px] ${quota !== null ? "grid-cols-5" : "grid-cols-4"}`}>
           <StatCell label="Total storage" value={fmtBytes(totalBytes)} />
+          {quota !== null && <StatCell label="Quota" value={fmtBytes(quota)} />}
           <StatCell label="IndexedDB" value={`${discovery.indexedDb.length}`} sub="databases" />
           <StatCell label="Object stores" value={`${stores.length}`} />
           <StatCell label="Total rows" value={fmtNum(stores.reduce((s, r) => s + (r.count ?? 0), 0))} />

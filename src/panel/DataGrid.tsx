@@ -541,13 +541,18 @@ export function DataGrid({
               <ContextMenu key={row.id}>
                 <ContextMenuTrigger asChild>
                   <tr
-                    style={{ height: ROW_HEIGHT }}
+                    style={{
+                      height: ROW_HEIGHT,
+                      backgroundColor: isSelected || isBulkSelected
+                        ? "var(--row-selected)"
+                        : rowIdx % 2 === 1
+                          ? "var(--row-odd)"
+                          : "var(--row-even)",
+                      boxShadow: isSelected ? "inset 2px 0 0 0 var(--row-selected-border)" : undefined
+                    }}
                     className={cn(
                       "group/datarow cursor-default transition-colors",
-                      rowIdx % 2 === 1 && !isSelected && !isBulkSelected && "bg-muted/20",
-                      isBulkSelected && "bg-primary/15",
-                      isSelected && "bg-primary/25",
-                      !isSelected && !isBulkSelected && "hover:bg-muted/60"
+                      !isSelected && !isBulkSelected && "hover:bg-[var(--row-hover)]"
                     )}
                     onClick={(e) => toggleKey(rowKey, record, e)}
                   >
@@ -564,7 +569,7 @@ export function DataGrid({
                             "overflow-hidden whitespace-nowrap border-b border-r border-border leading-5 last:border-r-0",
                             isEditing ? "p-0" : "text-ellipsis px-2 py-0.5",
                             isPinned && "sticky left-0 z-[2]",
-                            isPinned && (isSelected ? "bg-primary/25" : isBulkSelected ? "bg-primary/15" : rowIdx % 2 === 1 ? "bg-muted/20" : "bg-background")
+                            isPinned && (isSelected || isBulkSelected ? "bg-[var(--row-selected)]" : rowIdx % 2 === 1 ? "bg-[var(--row-odd)]" : "bg-[var(--row-even)]")
                           )}
                           style={{
                             left: isPinned ? 0 : undefined,

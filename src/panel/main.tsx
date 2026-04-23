@@ -29,7 +29,7 @@ import { keyStrategy } from "../shared/indexed";
 import { getPrefs, setPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
 import { inferSchema } from "../shared/schemaInfer";
 import type { InferredColumn } from "../shared/schemaInfer";
-import { appendHistory, getHistory, saveQuery, getSavedQueries } from "../shared/persisted";
+import { appendHistory, getHistory, saveQuery, getSavedQueries, clearHistory } from "../shared/persisted";
 import type { HistoryEntry, SavedQuery } from "../shared/persisted";
 import { matchesShortcut } from "./shortcuts";
 import { FilterBar } from "./FilterBar";
@@ -43,6 +43,7 @@ import { QueryHistoryPanel } from "./QueryHistoryPanel";
 import { SavedQueriesPanel } from "./SavedQueriesPanel";
 import { CommandPalette } from "./CommandPalette";
 import { DataGrid, type DraftRow } from "./DataGrid";
+import { JsonHighlight, SqlHighlight } from "./highlight";
 import { CacheView } from "./CacheView";
 import { OriginDashboard } from "./OriginDashboard";
 import { UndoStack, type UndoCommand } from "../shared/undo";
@@ -163,7 +164,8 @@ function App() {
   const [saveQueryDialogOpen, setSaveQueryDialogOpen] = useState(false);
   const [saveQueryName, setSaveQueryName] = useState("");
   const [saveQueryTags, setSaveQueryTags] = useState("");
-  const [sqlSidePanel, setSqlSidePanel] = useState<"history" | "saved">("history");
+  const [sidebarTab, setSidebarTab] = useState<"items" | "queries" | "history">("items");
+  const [sidebarSearch, setSidebarSearch] = useState("");
   const [cacheEntries, setCacheEntries] = useState<CacheEntrySummary[]>([]);
   const [cookieRows, setCookieRows] = useState<CookieRecord[]>([]);
   const [storeSummaries, setStoreSummaries] = useState<Map<string, StoreSummary | "loading">>(new Map());
@@ -1255,37 +1257,43 @@ function App() {
 
   return (
     <main className={`${theme} flex h-screen min-w-[1100px] flex-col bg-background text-foreground`}>
-      <header className="relative flex shrink-0 items-center gap-1.5 border-b border-border bg-card px-2 py-1.5">
-        {/* Left: logo + DB picker + Query toggle */}
-        <div className="flex shrink-0 items-center gap-0.5">
-          <span className="mr-1 grid h-5 w-5 place-items-center rounded-sm bg-foreground/90 text-[9px] font-semibold tracking-wider text-background">
-            IB
-          </span>
-          <Button
-            size="icon-xs"
-            variant="ghost"
+      <header
+        className="relative flex shrink-0 items-center gap-2 px-3"
+        style={{
+          height: "38px",
+          backgroundColor: "var(--titlebar-bg)",
+          borderBottom: "1px solid var(--hairline)"
+        }}
+      >
+        {/* Left: connection pill */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
             onClick={() => setDatabasePickerOpen(true)}
-            aria-label="Open database picker"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/5"
             title="Open database picker"
           >
-            <Database />
-          </Button>
-          <div className="mx-1 h-4 w-px bg-border" />
+            <Database className="size-3.5" style={{ color: "var(--icon-db)" }} />
+            <span className="max-w-[160px] truncate font-medium">
+              {discovery?.origin ? (() => { try { return new URL(discovery.origin).hostname; } catch { return "origin"; } })() : "origin"}
+            </span>
+          </button>
           <Button
             size="xs"
             variant={activeTabId === "sql" ? "secondary" : "ghost"}
             onClick={() => setActiveTabId("sql")}
-            className="h-6 px-2 font-mono text-[10px] uppercase tracking-widest"
+            className="h-6 px-2 text-[11px]"
             title="Open query editor"
           >
             Query
           </Button>
         </div>
 
-        {/* Center: breadcrumb path bar — max-width so it doesn't stretch edge-to-edge */}
+        {/* Center: breadcrumb path bar */}
         <div className="flex min-w-0 flex-1 justify-center px-2">
           <button
-            className="flex w-full max-w-2xl cursor-pointer items-center rounded-md border border-border/60 bg-background/40 px-3 py-1 text-left font-mono text-[11px] text-foreground transition-colors hover:bg-accent/40"
+            className="flex w-full max-w-xl cursor-pointer items-center justify-center rounded-md px-3 py-1 text-center font-mono text-[11px] text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            style={{ border: "1px solid var(--hairline)", backgroundColor: "var(--background)" }}
             onClick={() => setDatabasePickerOpen(true)}
             aria-label="Open database picker"
             title="Click to open database picker"
@@ -1371,30 +1379,102 @@ function App() {
           maxSize="380px"
           onResize={(size) => setLeftPanelCollapsed(isCollapsedPanelSize(size))}
         >
-          <aside className="h-full overflow-auto border-r border-border bg-card">
-            <StorageTree
-              discovery={discovery}
-              selected={selected}
-              visibleDbKeys={visibleDbKeys}
-              duplicateDbNames={duplicateDbNames}
-              multiOrigin={multiOrigin}
-              openNode={openNode}
-              openSql={() => setActiveTabId("sql")}
-              onRequestDeleteDatabase={requestDeleteDatabase}
-              onRequestDeleteStore={requestDeleteStore}
-              onRequestClearStore={requestClearStore}
-              onSnapshotStore={(db, storeName) => {
-                setSnapshotTarget({ scope: "store", origin: db.origin, dbName: db.name, dbVersion: db.version, storeName, frameId: db.frameId });
-                setSnapshotsOpen(true);
-              }}
-              onHideDatabase={hideDatabaseFromView}
-              onActivateDb={setActiveDbKey}
-              activeDbKey={activeDbKey}
-              onOpenPicker={() => setDatabasePickerOpen(true)}
-              storeSummaries={storeSummaries}
-              onExpandDb={fetchDbSummaries}
-              showStoreSizes={prefs.showStoreSizes}
-            />
+          <aside className="flex h-full" style={{ backgroundColor: "var(--sidebar-inner)" }}>
+            {/* Inner panel — Items / Queries / History */}
+            <div className="flex min-w-0 flex-1 flex-col" style={{ backgroundColor: "var(--sidebar-inner)" }}>
+              {/* Tab bar */}
+              <div
+                className="flex shrink-0 items-center justify-center gap-1 px-2 py-1.5"
+                style={{ borderBottom: "1px solid var(--hairline)" }}
+              >
+                {(["items", "queries", "history"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setSidebarTab(tab)}
+                    className={cn(
+                      "rounded-sm border px-3 py-1 text-[12px] font-medium capitalize transition-colors",
+                      sidebarTab === tab
+                        ? "border-border bg-background text-foreground shadow-[0_1px_0_rgba(0,0,0,0.04)]"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search — Items tab only */}
+              {sidebarTab === "items" && (
+                <div
+                  className="flex shrink-0 items-center gap-1.5 px-2 py-1.5"
+                  style={{ borderBottom: "1px solid var(--hairline)" }}
+                >
+                  <Search className="size-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    placeholder="Search for item…"
+                    className="flex-1 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setDatabasePickerOpen(true)}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Advanced search"
+                    title="Open database picker"
+                  >
+                    <SlidersHorizontal className="size-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Content */}
+              <div className="min-h-0 flex-1 overflow-auto">
+                {sidebarTab === "items" && (
+                  <StorageTree
+                    discovery={discovery}
+                    selected={selected}
+                    visibleDbKeys={visibleDbKeys}
+                    duplicateDbNames={duplicateDbNames}
+                    multiOrigin={multiOrigin}
+                    openNode={openNode}
+                    openSql={() => setActiveTabId("sql")}
+                    onRequestDeleteDatabase={requestDeleteDatabase}
+                    onRequestDeleteStore={requestDeleteStore}
+                    onRequestClearStore={requestClearStore}
+                    onSnapshotStore={(db, storeName) => {
+                      setSnapshotTarget({ scope: "store", origin: db.origin, dbName: db.name, dbVersion: db.version, storeName, frameId: db.frameId });
+                      setSnapshotsOpen(true);
+                    }}
+                    onHideDatabase={hideDatabaseFromView}
+                    onActivateDb={setActiveDbKey}
+                    activeDbKey={activeDbKey}
+                    onOpenPicker={() => setDatabasePickerOpen(true)}
+                    storeSummaries={storeSummaries}
+                    onExpandDb={fetchDbSummaries}
+                    showStoreSizes={prefs.showStoreSizes}
+                    searchQuery={sidebarSearch}
+                  />
+                )}
+                {sidebarTab === "queries" && (
+                  <SavedQueriesPanel
+                    queries={savedQueries}
+                    onLoad={(text) => { setQueryText(text); setActiveTabId("sql"); }}
+                    onMutated={() => void getSavedQueries(discovery?.origin ?? "").then(setSavedQueries)}
+                  />
+                )}
+                {sidebarTab === "history" && (
+                  <QueryHistoryPanel
+                    entries={historyEntries}
+                    origin={discovery?.origin ?? ""}
+                    onLoad={(text) => { setQueryText(text); setActiveTabId("sql"); }}
+                    onClear={() => void getHistory(discovery?.origin ?? "").then(setHistoryEntries)}
+                  />
+                )}
+              </div>
+            </div>
           </aside>
         </ResizablePanel>
 
@@ -1603,11 +1683,52 @@ function App() {
                   minSize="130px"
                   onResize={(size) => setBottomPanelCollapsed(isCollapsedPanelSize(size))}
                 >
-                  <section className="grid h-full place-items-center bg-card/40 p-3 text-center">
-                    <div className="space-y-1 text-[11px] text-muted-foreground">
-                      <p className="section-label">History</p>
-                      <p>Recent queries and mutations will appear here.</p>
-                    </div>
+                  <section className="flex h-full min-h-0 flex-col" style={{ backgroundColor: "var(--background)" }}>
+                    {historyEntries.length === 0 ? (
+                      <div className="grid h-full place-items-center p-3 text-center">
+                        <div className="space-y-1 text-[11px] text-muted-foreground">
+                          <p className="section-label">History</p>
+                          <p>Recent queries and mutations will appear here.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-1.5" style={{ borderBottom: "1px solid var(--hairline)" }}>
+                          <p className="section-label">History</p>
+                          <button
+                            type="button"
+                            onClick={() => { void clearHistory(discovery?.origin ?? "").then(() => getHistory(discovery?.origin ?? "").then(setHistoryEntries)); }}
+                            className="flex size-6 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Clear history"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-auto font-mono text-[11px] leading-5">
+                          {historyEntries.map((entry, idx) => (
+                            <div key={idx} className="px-3 py-1.5" style={{ borderBottom: "1px solid var(--hairline)" }}>
+                              <div className="mb-0.5 text-[10px] text-muted-foreground">
+                                -- {new Date(entry.createdAt).toLocaleString()}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => { setQueryText(entry.queryText); setActiveTabId("sql"); }}
+                                className="block w-full text-left font-mono hover:opacity-80"
+                              >
+                                <pre className="m-0 whitespace-pre-wrap break-all">
+                                  {(() => {
+                                    const t = entry.queryText.trim();
+                                    return t.startsWith("{") || t.startsWith("[")
+                                      ? <JsonHighlight text={entry.queryText} />
+                                      : <SqlHighlight text={entry.queryText} />;
+                                  })()}
+                                </pre>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </section>
                 </ResizablePanel>
               </ResizablePanelGroup>
@@ -1701,46 +1822,7 @@ function App() {
             )}
 
             {activeTabId === "sql" && (
-              <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-                <ResizablePanel defaultSize="22%" minSize="140px" maxSize="40%">
-                  <aside className="flex h-full flex-col bg-card">
-                    <div className="flex shrink-0 border-b border-border">
-                      <button
-                        type="button"
-                        onClick={() => setSqlSidePanel("history")}
-                        className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "history" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                      >
-                        History
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSqlSidePanel("saved")}
-                        className={`flex-1 px-2 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${sqlSidePanel === "saved" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                      >
-                        Saved
-                      </button>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                      {sqlSidePanel === "history" ? (
-                        <QueryHistoryPanel
-                          entries={historyEntries}
-                          origin={discovery?.origin ?? ""}
-                          onLoad={(text) => { setQueryText(text); }}
-                          onClear={() => void getHistory(discovery?.origin ?? "").then(setHistoryEntries)}
-                        />
-                      ) : (
-                        <SavedQueriesPanel
-                          queries={savedQueries}
-                          onLoad={(text) => { setQueryText(text); }}
-                          onMutated={() => void getSavedQueries(discovery?.origin ?? "").then(setSavedQueries)}
-                        />
-                      )}
-                    </div>
-                  </aside>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize="78%" minSize="300px">
-                  <ResizablePanelGroup orientation="vertical" className="h-full">
+              <ResizablePanelGroup orientation="vertical" className="h-full">
                     <ResizablePanel defaultSize="45%" minSize="150px">
                       <div className="flex h-full flex-col">
                         <div className="min-h-0 flex-1 bg-card">
@@ -1757,14 +1839,14 @@ function App() {
                           </Suspense>
                         </div>
                         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card/50 px-3 py-1.5 text-[11px] text-muted-foreground">
-                          <div className="flex flex-wrap items-center gap-1">
+                          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden">
                             <span className="section-label mr-1">Examples</span>
                             <QueryExampleButton onClick={() => setQueryText(exampleFindActive(selected))}>active</QueryExampleButton>
                             <QueryExampleButton onClick={() => setQueryText(exampleTopByCreated(selected))}>top 10 by createdAt</QueryExampleButton>
                             <QueryExampleButton onClick={() => setQueryText(exampleRegex(selected))}>email regex</QueryExampleButton>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="truncate font-mono">
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="hidden max-w-[220px] truncate font-mono md:inline">
                               {selected.kind === "indexeddb"
                                 ? `${selected.dbName} v${selected.dbVersion} · ${selected.storeName}`
                                 : queryDbContext
@@ -1815,8 +1897,6 @@ function App() {
                         )}
                       </div>
                     </ResizablePanel>
-                  </ResizablePanelGroup>
-                </ResizablePanel>
               </ResizablePanelGroup>
             )}
           </section>
@@ -2219,44 +2299,28 @@ function RecordInspector({
   }, [draftValue, inspectedValue, selectedRecord]);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-l border-border bg-card">
-      <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="section-label">{isKv ? "KV record" : "Row"}</p>
-          {selectedRecord && (
-            <>
-              <span className="h-3 w-px bg-border" />
-              <span className="truncate font-mono text-[11px] text-foreground">
-                <span className="text-muted-foreground">key=</span>
-                <JsonInlineValue value={inspectedKey} />
-              </span>
-            </>
-          )}
-        </div>
-        {selectedRecord && (
-          <button
-            type="button"
-            onClick={onCopy}
-            aria-label="Copy JSON"
-            className="flex size-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Copy className="size-3" />
-          </button>
-        )}
-      </header>
-
+    <aside className="flex h-full min-h-0 flex-col" style={{ backgroundColor: "var(--background)", borderLeft: "1px solid var(--hairline)" }}>
       {selectedRecord && draftValue !== null ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b border-border bg-background px-2 py-1.5">
-            <label className="relative block">
-              <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+          <div className="flex shrink-0 items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid var(--hairline)" }}>
+            <label className="relative block flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-6 w-full rounded-sm pl-6 text-[11px] md:text-[11px]"
+                className="h-8 w-full rounded-[6px] pl-8 text-[12px] md:text-[12px]"
                 value={fieldSearch}
                 onChange={(event) => setFieldSearch(event.target.value)}
-                placeholder="Search field…"
+                placeholder="Search for field…"
               />
             </label>
+            <button
+              type="button"
+              onClick={onCopy}
+              aria-label="Copy JSON"
+              className="flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              title="Copy JSON"
+            >
+              <Copy className="size-3.5" />
+            </button>
           </div>
           <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col">
@@ -2339,13 +2403,67 @@ function FieldRow({
   const type = inferType(value);
 
   return (
-    <div className="border-b border-border pl-2 pr-3 py-1 last:border-b-0 hover:bg-muted/20">
-      <div className="flex items-baseline gap-2 pb-0.5">
-        <span className="min-w-0 flex-1 truncate text-[10px] text-foreground" title={name}>{name}</span>
-        <span className="shrink-0 font-mono text-[8px] uppercase tracking-wider text-muted-foreground">{type}</span>
+    <div className="px-3 py-1.5 last:pb-3" style={{ borderBottom: "1px solid var(--hairline)" }}>
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate text-[12px] font-normal text-foreground" title={name}>{name}</span>
+        <span className="shrink-0 text-[11px] font-normal text-muted-foreground">{type}</span>
       </div>
       <FieldInput value={value} onChange={onChange} type={type} />
     </div>
+  );
+}
+
+function JsonFieldInput({
+  value,
+  onChange
+}: {
+  value: SerializableValue;
+  onChange: (next: SerializableValue) => void;
+}) {
+  const pretty = useMemo(() => JSON.stringify(value, null, 2), [value]);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(pretty);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(pretty);
+  }, [pretty, editing]);
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-1">
+        <Textarea
+          autoFocus
+          className="min-h-24 rounded-[4px] font-mono text-[11px] leading-5 md:text-[11px]"
+          value={draft}
+          spellCheck={false}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDraft(next);
+            try {
+              onChange(JSON.parse(next) as SerializableValue);
+              setError(null);
+            } catch (err) {
+              setError((err as Error).message);
+            }
+          }}
+          onBlur={() => { if (!error) setEditing(false); }}
+        />
+        {error && <p className="text-[10px] text-destructive">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="block w-full cursor-text rounded-[4px] border border-border bg-background p-2 text-left font-mono text-[11px] leading-5 hover:border-ring/60"
+    >
+      <pre className="m-0 whitespace-pre-wrap break-all">
+        <JsonHighlight text={pretty} />
+      </pre>
+    </button>
   );
 }
 
@@ -2361,10 +2479,10 @@ function FieldInput({
   if (type === "boolean") {
     return (
       <Select value={String(value)} onValueChange={(next) => onChange(next === "true")}>
-        <SelectTrigger size="sm" className="h-6 w-full rounded-sm font-mono text-[11px] md:text-[11px]">
+        <SelectTrigger size="sm" className="h-7 w-full rounded-[4px] text-[12px] md:text-[12px]">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className="font-mono text-[11px] md:text-[11px]">
+        <SelectContent className="text-[12px] md:text-[12px]">
           <SelectItem value="true">true</SelectItem>
           <SelectItem value="false">false</SelectItem>
         </SelectContent>
@@ -2375,12 +2493,15 @@ function FieldInput({
   if (type === "null") {
     return (
       <div className="flex items-center gap-1.5">
-        <Input
-          className="h-6 flex-1 cursor-not-allowed rounded-sm bg-muted/30 font-mono text-[11px] text-muted-foreground md:text-[11px]"
-          value="NULL"
-          disabled
-          readOnly
-        />
+        <div className="relative flex-1">
+          <Input
+            className="h-7 w-full cursor-not-allowed rounded-[4px] bg-transparent pr-6 text-[12px] uppercase text-muted-foreground md:text-[12px]"
+            value="NULL"
+            disabled
+            readOnly
+          />
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+        </div>
         <Button variant="outline" size="xs" onClick={() => onChange("")}>Set</Button>
       </div>
     );
@@ -2388,49 +2509,40 @@ function FieldInput({
 
   if (type === "number") {
     return (
-      <Input
-        type="number"
-        className="h-6 w-full rounded-sm font-mono text-[11px] md:text-[11px]"
-        value={value === null ? "" : String(value)}
-        onChange={(event) => {
-          const raw = event.target.value;
-          if (raw === "") {
-            onChange(0);
-            return;
-          }
-          const parsed = Number(raw);
-          onChange(Number.isFinite(parsed) ? parsed : (value as number));
-        }}
-      />
+      <div className="relative">
+        <Input
+          type="number"
+          className="h-7 w-full rounded-[4px] pr-6 text-[12px] md:text-[12px]"
+          value={value === null ? "" : String(value)}
+          onChange={(event) => {
+            const raw = event.target.value;
+            if (raw === "") {
+              onChange(0);
+              return;
+            }
+            const parsed = Number(raw);
+            onChange(Number.isFinite(parsed) ? parsed : (value as number));
+          }}
+        />
+        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+      </div>
     );
   }
 
   if (type === "object" || type === "array") {
-    const pretty = JSON.stringify(value, null, 2);
-    return (
-      <Textarea
-        className="min-h-20 rounded-sm font-mono text-[11px] leading-4 md:text-[11px]"
-        value={pretty}
-        spellCheck={false}
-        onChange={(event) => {
-          try {
-            onChange(JSON.parse(event.target.value) as SerializableValue);
-          } catch {
-            // Keep old value on invalid JSON; the textarea still reflects the
-            // broken text until it parses cleanly.
-          }
-        }}
-      />
-    );
+    return <JsonFieldInput value={value} onChange={onChange} />;
   }
 
   // string
   return (
-    <Input
-      className="h-6 w-full rounded-sm font-mono text-[11px] md:text-[11px]"
-      value={value as string}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <div className="relative">
+      <Input
+        className="h-7 w-full rounded-[4px] pr-6 text-[12px] md:text-[12px]"
+        value={value as string}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+    </div>
   );
 }
 
@@ -2779,7 +2891,8 @@ function StorageTree({
   onOpenPicker,
   storeSummaries,
   onExpandDb,
-  showStoreSizes
+  showStoreSizes,
+  searchQuery = ""
 }: {
   discovery: StorageDiscovery | null;
   selected: SelectedNode;
@@ -2799,6 +2912,7 @@ function StorageTree({
   storeSummaries: Map<string, StoreSummary | "loading">;
   onExpandDb: (db: IndexedDbDatabaseInfo) => void;
   showStoreSizes: boolean;
+  searchQuery?: string;
 }) {
   const [expandedDbKeys, setExpandedDbKeys] = useState<Set<string>>(new Set());
 
@@ -2819,34 +2933,21 @@ function StorageTree({
     });
   }, [discovery, selected]);
 
-  if (!discovery) return <p className="px-3 py-3 text-[11px] text-muted-foreground">Open DevTools on a page and refresh storage.</p>;
+  if (!discovery) return <p className="px-3 py-3 text-[12px] text-muted-foreground">Open DevTools on a page and refresh storage.</p>;
 
-  const visibleDbs = discovery.indexedDb.filter((db) => visibleDbKeys.includes(dbKey(db)));
+  const needle = searchQuery.trim().toLowerCase();
+  const matchText = (s: string) => !needle || s.toLowerCase().includes(needle);
+
+  let visibleDbs = discovery.indexedDb.filter((db) => visibleDbKeys.includes(dbKey(db)));
+  if (needle) {
+    visibleDbs = visibleDbs.filter(
+      (db) => matchText(db.name) || db.stores.some((s) => matchText(s.name))
+    );
+  }
 
   return (
-    <nav className="flex flex-col">
-      <div className="flex flex-col gap-0.5 px-1.5 py-2">
-        <TreeItem
-          active={selected.kind === "overview"}
-          onClick={() => openNode({ kind: "overview" })}
-          icon={<Database className="size-3" />}
-          label="Origin dashboard"
-        />
-        <TreeItem
-          active={false}
-          onClick={openSql}
-          icon={<Search className="size-3" />}
-          label="Query"
-          trailing={
-            <KbdGroup>
-              <Kbd>⌘</Kbd>
-              <Kbd>↵</Kbd>
-            </KbdGroup>
-          }
-        />
-      </div>
-
-      <TreeSection label="IndexedDB" count={discovery.indexedDb.length}>
+    <nav className="flex flex-col pb-2">
+      <TreeSection label="IndexedDB" count={visibleDbs.length}>
         {discovery.indexedDb.length === 0 && (
           <p className="px-3 py-2 text-[11px] text-muted-foreground">No databases.</p>
         )}
@@ -2865,7 +2966,8 @@ function StorageTree({
         )}
         {visibleDbs.map((db) => {
           const key = dbKey(db);
-          const isExpanded = expandedDbKeys.has(key);
+          const hasMatch = !needle || matchText(db.name) || db.stores.some((s) => matchText(s.name));
+          const isExpanded = expandedDbKeys.has(key) || (needle !== "" && hasMatch);
           const isSelectedDb = selected.kind === "indexeddb" && selected.dbName === db.name && selected.dbVersion === db.version && selected.origin === db.origin;
           const showOrigin = multiOrigin || duplicateDbNames.has(db.name);
           return (
@@ -2875,11 +2977,12 @@ function StorageTree({
                   <button
                     type="button"
                     className={cn(
-                      "group mx-1.5 flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-[11px] transition-colors",
+                      "group mx-1 flex h-[22px] items-center gap-1.5 rounded-sm px-2 text-left text-[12px] transition-colors",
                       isSelectedDb || activeDbKey === key
-                        ? "bg-accent text-accent-foreground"
-                        : "text-foreground/85 hover:bg-muted/60"
+                        ? "font-medium text-foreground"
+                        : "text-foreground hover:bg-[var(--sidebar-row-hover)]"
                     )}
+                    style={isSelectedDb || activeDbKey === key ? { backgroundColor: "var(--sidebar-row-active)" } : undefined}
                     onClick={() => {
                       onActivateDb(key);
                       setExpandedDbKeys((current) => {
@@ -2897,16 +3000,17 @@ function StorageTree({
                   >
                     <ChevronRight
                       className={cn(
-                        "size-3 shrink-0 text-muted-foreground transition-transform",
+                        "size-3 shrink-0 transition-transform",
                         isExpanded && "rotate-90"
                       )}
+                      style={{ color: "var(--icon-dim)" }}
                     />
-                    <Database className="size-3 shrink-0 text-muted-foreground" />
+                    <Database className="size-3.5 shrink-0" style={{ color: "var(--icon-db)" }} />
                     <span className="flex min-w-0 flex-1 items-center gap-1.5">
                       <span className="truncate">{db.name}</span>
                       {showOrigin && <OriginBadge origin={db.origin} />}
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground/80">v{db.version}</span>
+                    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">v{db.version}</span>
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-52">
@@ -2919,7 +3023,7 @@ function StorageTree({
               </ContextMenu>
               {isExpanded && (
                 <div className="flex flex-col">
-                  {db.stores.map((store) => {
+                  {db.stores.filter((store) => !needle || matchText(store.name) || matchText(db.name)).map((store) => {
                     const isSelectedStore = isSelectedDb && selected.kind === "indexeddb" && selected.storeName === store.name;
                     return (
                       <ContextMenu key={`${key}:${store.name}`}>
@@ -2927,32 +3031,33 @@ function StorageTree({
                           <button
                             type="button"
                             className={cn(
-                              "mx-1.5 flex items-center gap-1.5 rounded-sm py-1 pr-1.5 pl-6 text-left text-[11px] transition-colors",
+                              "mx-1 flex h-[22px] items-center gap-1.5 rounded-sm pr-2 pl-7 text-left text-[12px] transition-colors",
                               isSelectedStore
-                                ? "bg-primary/25 text-foreground"
-                                : "text-foreground/80 hover:bg-muted/60"
+                                ? "font-medium text-foreground"
+                                : "text-foreground hover:bg-[var(--sidebar-row-hover)]"
                             )}
+                            style={isSelectedStore ? { backgroundColor: "var(--sidebar-row-active)" } : undefined}
                             onClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId })}
                             onDoubleClick={() => openNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true })}
                           >
-                            <Table2 className="size-3 shrink-0 text-muted-foreground" />
+                            <Table2 className="size-3.5 shrink-0" style={{ color: "var(--icon-store)" }} />
                             <span className="flex-1 truncate">{store.name}</span>
                             {(() => {
-                              if (!showStoreSizes) return <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{store.count ?? "?"}</span>;
+                              if (!showStoreSizes) return <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{store.count ?? "?"}</span>;
                               const sKey = `${db.origin}::${db.name}::v${db.version}::${store.name}`;
                               const summary = storeSummaries.get(sKey);
-                              if (summary === "loading") return <span className="font-mono text-[10px] text-muted-foreground/50">…</span>;
+                              if (summary === "loading") return <span className="font-mono text-[11px] text-muted-foreground/50">…</span>;
                               if (summary) {
                                 const bytes = summary.approxBytes;
                                 const bStr = bytes !== null ? (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)}M` : bytes >= 1024 ? `${(bytes / 1024).toFixed(0)}K` : `${bytes}B`) : null;
                                 return (
-                                  <span className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground tabular-nums">
+                                  <span className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground tabular-nums">
                                     <span>{summary.rowCount?.toLocaleString() ?? "?"}</span>
                                     {bStr && <span className="text-muted-foreground/50">·{bStr}</span>}
                                   </span>
                                 );
                               }
-                              return <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{store.count ?? "?"}</span>;
+                              return <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{store.count ?? "?"}</span>;
                             })()}
                           </button>
                         </ContextMenuTrigger>
@@ -2981,42 +3086,50 @@ function StorageTree({
         })}
       </TreeSection>
 
-      <TreeSection label="Storage" count={2}>
-        <TreeItem
-          active={selected.kind === "kv" && selected.surface === "localStorage"}
-          onClick={() => openNode({ kind: "kv", surface: "localStorage" }, { persist: true })}
-          icon={<Database className="size-3" />}
-          label="LocalStorage"
-          trailing={<span className="font-mono text-[10px] text-muted-foreground tabular-nums">{discovery.localStorage.count}</span>}
-        />
-        <TreeItem
-          active={selected.kind === "kv" && selected.surface === "sessionStorage"}
-          onClick={() => openNode({ kind: "kv", surface: "sessionStorage" }, { persist: true })}
-          icon={<Database className="size-3" />}
-          label="SessionStorage"
-          trailing={<span className="font-mono text-[10px] text-muted-foreground tabular-nums">{discovery.sessionStorage.count}</span>}
-        />
-        <TreeItem
-          active={selected.kind === "cookies"}
-          onClick={() => openNode({ kind: "cookies" }, { persist: true })}
-          icon={<Database className="size-3" />}
-          label="Cookies"
-          trailing={<span className="font-mono text-[10px] text-muted-foreground tabular-nums">{discovery.cookies?.count ?? 0}</span>}
-        />
-      </TreeSection>
+      {(!needle || matchText("LocalStorage") || matchText("SessionStorage") || matchText("Cookies")) && (
+        <TreeSection label="Storage" count={2}>
+          {matchText("LocalStorage") && (
+            <TreeItem
+              active={selected.kind === "kv" && selected.surface === "localStorage"}
+              onClick={() => openNode({ kind: "kv", surface: "localStorage" }, { persist: true })}
+              icon={<Database className="size-3.5" style={{ color: "var(--icon-db)" }} />}
+              label="LocalStorage"
+              trailing={<span className="font-mono text-[11px] text-muted-foreground tabular-nums">{discovery.localStorage.count}</span>}
+            />
+          )}
+          {matchText("SessionStorage") && (
+            <TreeItem
+              active={selected.kind === "kv" && selected.surface === "sessionStorage"}
+              onClick={() => openNode({ kind: "kv", surface: "sessionStorage" }, { persist: true })}
+              icon={<Database className="size-3.5" style={{ color: "var(--icon-db)" }} />}
+              label="SessionStorage"
+              trailing={<span className="font-mono text-[11px] text-muted-foreground tabular-nums">{discovery.sessionStorage.count}</span>}
+            />
+          )}
+          {matchText("Cookies") && (
+            <TreeItem
+              active={selected.kind === "cookies"}
+              onClick={() => openNode({ kind: "cookies" }, { persist: true })}
+              icon={<Database className="size-3.5" style={{ color: "var(--icon-db)" }} />}
+              label="Cookies"
+              trailing={<span className="font-mono text-[11px] text-muted-foreground tabular-nums">{discovery.cookies?.count ?? 0}</span>}
+            />
+          )}
+        </TreeSection>
+      )}
 
       {discovery.cacheStorage && discovery.cacheStorage.caches.length > 0 && (
         <TreeSection label="Cache Storage" count={discovery.cacheStorage.caches.length}>
-          {discovery.cacheStorage.caches.map((cache) => (
+          {discovery.cacheStorage.caches.filter((cache) => matchText(cache.name)).map((cache) => (
             <TreeItem
               key={cache.name}
               active={selected.kind === "cache" && selected.cacheName === cache.name}
               onClick={() => openNode({ kind: "cache", cacheName: cache.name, frameId: 0 }, { persist: true })}
-              icon={<Database className="size-3" />}
+              icon={<Database className="size-3.5" style={{ color: "var(--icon-db)" }} />}
               label={cache.name}
               trailing={
                 cache.entryCount !== null
-                  ? <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{cache.entryCount}</span>
+                  ? <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{cache.entryCount}</span>
                   : undefined
               }
             />
@@ -3029,11 +3142,11 @@ function StorageTree({
 
 function TreeSection({ label, count, children }: { label: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="border-t border-border py-1.5">
-      <header className="flex items-center justify-between px-3 py-1">
+    <section className="pt-2 pb-0.5" style={{ borderTop: "1px solid var(--hairline)" }}>
+      <header className="flex h-[22px] items-center justify-between px-3">
         <h3 className="section-label">{label}</h3>
         {typeof count === "number" && (
-          <span className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">{count}</span>
+          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{count}</span>
         )}
       </header>
       <div className="flex flex-col">{children}</div>
@@ -3059,13 +3172,14 @@ function TreeItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "mx-1.5 flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-[11px] transition-colors",
+        "mx-1 flex h-[22px] items-center gap-1.5 rounded-sm px-2 text-left text-[12px] transition-colors",
         active
-          ? "bg-accent text-accent-foreground"
-          : "text-foreground/85 hover:bg-muted/60"
+          ? "font-medium text-foreground"
+          : "text-foreground hover:bg-[var(--sidebar-row-hover)]"
       )}
+      style={active ? { backgroundColor: "var(--sidebar-row-active)" } : undefined}
     >
-      {icon && <span className="text-muted-foreground">{icon}</span>}
+      {icon && <span className="shrink-0">{icon}</span>}
       <span className="flex-1 truncate">{label}</span>
       {trailing && <span className="flex shrink-0 items-center leading-none">{trailing}</span>}
     </button>
@@ -3193,49 +3307,58 @@ function DataFooter({
 
   return (
     <footer ref={wrapperRef} className="relative flex shrink-0 items-center gap-1.5 border-t border-border bg-card/60 px-2 py-1 text-[11px]">
-      <div className="flex items-center rounded-sm border border-border bg-background p-0.5">
-        <button
-          type="button"
-          onClick={() => onChangeView("data")}
-          className={cn(
-            "rounded-[3px] px-2 py-0.5 text-[11px] font-medium",
-            view === "data" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
-          )}
-          aria-pressed={view === "data"}
-        >
-          Data
-        </button>
-        <button
-          type="button"
-          onClick={() => onChangeView("structure")}
-          className={cn(
-            "rounded-[3px] px-2 py-0.5 text-[11px] font-medium",
-            view === "structure" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
-          )}
-          aria-pressed={view === "structure"}
-        >
-          Structure
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => onChangeView("data")}
+        className={cn(
+          "rounded-sm border px-2 py-0.5 text-[11px] font-medium",
+          view === "data"
+            ? "border-border bg-background text-foreground shadow-sm"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        )}
+        aria-pressed={view === "data"}
+      >
+        Data
+      </button>
+      <button
+        type="button"
+        onClick={() => onChangeView("structure")}
+        className={cn(
+          "rounded-sm border px-2 py-0.5 text-[11px] font-medium",
+          view === "structure"
+            ? "border-border bg-background text-foreground shadow-sm"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        )}
+        aria-pressed={view === "structure"}
+      >
+        Structure
+      </button>
       {view === "data" && (
-        <Button size="xs" variant="outline" onClick={onAddRow} className="gap-1">
+        <button
+          type="button"
+          onClick={onAddRow}
+          className="flex items-center gap-1 rounded-sm border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-muted/60"
+        >
           <Plus className="size-3" />
           Row
-        </Button>
+        </button>
       )}
       <span className="ml-2 flex-1 truncate text-muted-foreground">{rowStatus}</span>
 
       {view === "data" && (
         <>
           <div className="relative">
-            <Button
-              size="xs"
-              variant={openPopover === "columns" ? "secondary" : "outline"}
+            <button
+              type="button"
               onClick={() => setOpenPopover((prev) => (prev === "columns" ? null : "columns"))}
               disabled={allColumns.length === 0}
+              className={cn(
+                "rounded-sm border border-border bg-background px-2 py-0.5 text-[11px] font-medium disabled:opacity-40",
+                openPopover === "columns" ? "text-foreground shadow-sm" : "text-foreground hover:bg-muted/60"
+              )}
             >
               Columns{hiddenColumns.size > 0 ? ` (${allColumns.length - hiddenColumns.size}/${allColumns.length})` : ""}
-            </Button>
+            </button>
             {openPopover === "columns" && (
               <ColumnsPopover
                 allColumns={allColumns}
@@ -3249,24 +3372,29 @@ function DataFooter({
             )}
           </div>
 
-          <Button
-            size="xs"
-            variant={filtersOpen ? "default" : "outline"}
+          <button
+            type="button"
             onClick={onToggleFilters}
+            className={cn(
+              "rounded-sm border border-border bg-background px-2 py-0.5 text-[11px] font-medium",
+              filtersOpen ? "text-foreground shadow-sm" : "text-foreground hover:bg-muted/60"
+            )}
           >
             Filters{filterRuleCount > 0 ? ` (${filterRuleCount})` : ""}
-          </Button>
+          </button>
 
           <div className="relative">
-            <Button
-              size="xs"
-              variant={openPopover === "export" ? "secondary" : "outline"}
+            <button
+              type="button"
               onClick={() => setOpenPopover((prev) => (prev === "export" ? null : "export"))}
-              className="gap-1"
+              className={cn(
+                "flex items-center gap-1 rounded-sm border border-border bg-background px-2 py-0.5 text-[11px] font-medium",
+                openPopover === "export" ? "text-foreground shadow-sm" : "text-foreground hover:bg-muted/60"
+              )}
             >
               Export
               <ChevronDown className="size-3" />
-            </Button>
+            </button>
             {openPopover === "export" && (
               <div
                 role="menu"
@@ -3307,29 +3435,29 @@ function DataFooter({
           type="button"
           onClick={onPrev}
           disabled={!canPrev}
-          className="grid h-5 w-5 place-items-center text-foreground/80 disabled:text-muted-foreground/40"
+          className="grid h-[22px] w-6 place-items-center text-foreground/80 disabled:text-muted-foreground/40"
           aria-label="Previous page"
         >
           <ChevronLeft className="size-3" />
         </button>
-        <span className="h-4 w-px bg-border" />
+        <span className="h-[18px] w-px bg-border" />
         <button
           type="button"
           onClick={() => setOpenPopover((prev) => (prev === "pagination" ? null : "pagination"))}
           className={cn(
-            "grid h-5 w-5 place-items-center",
+            "grid h-[22px] w-6 place-items-center",
             openPopover === "pagination" ? "bg-secondary text-foreground" : "text-foreground/80"
           )}
           aria-label="Pagination settings"
         >
           <SlidersHorizontal className="size-3" />
         </button>
-        <span className="h-4 w-px bg-border" />
+        <span className="h-[18px] w-px bg-border" />
         <button
           type="button"
           onClick={onNext}
           disabled={!canNext}
-          className="grid h-5 w-5 place-items-center text-foreground/80 disabled:text-muted-foreground/40"
+          className="grid h-[22px] w-6 place-items-center text-foreground/80 disabled:text-muted-foreground/40"
           aria-label="Next page"
         >
           <ChevronRight className="size-3" />
