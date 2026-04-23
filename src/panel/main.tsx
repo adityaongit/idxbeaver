@@ -35,7 +35,7 @@ import type { HistoryEntry, SavedQuery } from "../shared/persisted";
 import { matchesShortcut } from "./shortcuts";
 import { FilterBar } from "./FilterBar";
 import { StructureView } from "./StructureView";
-import { SettingsDialog } from "./SettingsDialog";
+import { SettingsPage } from "./SettingsPage";
 import { DestructiveDialog, type DestructivePlan } from "./DestructiveDialog";
 import { SnapshotsDialog, captureSnapshotForStore, type SnapshotTarget } from "./SnapshotsDialog";
 import { ImportDialog } from "./ImportDialog";
@@ -329,7 +329,7 @@ function App() {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
       if (matchesShortcut(e, "mod+k")) { e.preventDefault(); setCommandPaletteOpen(true); return; }
-      if (matchesShortcut(e, "mod+,")) { e.preventDefault(); setSettingsOpen(true); return; }
+      if (matchesShortcut(e, "mod+,")) { e.preventDefault(); setSettingsOpen((o) => !o); return; }
       if (matchesShortcut(e, "mod+shift+t")) { e.preventDefault(); setDatabasePickerOpen(true); return; }
       if (matchesShortcut(e, "?")) { e.preventDefault(); setHelpOpen(true); return; }
       if (matchesShortcut(e, "mod+shift+s") && activeTabId === "sql") { e.preventDefault(); setSaveQueryDialogOpen(true); return; }
@@ -1302,15 +1302,22 @@ function App() {
           </Button>
           <Button
             size="icon-xs"
-            variant="outline"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
+            variant={settingsOpen ? "default" : "outline"}
+            onClick={() => setSettingsOpen((o) => !o)}
+            aria-label={settingsOpen ? "Close settings" : "Settings"}
           >
             <Settings />
           </Button>
         </div>
       </header>
 
+      {settingsOpen ? (
+        <SettingsPage
+          prefs={prefs}
+          onClose={() => setSettingsOpen(false)}
+          onPrefsChange={setPrefsState}
+        />
+      ) : (
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
           panelRef={leftPanelRef}
@@ -1813,6 +1820,7 @@ function App() {
           />
         </ResizablePanel>
       </ResizablePanelGroup>
+      )}
 
       <Dialog open={databasePickerOpen} onOpenChange={setDatabasePickerOpen}>
         <DialogContent
@@ -1994,18 +2002,6 @@ function App() {
           }}
         />
       )}
-
-      <SettingsDialog
-        open={settingsOpen}
-        prefs={prefs}
-        onOpenChange={setSettingsOpen}
-        onPrefsChange={(next) => {
-          setPrefsState(next);
-          if (next.theme !== "system") {
-            setTheme(next.theme);
-          }
-        }}
-      />
 
       <CommandPalette
         open={commandPaletteOpen}
