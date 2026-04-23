@@ -1392,13 +1392,24 @@ function App() {
 
         <ResizablePanel defaultSize="57%" minSize="520px">
           <section className="flex h-full min-w-0 flex-col bg-background">
-            {renderedTabs.length > 0 && (
+            {discovery && (
               <div className="flex shrink-0 items-stretch border-b border-border bg-card">
+                {/* Query tab — always present */}
+                <button
+                  onClick={() => setActiveTabId("sql")}
+                  className={[
+                    "flex shrink-0 items-center border-r border-border/50 px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors",
+                    activeTabId === "sql"
+                      ? "bg-background text-foreground"
+                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  sql
+                </button>
                 {renderedTabs.map((tab) => {
                   const isActive = tab.value === activeTabId;
                   const select = () => {
                     if (tab.value === "overview") { openNode({ kind: "overview" }); return; }
-                    if (tab.value === "sql") { setActiveTabId("sql"); return; }
                     if (tab.value === "preview" && previewTab) { openNode(previewTab.node); return; }
                     const found = tabs.find((t) => t.id === tab.value);
                     if (found) chooseTab(found);
@@ -1432,14 +1443,6 @@ function App() {
                 })}
               </div>
             )}
-
-            <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card/50 px-3 py-1.5">
-              <span className="section-label shrink-0">
-                {activeTabId === "sql" ? "Query" : selected.kind === "overview" ? "Origin" : selected.kind === "indexeddb" ? "Store" : selected.kind === "cache" ? "Cache" : selected.kind === "cookies" ? "Cookies" : "KV"}
-              </span>
-              <span className="h-3 w-px bg-border" />
-              <h2 className="min-w-0 flex-1 truncate text-[12px] font-medium tracking-tight">{activeTabId === "sql" ? "MongoDB-style query" : titleForSelection(selected)}</h2>
-            </header>
 
             {notice && (
               <div
