@@ -22,7 +22,6 @@ import { Kbd, KbdGroup } from "../components/ui/kbd";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../components/ui/context-menu";
 import { parseMongoQuery } from "../shared/query";
 import { applyFilters, activeRuleCount, type FilterState, EMPTY_FILTER_STATE } from "../shared/filters";
@@ -1273,15 +1272,17 @@ function App() {
           </Button>
         </div>
 
-        {/* Center: breadcrumb path bar */}
-        <button
-          className="flex min-w-0 flex-1 cursor-pointer items-center rounded-md border border-border/60 bg-background/40 px-3 py-1 text-left font-mono text-[11px] text-foreground transition-colors hover:bg-accent/40"
-          onClick={() => setDatabasePickerOpen(true)}
-          aria-label="Open database picker"
-          title="Click to open database picker"
-        >
-          <span className="flex min-w-0 items-baseline truncate">{breadcrumb}</span>
-        </button>
+        {/* Center: breadcrumb path bar — max-width so it doesn't stretch edge-to-edge */}
+        <div className="flex min-w-0 flex-1 justify-center px-2">
+          <button
+            className="flex w-full max-w-2xl cursor-pointer items-center rounded-md border border-border/60 bg-background/40 px-3 py-1 text-left font-mono text-[11px] text-foreground transition-colors hover:bg-accent/40"
+            onClick={() => setDatabasePickerOpen(true)}
+            aria-label="Open database picker"
+            title="Click to open database picker"
+          >
+            <span className="flex min-w-0 items-baseline truncate">{breadcrumb}</span>
+          </button>
+        </div>
 
         {/* Right: actions + panel toggles */}
         <div className="flex shrink-0 items-center gap-0.5">
@@ -1391,51 +1392,46 @@ function App() {
 
         <ResizablePanel defaultSize="57%" minSize="520px">
           <section className="flex h-full min-w-0 flex-col bg-background">
-            {renderedTabs.length > 0 && <Tabs
-              value={activeTabId}
-              onValueChange={(value) => {
-                if (value === "overview") {
-                  openNode({ kind: "overview" });
-                  return;
-                }
-                if (value === "sql") {
-                  setActiveTabId("sql");
-                  return;
-                }
-                if (value === "preview" && previewTab) {
-                  openNode(previewTab.node);
-                  return;
-                }
-                const tab = tabs.find((item) => item.id === value);
-                if (tab) chooseTab(tab);
-              }}
-              className="shrink-0 gap-0"
-            >
-              <TabsList variant="line" className="h-7 w-full justify-start rounded-none border-b border-border bg-card px-1.5">
-                {renderedTabs.map((tab) => (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className={`min-w-0 flex-none gap-1.5 px-2.5 text-[11px] font-normal ${tab.preview ? "italic text-muted-foreground" : ""}`}
-                  >
-                    {tab.title}
-                    {tab.closable && (
-                      <span
-                        className="text-muted-foreground hover:text-foreground"
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          closeTab(tab.value);
-                        }}
-                      >
-                        ×
-                      </span>
-                    )}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>}
+            {renderedTabs.length > 0 && (
+              <div className="flex shrink-0 items-stretch border-b border-border bg-card">
+                {renderedTabs.map((tab) => {
+                  const isActive = tab.value === activeTabId;
+                  const select = () => {
+                    if (tab.value === "overview") { openNode({ kind: "overview" }); return; }
+                    if (tab.value === "sql") { setActiveTabId("sql"); return; }
+                    if (tab.value === "preview" && previewTab) { openNode(previewTab.node); return; }
+                    const found = tabs.find((t) => t.id === tab.value);
+                    if (found) chooseTab(found);
+                  };
+                  return (
+                    <button
+                      key={tab.value}
+                      onClick={select}
+                      className={[
+                        "group flex min-w-0 max-w-[160px] items-center gap-1.5 border-r border-border/50 px-3 py-1.5 text-[11px] transition-colors",
+                        tab.preview ? "italic" : "",
+                        isActive
+                          ? "bg-background text-foreground"
+                          : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+                      ].join(" ")}
+                    >
+                      <span className="truncate">{tab.title}</span>
+                      {tab.closable && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="ml-0.5 shrink-0 text-[13px] leading-none opacity-40 transition-opacity hover:opacity-100"
+                          onClick={(e) => { e.stopPropagation(); closeTab(tab.value); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); closeTab(tab.value); } }}
+                        >
+                          ×
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card/50 px-3 py-1.5">
               <span className="section-label shrink-0">
