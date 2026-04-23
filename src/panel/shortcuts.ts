@@ -7,7 +7,7 @@ export const SHORTCUTS = [
   { id: "open-filters",    keys: "mod+shift+f",     label: "Open filters" },
   { id: "new-row",         keys: "mod+shift+n",     label: "New inline row" },
   { id: "export",          keys: "mod+shift+e",     label: "Export current view" },
-  { id: "delete-selected", keys: "backspace",       label: "Delete selected row" },
+  { id: "delete-selected", keys: "mod+backspace",   label: "Delete selected row" },
   { id: "cancel",          keys: "escape",          label: "Cancel / close" },
   { id: "settings",        keys: "mod+,",           label: "Open settings" },
   { id: "help",            keys: "?",               label: "Keyboard shortcuts" },

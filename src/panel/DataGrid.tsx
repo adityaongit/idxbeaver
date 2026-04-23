@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../components/ui/context-menu";
-import { Pin, PinOff, X } from "lucide-react";
+import { Pin, PinOff } from "lucide-react";
 import type { IndexedDbRecord, SerializableValue } from "../shared/types";
 import type { InferredColumn } from "../shared/schemaInfer";
 import type { UndoCommand } from "../shared/undo";
@@ -90,15 +90,19 @@ function CellEditor({
     input.select();
   }, []);
   return (
-    <div className="flex items-center gap-1 bg-background px-1 py-0.5" onClick={(e) => e.stopPropagation()}>
+    <div className="flex items-center bg-background px-1 py-0.5" onClick={(e) => e.stopPropagation()}>
       <input
         ref={inputRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") { e.preventDefault(); onCommit(); }
-          else if (e.key === "Escape") { e.preventDefault(); onCancel(); }
-          else if (e.key === "Tab") {
+          if (e.key === "Enter" || ((e.metaKey || e.ctrlKey) && e.key === "s")) {
+            e.preventDefault();
+            onCommit();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+          } else if (e.key === "Tab") {
             e.preventDefault();
             if (e.shiftKey) onTabPrev?.();
             else onTabNext?.();
@@ -106,22 +110,6 @@ function CellEditor({
         }}
         className="h-5 min-w-0 flex-1 rounded-[2px] border-0 bg-transparent px-1 font-mono text-[11px] text-foreground outline-none ring-1 ring-primary/60 focus:ring-primary"
       />
-      <button
-        type="button"
-        onClick={onCommit}
-        className="rounded-[2px] bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-        aria-label="Save cell"
-      >
-        Save
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="rounded-[2px] px-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-        aria-label="Cancel edit"
-      >
-        <X className="size-3" />
-      </button>
     </div>
   );
 }
@@ -340,7 +328,7 @@ export function DataGrid({
   // Keyboard handler for delete/duplicate
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Backspace" || e.key === "Delete") {
+      if ((e.key === "Backspace" || e.key === "Delete") && (e.metaKey || e.ctrlKey)) {
         if (selectedKeys.size === 0) return;
         const selected = indexedRows.filter((r) => selectedKeys.has(JSON.stringify(r.key)));
         onBulkDelete?.(selected);
