@@ -1235,27 +1235,85 @@ function App() {
     );
   }, [discovery, tableResult?.columns]);
 
+  const breadcrumb = useMemo(() => {
+    const hostname = (() => {
+      try { return new URL(discovery?.url ?? discovery?.origin ?? "").hostname; } catch { return discovery?.origin ?? ""; }
+    })();
+    if (!hostname) return "No inspected tab";
+    const sep = <span className="mx-1.5 opacity-30"> : </span>;
+    const parts: React.ReactNode[] = [<span key="host" className="opacity-60">{hostname}</span>];
+    if (selected.kind === "indexeddb") {
+      parts.push(sep, <span key="db">{selected.dbName}</span>, sep, <span key="store" className="font-medium">{selected.storeName}</span>);
+    } else if (selected.kind === "kv") {
+      parts.push(sep, <span key="kv" className="font-medium">{selected.surface}</span>);
+    } else if (selected.kind === "cookies") {
+      parts.push(sep, <span key="cookies" className="font-medium">Cookies</span>);
+    } else if (selected.kind === "cache") {
+      parts.push(sep, <span key="cache-label" className="opacity-60">Cache</span>, sep, <span key="cache" className="font-medium">{selected.cacheName}</span>);
+    }
+    return parts;
+  }, [discovery, selected]);
+
   return (
     <main className={`${theme} flex h-screen min-w-[1100px] flex-col bg-background text-foreground`}>
-      <header className="relative flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 py-1.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid h-5 w-5 place-items-center rounded-sm bg-foreground/90 text-[9px] font-semibold tracking-wider text-background">
+      <header className="relative flex shrink-0 items-center gap-1.5 border-b border-border bg-card px-2 py-1.5">
+        {/* Left: logo + DB picker */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className="mr-1 grid h-5 w-5 place-items-center rounded-sm bg-foreground/90 text-[9px] font-semibold tracking-wider text-background">
             IB
           </span>
-          <div className="min-w-0 leading-tight">
-            <h1 className="text-[12px] font-medium leading-tight">IdxBeaver</h1>
-            <p className="truncate font-mono text-[10px] leading-tight text-muted-foreground">{discovery?.origin ?? "no inspected tab"}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
           <Button
-            variant="outline"
-            size="xs"
+            size="icon-xs"
+            variant="ghost"
             onClick={() => setDatabasePickerOpen(true)}
+            aria-label="Open database picker"
+            title="Open database picker"
           >
-            <Database data-icon="inline-start" />
-            Open
+            <Database />
           </Button>
+        </div>
+
+        {/* Center: breadcrumb path bar */}
+        <button
+          className="flex min-w-0 flex-1 cursor-pointer items-center rounded-md border border-border/60 bg-background/40 px-3 py-1 text-left font-mono text-[11px] text-foreground transition-colors hover:bg-accent/40"
+          onClick={() => setDatabasePickerOpen(true)}
+          aria-label="Open database picker"
+          title="Click to open database picker"
+        >
+          <span className="flex min-w-0 items-baseline truncate">{breadcrumb}</span>
+        </button>
+
+        {/* Right: actions + panel toggles */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={refreshDiscovery}
+            disabled={busy}
+            aria-label={busy ? "Refreshing…" : "Refresh"}
+            title="Refresh"
+          >
+            <RefreshCw className={busy ? "animate-spin" : undefined} />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            onClick={() => { const next = theme === "dark" ? "light" : "dark"; void setPrefs({ theme: next }).then(setPrefsState); }}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <Sun /> : <Moon />}
+          </Button>
+          <Button
+            size="icon-xs"
+            variant={settingsOpen ? "secondary" : "ghost"}
+            onClick={() => setSettingsOpen((o) => !o)}
+            aria-label={settingsOpen ? "Close settings" : "Settings"}
+            title="Settings"
+          >
+            <Settings />
+          </Button>
+          <div className="mx-1 h-4 w-px bg-border" />
           <PanelToggleButton
             active={!leftPanelCollapsed}
             onClick={() => togglePanel("left")}
@@ -1268,9 +1326,7 @@ function App() {
             onClick={() => togglePanel("bottom")}
             label={
               canToggleBottomPanel
-                ? bottomPanelCollapsed
-                  ? "Show bottom panel"
-                  : "Hide bottom panel"
+                ? bottomPanelCollapsed ? "Show bottom panel" : "Hide bottom panel"
                 : "Bottom panel unavailable in this view"
             }
             disabled={!canToggleBottomPanel}
@@ -1284,30 +1340,6 @@ function App() {
           >
             {rightPanelCollapsed ? <PanelRightDashed /> : <PanelRight />}
           </PanelToggleButton>
-          <div className="mx-0.5 h-4 w-px bg-border" />
-          <Button variant="outline" size="xs" onClick={refreshDiscovery} disabled={busy}>
-            <RefreshCw data-icon="inline-start" className={busy ? "animate-spin" : undefined} />
-            {busy ? "Working…" : "Refresh"}
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="outline"
-            onClick={() => {
-              const next = theme === "dark" ? "light" : "dark";
-              void setPrefs({ theme: next }).then(setPrefsState);
-            }}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? <Sun /> : <Moon />}
-          </Button>
-          <Button
-            size="icon-xs"
-            variant={settingsOpen ? "default" : "outline"}
-            onClick={() => setSettingsOpen((o) => !o)}
-            aria-label={settingsOpen ? "Close settings" : "Settings"}
-          >
-            <Settings />
-          </Button>
         </div>
       </header>
 
