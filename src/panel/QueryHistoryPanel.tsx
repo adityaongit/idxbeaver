@@ -1,6 +1,12 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { clearHistory, type HistoryEntry } from "../shared/persisted";
+import { JsonHighlight, SqlHighlight } from "./highlight";
+
+function looksLikeJson(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
 
 function formatRelativeTime(ms: number): string {
   const diff = Date.now() - ms;
@@ -54,9 +60,15 @@ export function QueryHistoryPanel({ entries, origin, onLoad, onClear }: QueryHis
             onClick={() => onLoad(entry.queryText)}
             className="flex w-full flex-col gap-0.5 border-b border-border px-3 py-2 text-left hover:bg-muted/40"
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
               <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${entry.ok ? "bg-primary" : "bg-destructive"}`} />
-              <span className="flex-1 truncate font-mono text-[10px] text-foreground">{queryPreview(entry.queryText)}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-[10px]">
+                {looksLikeJson(entry.queryText) ? (
+                  <JsonHighlight text={queryPreview(entry.queryText)} />
+                ) : (
+                  <SqlHighlight text={queryPreview(entry.queryText)} />
+                )}
+              </span>
             </div>
             <div className="flex items-center gap-2 pl-3.5 text-[10px] text-muted-foreground">
               <span>{formatRelativeTime(entry.createdAt)}</span>
