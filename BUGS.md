@@ -1,54 +1,57 @@
 # Known bugs / deferred fixes
 
-## Keyboard shortcuts conflicting with browser globals
+All previously listed bugs have been resolved. See git history for details.
 
-**File:** `src/panel/shortcuts.ts` + `src/panel/main.tsx:289-310` (global shortcut listener)
+---
 
-Several shortcuts are grabbed by the browser before the DevTools panel receives them:
+## [FIXED] Keyboard shortcuts conflicting with browser globals
 
-| Shortcut | Browser action | Our intent |
+Remapped all browser-intercepted shortcuts to `mod+shift` variants:
+
+| Old | New | Action |
 |---|---|---|
-| ⌘T | New tab | Open database picker |
-| ⌘S | Save page | Save current query |
-| ⌘F | Find in page | Open filters |
-| ⌘N | New window | New inline row |
-| ⌘E | (varies) | Export current view |
+| ⌘T | ⌘⇧T | Open database picker |
+| ⌘S | ⌘⇧S | Save current query |
+| ⌘F | ⌘⇧F | Open filters |
+| ⌘N | ⌘⇧N | New inline row |
+| ⌘E | ⌘⇧E | Export current view |
 
-**Root cause:** The DevTools panel runs in an extension panel which shares some (not all) keyboard shortcut interception with the browser chrome. `e.preventDefault()` works for some keys inside the panel but not all.
-
-**Fix options:**
-- Remap conflicting shortcuts to combinations the browser doesn't intercept (e.g. ⌘⇧S for save, ⌘⇧F for filter)
-- Use non-modifier shortcuts for actions that only make sense when the panel is focused
-- File location for remapping: `src/panel/shortcuts.ts` (the `SHORTCUTS` const) + update `matchesShortcut` calls in `src/panel/main.tsx` global listener at line ~289
+**Files:** `src/panel/shortcuts.ts`, `src/panel/main.tsx`, `src/panel/CommandPalette.tsx`
 
 ---
 
-## QueryEditor `h-full` in Suspense fallback sizing
+## [FIXED] QueryEditor `h-full` in Suspense fallback sizing
 
-**File:** `src/panel/main.tsx` — the Suspense wrapper around `QueryEditor` in the SQL tab (the top resizable panel)
+Changed fallback from `grid h-full` to `flex min-h-[120px]` so it renders
+correctly even before the parent has an explicit pixel height.
 
-The Suspense fallback uses `grid h-full` but before CodeMirror loads the container height may not be set. Rarely visible in practice (CodeMirror loads fast) but could flicker on slow machines.
-
----
-
-## History sidebar shows entries across different origins
-
-**File:** `src/shared/persisted.ts:130` (`getHistory`) + `src/panel/main.tsx` — `useEffect` that loads history on `discovery?.origin` change
-
-If the user inspects a page where the DevTools `origin` is a frame origin rather than the tab origin, saved queries stored under a different origin won't appear. The `discovery.origin` may differ from the `inspectedWindow` origin. Currently no fallback / merge strategy.
+**File:** `src/panel/main.tsx`
 
 ---
 
-## `⌘K` command palette — `onToggleFilters` fires even with no store open
+## [FIXED] History sidebar shows entries across different origins
 
-**File:** `src/panel/CommandPalette.tsx:127` and `src/panel/main.tsx` — `onToggleFilters` prop passed to CommandPalette
+History and saved queries now derive the key from `new URL(discovery.url).origin`
+when `discovery.url` is available, falling back to `discovery.origin`. This ensures
+the top-level tab origin is used rather than a sub-frame origin.
 
-The "Open filters" action in the command palette calls `onToggleFilters` unconditionally. When no IndexedDB store is open (selected.kind !== "indexeddb"), toggling the filter state has no visible effect but still updates `filterState.open`. Should guard: only show/enable the action when a store is active.
+**File:** `src/panel/main.tsx`
 
 ---
 
-## Large query result DataGrid has no virtualization
+## [FIXED] `⌘K` command palette — `onToggleFilters` fires even with no store open
 
-**File:** `src/panel/main.tsx:3009` — `DataGrid` component
+`onToggleFilters` and `onNewRow` are now optional props in `CommandPalette`.
+`main.tsx` passes them only when `selected.kind === "indexeddb"`, so the actions
+are hidden from the palette when no store is active.
 
-DataGrid renders all rows as real DOM nodes. For queries returning thousands of rows (no `limit` set) this causes jank and potential OOM. Tracked as Phase C work (Plan 09).
+**Files:** `src/panel/CommandPalette.tsx`, `src/panel/main.tsx`
+
+---
+
+## [FIXED] Large query result DataGrid has no virtualization
+
+`DataGrid` uses `useVirtualizer` from `@tanstack/react-virtual` — only visible
+rows are rendered as DOM nodes.
+
+**File:** `src/panel/DataGrid.tsx`

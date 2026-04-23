@@ -222,11 +222,16 @@ function App() {
   }, [refreshDiscovery]);
 
   useEffect(() => {
-    const origin = discovery?.origin;
+    // Use the top-level URL's origin when available — discovery.origin may reflect
+    // a frame origin rather than the tab origin, which would miss saved queries.
+    const origin = (() => {
+      if (discovery?.url) { try { return new URL(discovery.url).origin; } catch {} }
+      return discovery?.origin;
+    })();
     if (!origin) return;
     void getHistory(origin).then(setHistoryEntries);
     void getSavedQueries(origin).then(setSavedQueries);
-  }, [discovery?.origin]);
+  }, [discovery?.origin, discovery?.url]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--font-sans", prefs.uiFont);
@@ -325,12 +330,12 @@ function App() {
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
       if (matchesShortcut(e, "mod+k")) { e.preventDefault(); setCommandPaletteOpen(true); return; }
       if (matchesShortcut(e, "mod+,")) { e.preventDefault(); setSettingsOpen(true); return; }
-      if (matchesShortcut(e, "mod+t")) { e.preventDefault(); setDatabasePickerOpen(true); return; }
+      if (matchesShortcut(e, "mod+shift+t")) { e.preventDefault(); setDatabasePickerOpen(true); return; }
       if (matchesShortcut(e, "?")) { e.preventDefault(); setHelpOpen(true); return; }
-      if (matchesShortcut(e, "mod+s") && activeTabId === "sql") { e.preventDefault(); setSaveQueryDialogOpen(true); return; }
-      if (matchesShortcut(e, "mod+f") && selected.kind === "indexeddb") { e.preventDefault(); setFilterState((prev) => ({ ...prev, open: !prev.open })); return; }
-      if (matchesShortcut(e, "mod+n") && selected.kind === "indexeddb") { e.preventDefault(); startDraftRow(); return; }
-      if (matchesShortcut(e, "mod+e")) { e.preventDefault(); exportVisible("json"); return; }
+      if (matchesShortcut(e, "mod+shift+s") && activeTabId === "sql") { e.preventDefault(); setSaveQueryDialogOpen(true); return; }
+      if (matchesShortcut(e, "mod+shift+f") && selected.kind === "indexeddb") { e.preventDefault(); setFilterState((prev) => ({ ...prev, open: !prev.open })); return; }
+      if (matchesShortcut(e, "mod+shift+n") && selected.kind === "indexeddb") { e.preventDefault(); startDraftRow(); return; }
+      if (matchesShortcut(e, "mod+shift+e")) { e.preventDefault(); exportVisible("json"); return; }
       if (matchesShortcut(e, "mod+z") && !e.shiftKey) { e.preventDefault(); void handleUndo(); return; }
       if (matchesShortcut(e, "mod+shift+z")) { e.preventDefault(); void handleRedo(); return; }
     };
@@ -1703,7 +1708,7 @@ function App() {
                     <ResizablePanel defaultSize="45%" minSize="150px">
                       <div className="flex h-full flex-col">
                         <div className="min-h-0 flex-1 bg-card">
-                          <Suspense fallback={<div className="grid h-full place-items-center text-[11px] text-muted-foreground">Loading editor…</div>}>
+                          <Suspense fallback={<div className="flex min-h-[120px] items-center justify-center text-[11px] text-muted-foreground">Loading editor…</div>}>
                             <QueryEditor
                               value={queryText}
                               onChange={setQueryText}
@@ -2011,8 +2016,8 @@ function App() {
         onLoadQuery={(text) => { setQueryText(text); setActiveTabId("sql"); setCommandPaletteOpen(false); }}
         onOpenSettings={() => { setSettingsOpen(true); setCommandPaletteOpen(false); }}
         onOpenPicker={() => { setDatabasePickerOpen(true); setCommandPaletteOpen(false); }}
-        onToggleFilters={() => { setFilterState((prev) => ({ ...prev, open: !prev.open })); setCommandPaletteOpen(false); }}
-        onNewRow={() => { startDraftRow(); setCommandPaletteOpen(false); }}
+        onToggleFilters={selected.kind === "indexeddb" ? () => { setFilterState((prev) => ({ ...prev, open: !prev.open })); setCommandPaletteOpen(false); } : undefined}
+        onNewRow={selected.kind === "indexeddb" ? () => { startDraftRow(); setCommandPaletteOpen(false); } : undefined}
         onExport={(format) => { exportVisible(format); setCommandPaletteOpen(false); }}
       />
 

@@ -20,8 +20,8 @@ interface CommandPaletteProps {
   onLoadQuery: (text: string) => void;
   onOpenSettings: () => void;
   onOpenPicker: () => void;
-  onToggleFilters: () => void;
-  onNewRow: () => void;
+  onToggleFilters?: () => void;
+  onNewRow?: () => void;
   onExport: (format: "json" | "csv") => void;
 }
 
@@ -122,16 +122,20 @@ export function CommandPalette({
               <CommandItem value="open picker databases" onSelect={() => { onOpenPicker(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
                 <Database className="mr-2 size-3.5 shrink-0 text-muted-foreground" />
                 Open database picker
-                <CommandShortcut>{formatKeys("mod+t")}</CommandShortcut>
+                <CommandShortcut>{formatKeys("mod+shift+t")}</CommandShortcut>
               </CommandItem>
-              <CommandItem value="filters open" onSelect={() => { onToggleFilters(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
-                Open filters
-                <CommandShortcut>{formatKeys("mod+f")}</CommandShortcut>
-              </CommandItem>
-              <CommandItem value="new row inline" onSelect={() => { onNewRow(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
-                New inline row
-                <CommandShortcut>{formatKeys("mod+n")}</CommandShortcut>
-              </CommandItem>
+              {onToggleFilters && (
+                <CommandItem value="filters open" onSelect={() => { onToggleFilters(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+                  Open filters
+                  <CommandShortcut>{formatKeys("mod+shift+f")}</CommandShortcut>
+                </CommandItem>
+              )}
+              {onNewRow && (
+                <CommandItem value="new row inline" onSelect={() => { onNewRow(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+                  New inline row
+                  <CommandShortcut>{formatKeys("mod+shift+n")}</CommandShortcut>
+                </CommandItem>
+              )}
               <CommandItem value="export json" onSelect={() => { onExport("json"); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
                 Export as JSON
               </CommandItem>
