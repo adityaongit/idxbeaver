@@ -6,7 +6,7 @@
 
 Browse, query, edit, and export IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache Storage — with a proper data grid, a MongoDB-style query language, row inspector, and saved queries / history.
 
-![IdxBeaver](docs/screenshots/product_demo.png)
+![IdxBeaver](landing-site/public/screenshots/product_demo.png)
 
 </div>
 
