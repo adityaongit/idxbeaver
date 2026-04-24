@@ -6,7 +6,7 @@
 
 Browse, query, edit, and export IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache Storage — with a proper data grid, a MongoDB-style query language, row inspector, and saved queries / history.
 
-![IdxBeaver — light mode](docs/screenshots/light.png)
+![IdxBeaver](docs/screenshots/product_demo.png)
 
 </div>
 
@@ -29,20 +29,6 @@ Chrome's built-in Application panel treats browser storage as an afterthought: n
 - **Command palette** — `⌘K` to jump between stores, tabs, saved queries, and actions.
 - **Multi-origin, multi-frame** — IndexedDB is partitioned per origin; IdxBeaver follows the partitioning and labels sources correctly.
 - **Dark + light themes** — pixel-aligned with TablePlus conventions; fonts, sizes, and table font (mono or sans) configurable from Settings.
-
-## Screenshots
-
-<div align="center">
-
-### Light
-
-![Light mode](docs/screenshots/light.png)
-
-### Dark
-
-![Dark mode](docs/screenshots/dark.png)
-
-</div>
 
 ## Install (Developer Mode)
 
