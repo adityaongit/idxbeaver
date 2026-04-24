@@ -4,6 +4,7 @@ export type Prefs = {
   theme: Theme;
   uiFont: string;
   cellFont: string;
+  tableFont: string;
   cellFontSize: number;
   uiFontSize: number;
   showHiddenSystemDbs: boolean;
@@ -15,6 +16,7 @@ export const DEFAULTS: Prefs = {
   theme: "system",
   uiFont: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif",
   cellFont: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+  tableFont: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
   cellFontSize: 18,
   uiFontSize: 18,
   showHiddenSystemDbs: false,

@@ -149,6 +149,24 @@ export function SettingsPage({ prefs, onClose, onPrefsChange }: SettingsPageProp
               </Select>
             </Row>
 
+            <Row label="Data table font">
+              <Select
+                value={CELL_FONTS.some((f) => f.value === prefs.tableFont) ? prefs.tableFont : "custom"}
+                onValueChange={(v) => {
+                  if (v !== "custom") void patch({ tableFont: v });
+                }}
+              >
+                <SelectTrigger size="sm" className="h-7 w-44 rounded-sm text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CELL_FONTS.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Row>
+
             {(cellFontSelectValue === "custom" || cellFontIsCustom) && (
               <Row label="Custom cell font">
                 <Input

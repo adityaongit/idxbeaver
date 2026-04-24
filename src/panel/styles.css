@@ -382,6 +382,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Data-grid table scope — overrides cell fonts independently of --font-mono.
+   Set via prefs.tableFont and applied to all descendants of the grid. */
+.data-grid-root,
+.data-grid-root .font-mono {
+  font-family: var(--font-table, var(--font-mono));
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

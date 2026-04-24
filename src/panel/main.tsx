@@ -237,8 +237,9 @@ function App() {
   useEffect(() => {
     document.documentElement.style.setProperty("--font-sans", prefs.uiFont);
     document.documentElement.style.setProperty("--font-mono", prefs.cellFont);
+    document.documentElement.style.setProperty("--font-table", prefs.tableFont);
     document.documentElement.style.setProperty("font-size", `${prefs.uiFontSize}px`);
-  }, [prefs.uiFont, prefs.cellFont, prefs.uiFontSize]);
+  }, [prefs.uiFont, prefs.cellFont, prefs.tableFont, prefs.uiFontSize]);
 
   // Keep visible DBs consistent with discovery, but never auto-select — the user
   // picks which databases to browse.
@@ -1265,19 +1266,25 @@ function App() {
           borderBottom: "1px solid var(--hairline)"
         }}
       >
-        {/* Left: connection pill */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
+        {/* Left: brand + db picker + query toggle */}
+        <div className="flex shrink-0 items-center gap-1">
+          <span
+            className="grid h-[22px] w-[22px] place-items-center rounded-[4px] text-[9px] font-bold tracking-wider"
+            style={{ backgroundColor: "var(--foreground)", color: "var(--background)" }}
+            title="IdxBeaver"
+          >
+            IB
+          </span>
+          <Button
+            size="icon-xs"
+            variant="ghost"
             onClick={() => setDatabasePickerOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            aria-label="Open database picker"
             title="Open database picker"
           >
-            <Database className="size-3.5" style={{ color: "var(--icon-db)" }} />
-            <span className="max-w-[160px] truncate font-medium">
-              {discovery?.origin ? (() => { try { return new URL(discovery.origin).hostname; } catch { return "origin"; } })() : "origin"}
-            </span>
-          </button>
+            <Database />
+          </Button>
+          <div className="mx-1 h-4 w-px bg-border" />
           <Button
             size="xs"
             variant={activeTabId === "sql" ? "secondary" : "ghost"}

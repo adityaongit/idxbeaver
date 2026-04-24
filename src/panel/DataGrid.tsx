@@ -394,7 +394,7 @@ export function DataGrid({
   return (
     <div
       ref={scrollRef}
-      className="min-h-0 flex-1 overflow-auto bg-background"
+      className="data-grid-root min-h-0 flex-1 overflow-auto bg-background"
       tabIndex={0}
       style={{ outline: "none" }}
     >
