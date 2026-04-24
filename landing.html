@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IdxBeaver — Modern browser storage, managed like a database</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --bg-soft:#FAFAFA;
+    --bg-alt:#F4F4F5;
+    --bg-deep:#0B0B0D;
+    --ink:#09090B;
+    --ink-2:#18181B;
+    --ink-dim:#52525B;
+    --ink-mute:#A1A1AA;
+    --hair:rgba(0,0,0,.08);
+    --hair-soft:rgba(0,0,0,.05);
+    --accent:#0A84FF;
+    --accent-dim:#0056C4;
+    --accent-soft:#EAF4FF;
+    --success:#16A34A;
+    --warn:#F59E0B;
+    --danger:#E5484D;
+    --sans:"Geist","Inter Tight",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+
+    --ring:0 0 0 1px rgba(0,0,0,.06);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.04);
+    --shadow-md:0 4px 12px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.05);
+    --shadow-lg:0 20px 60px -20px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.06);
+    --shadow-xl:0 40px 100px -30px rgba(10,132,255,.22), 0 20px 40px -20px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.06);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:var(--sans);font-size:15px;line-height:1.55;font-weight:400;
+    -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+    letter-spacing:-.005em;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--accent);color:#fff}
+
+  .mono{font-family:var(--mono);font-feature-settings:"tnum","zero","ss01";font-variant-numeric:tabular-nums}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+  .wrap-wide{max-width:1320px;margin:0 auto;padding:0 24px}
+
+  /* ——— PROMO BAR ——— */
+  .promo{
+    background:var(--ink);color:#fff;font-size:12.5px;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    height:36px;font-family:var(--mono);font-weight:400;letter-spacing:0;
+  }
+  .promo b{color:#fff;font-weight:500}
+  .promo .tag{background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:500}
+  .promo a{color:#A1A1AA;margin-left:4px;text-decoration:underline;text-underline-offset:3px}
+  .promo a:hover{color:#fff}
+
+  /* ——— NAV ——— */
+  nav.top{
+    position:sticky;top:0;z-index:50;
+    background:rgba(255,255,255,.82);backdrop-filter:blur(14px) saturate(160%);
+    border-bottom:1px solid var(--hair);
+  }
+  .nav{display:flex;align-items:center;justify-content:space-between;height:62px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.015em;font-size:16px}
+  .brand .logo{
+    width:26px;height:26px;border-radius:7px;
+    background:linear-gradient(135deg,var(--accent) 0%,#0055D4 100%);
+    position:relative;flex:0 0 auto;
+    box-shadow:0 0 0 1px rgba(0,0,0,.06), 0 4px 12px -3px rgba(10,132,255,.45);
+  }
+  .brand .logo::after{
+    content:"";position:absolute;inset:5px;border-radius:3px;
+    background:
+      linear-gradient(#fff,#fff) 0 20%/100% 1.2px no-repeat,
+      linear-gradient(#fff,#fff) 0 55%/100% 1.2px no-repeat,
+      linear-gradient(#fff,#fff) 0 90%/100% 1.2px no-repeat;
+  }
+  .nav-links{display:flex;gap:30px;font-size:14px;color:var(--ink-2);font-weight:450}
+  .nav-links a{transition:color .15s ease;position:relative}
+  .nav-links a:hover{color:var(--accent)}
+  .nav-cta{display:flex;gap:10px;align-items:center}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    height:38px;padding:0 16px;border-radius:8px;
+    font-family:var(--sans);font-size:13.5px;font-weight:500;letter-spacing:-.005em;
+    border:1px solid var(--hair);color:var(--ink);background:#fff;
+    transition:border-color .15s, background .15s, transform .12s, box-shadow .15s;cursor:pointer;
+    box-shadow:var(--shadow-sm);
+  }
+  .btn:hover{border-color:rgba(0,0,0,.16);box-shadow:var(--shadow-md)}
+  .btn-ghost{background:transparent;border-color:transparent;box-shadow:none}
+  .btn-ghost:hover{background:var(--bg-alt);border-color:transparent}
+  .btn-primary{
+    background:var(--ink);color:#fff;border-color:transparent;
+    box-shadow:0 1px 0 rgba(255,255,255,.14) inset, 0 6px 20px -6px rgba(0,0,0,.25);
+  }
+  .btn-primary:hover{background:#000;transform:translateY(-1px);box-shadow:0 1px 0 rgba(255,255,255,.14) inset, 0 10px 28px -6px rgba(0,0,0,.35)}
+  .btn-blue{
+    background:var(--accent);color:#fff;border-color:transparent;
+    box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 8px 24px -6px rgba(10,132,255,.45);
+  }
+  .btn-blue:hover{background:#0A6EE0;transform:translateY(-1px)}
+  .btn-lg{height:48px;padding:0 22px;font-size:14.5px;border-radius:10px}
+
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;
+    height:28px;padding:0 12px;border-radius:999px;
+    background:var(--bg-alt);border:1px solid var(--hair);
+    font-family:var(--mono);font-size:11.5px;font-weight:500;color:var(--ink-dim);
+    letter-spacing:.01em;
+  }
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 10px rgba(22,163,74,.5)}
+  .pill b{color:var(--ink);font-weight:600}
+
+  /* ——— HERO ——— */
+  section.hero{
+    padding:72px 0 40px;
+    text-align:center;
+    background:
+      radial-gradient(800px 400px at 50% 0%, rgba(10,132,255,.06), transparent 70%),
+      linear-gradient(180deg, #FAFAFA 0%, #fff 60%);
+    border-bottom:1px solid var(--hair);
+  }
+  .hero h1{
+    font-family:var(--sans);font-weight:700;
+    font-size:clamp(40px, 6.4vw, 88px);
+    line-height:1.02;letter-spacing:-.035em;
+    margin:22px auto 22px;max-width:960px;
+    color:var(--ink);
+  }
+  .hero h1 .blue{color:var(--accent)}
+  .hero h1 .dim{color:var(--ink-mute);font-weight:500}
+  .hero .sub{
+    font-size:clamp(16px, 1.3vw, 19px);line-height:1.55;color:var(--ink-dim);
+    max-width:640px;margin:0 auto 32px;font-weight:400;
+  }
+  .hero .sub b{color:var(--ink);font-weight:500}
+  .hero-ctas{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .hero-meta{font-family:var(--mono);font-size:12px;color:var(--ink-mute);letter-spacing:.02em;margin-top:14px}
+  .hero-meta span{margin:0 10px}
+
+  .hero-visual{
+    max-width:1280px;margin:64px auto 0;padding:0 24px;
+    position:relative;
+  }
+  .hero-visual::before{
+    content:"";position:absolute;left:50%;top:-40px;transform:translateX(-50%);
+    width:70%;height:120%;
+    background:radial-gradient(60% 50% at 50% 0%, rgba(10,132,255,.14), transparent 70%);
+    z-index:-1;pointer-events:none;
+  }
+
+  /* ——— PRODUCT MOCK (hero) ——— */
+  .product-frame{
+    position:relative;border-radius:16px;overflow:hidden;
+    background:#151518;border:1px solid rgba(0,0,0,.1);
+    box-shadow:var(--shadow-xl);
+  }
+  .pf-title{
+    display:flex;align-items:center;gap:10px;height:34px;padding:0 14px;
+    background:#1E1E21;border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .pf-dots{display:flex;gap:7px}
+  .pf-dots i{width:12px;height:12px;border-radius:50%;display:block}
+  .pf-dots i:nth-child(1){background:#FF5F57}
+  .pf-dots i:nth-child(2){background:#FEBC2E}
+  .pf-dots i:nth-child(3){background:#28C840}
+  .pf-t{margin:0 auto;font-family:var(--mono);font-size:11.5px;color:#8A8A92;letter-spacing:.03em}
+  .pf-bar{display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;background:#17171A;border-bottom:1px solid rgba(255,255,255,.06);font-family:var(--mono);font-size:11.5px;color:#8A8A92}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#C0C0C6;font-family:var(--mono);font-size:10.5px}
+  .chip.b{color:#78B8FF;border-color:rgba(10,132,255,.3);background:rgba(10,132,255,.1)}
+  .pf-body{display:grid;grid-template-columns:220px 1fr 300px;min-height:440px;background:#0F0F11;color:#E8E8E8}
+  .pf-side{border-right:1px solid rgba(255,255,255,.06);padding:10px 8px;background:#141416}
+  .pf-sect{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:#54545C;text-transform:uppercase;padding:10px 6px 6px;font-weight:500}
+  .pf-row{display:flex;align-items:center;gap:8px;height:22px;padding:0 8px;border-radius:4px;font-family:var(--mono);font-size:12px;color:#E8E8E8}
+  .pf-row .i{width:10px;height:10px;border-radius:2px;background:var(--accent);opacity:.85;flex:0 0 auto}
+  .pf-row .i.db{background:#A1A1A6;border-radius:50%}
+  .pf-row .n{margin-left:auto;color:#54545C;font-size:10.5px}
+  .pf-row.act{background:rgba(10,132,255,.14);color:#fff;position:relative}
+  .pf-row.act::before{content:"";position:absolute;left:-1px;top:4px;bottom:4px;width:2px;background:var(--accent);border-radius:1px}
+
+  .pf-grid{overflow:hidden;background:#0F0F11}
+  .gh{display:grid;grid-template-columns:44px 110px 1fr 100px 90px;border-bottom:1px solid rgba(255,255,255,.06);height:26px;align-items:center;background:#16161A;font-family:var(--mono);font-size:11px;color:#8A8A92}
+  .gh>div{padding:0 10px;border-right:1px solid rgba(255,255,255,.04)}
+  .gr{display:grid;grid-template-columns:44px 110px 1fr 100px 90px;height:22px;align-items:center;font-family:var(--mono);font-size:11.5px}
+  .gr>div{padding:0 10px;border-right:1px solid rgba(255,255,255,.04);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gr:nth-child(odd){background:#111114}
+  .gr:nth-child(even){background:#0F0F11}
+  .gr:hover{background:#152233}
+  .gr.sel{background:rgba(10,132,255,.16) !important;box-shadow:inset 2px 0 0 0 var(--accent)}
+  .gr .k{color:#54545C}
+  .gr .s{color:#FF7AB6}
+  .gr .n{color:#78D2FA;text-align:right;display:block}
+  .gr .nu{color:#54545C;font-style:italic}
+  .gr .b{color:#D09CFE}
+
+  .pf-ins{border-left:1px solid rgba(255,255,255,.06);background:#141416;padding:14px}
+  .pf-ins .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:#54545C;text-transform:uppercase;margin-bottom:10px}
+  .irow{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed rgba(255,255,255,.05);font-family:var(--mono);font-size:11.5px;gap:10px}
+  .irow .kk{color:#8A8A92}
+  .irow .vv{color:#E8E8E8;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .jsonbox{margin-top:14px;background:#0E0E10;border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:10px;font-family:var(--mono);font-size:11px;line-height:1.75}
+  .jsonbox .k{color:#7FD1FF;font-weight:500}
+  .jsonbox .s{color:#FF7AB6}
+  .jsonbox .n{color:#78D2FA}
+  .jsonbox .p{color:#54545C}
+
+  .pf-footer{display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;background:#111114;border-top:1px solid rgba(255,255,255,.06);font-family:var(--mono);font-size:11px;color:#8A8A92}
+  .pf-footer .pr{color:#78B8FF}
+  .cursor{display:inline-block;width:6px;height:12px;background:var(--accent);margin-left:1px;animation:blink 1s steps(2) infinite;vertical-align:middle}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ——— LOGO STRIP ——— */
+  .logos{padding:56px 0;background:#fff;border-bottom:1px solid var(--hair)}
+  .logos .eb{text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:28px}
+  .logo-row{
+    display:grid;grid-template-columns:repeat(6,1fr);gap:40px;align-items:center;
+    justify-items:center;opacity:.9;
+  }
+  .logo-slot{
+    width:100%;max-width:140px;height:40px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--ink-mute);font-size:13px;font-weight:500;letter-spacing:-.01em;
+    filter:grayscale(1);opacity:.75;transition:opacity .2s;
+  }
+  .logo-slot:hover{opacity:1}
+  .logo-slot .ph{
+    width:100%;height:28px;border-radius:4px;background:repeating-linear-gradient(135deg,var(--bg-alt) 0 6px, #fff 6px 12px);
+    border:1px dashed rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:10px;color:var(--ink-mute);letter-spacing:.06em
+  }
+
+  /* ——— SURFACES ROW ——— */
+  .surfaces{padding:96px 0;border-bottom:1px solid var(--hair);background:var(--bg-soft)}
+  .surfaces h2{
+    font-size:clamp(30px, 3.4vw, 48px);font-weight:700;line-height:1.08;letter-spacing:-.03em;
+    text-align:center;max-width:820px;margin:0 auto 14px;
+  }
+  .surfaces h2 .blue{color:var(--accent)}
+  .surfaces .sub{text-align:center;color:var(--ink-dim);max-width:620px;margin:0 auto 48px;font-size:16px}
+  .surf-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .surf{
+    background:#fff;border:1px solid var(--hair);border-radius:12px;padding:22px 20px;
+    transition:border-color .15s, transform .15s, box-shadow .15s;
+  }
+  .surf:hover{border-color:rgba(0,0,0,.16);transform:translateY(-2px);box-shadow:var(--shadow-md)}
+  .surf .ico{
+    width:36px;height:36px;border-radius:8px;
+    display:flex;align-items:center;justify-content:center;margin-bottom:14px;
+    font-family:var(--mono);font-size:14px;font-weight:600;color:#fff;
+  }
+  .surf h4{font-size:15px;font-weight:600;letter-spacing:-.01em;margin-bottom:4px}
+  .surf p{font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+  .surf .meta{margin-top:14px;font-family:var(--mono);font-size:10.5px;color:var(--ink-mute);letter-spacing:.04em}
+
+  /* ——— SECTION ——— */
+  .section{padding:120px 0;border-bottom:1px solid var(--hair);background:#fff;position:relative}
+  .section.alt{background:var(--bg-soft)}
+  .section.dark{background:var(--bg-deep);color:#ECECEE;border-bottom:none}
+
+  .sec-head{text-align:center;margin-bottom:64px}
+  .sec-head .eb{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;font-weight:500}
+  .section.dark .sec-head .eb{color:var(--accent)}
+  .sec-head h2{
+    font-size:clamp(32px, 3.8vw, 56px);font-weight:700;line-height:1.04;letter-spacing:-.03em;
+    max-width:820px;margin:0 auto 16px;
+  }
+  .section.dark .sec-head h2{color:#fff}
+  .sec-head p{color:var(--ink-dim);max-width:620px;margin:0 auto;font-size:17px}
+  .section.dark .sec-head p{color:#A1A1AA}
+
+  /* FEATURE SPLIT (alternating) */
+  .feat{display:grid;grid-template-columns:1fr 1.2fr;gap:80px;align-items:center;margin-bottom:140px}
+  .feat:last-child{margin-bottom:0}
+  .feat.reverse{grid-template-columns:1.2fr 1fr}
+  .feat.reverse .feat-txt{order:2}
+  .feat-eb{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;font-weight:500}
+  .feat-h{font-size:clamp(28px, 3vw, 42px);font-weight:700;line-height:1.1;letter-spacing:-.025em;margin-bottom:18px}
+  .feat-p{color:var(--ink-dim);font-size:16px;line-height:1.65;margin-bottom:22px;max-width:520px}
+  .feat-list{list-style:none;padding:0}
+  .feat-list li{
+    display:flex;gap:10px;align-items:flex-start;padding:8px 0;
+    font-size:14.5px;color:var(--ink-2);
+  }
+  .feat-list li svg{flex:0 0 auto;margin-top:4px;color:var(--accent)}
+
+  /* image placeholder frames */
+  .shot{
+    border-radius:14px;overflow:hidden;
+    background:var(--bg-alt);border:1px solid var(--hair);
+    box-shadow:var(--shadow-lg);
+    position:relative;
+  }
+  .shot.dark{background:#151518;border-color:rgba(0,0,0,.2)}
+  .shot img{width:100%;display:block}
+  .shot .ph{
+    aspect-ratio:16/10;width:100%;
+    background:
+      repeating-linear-gradient(45deg, rgba(0,0,0,.025) 0 12px, transparent 12px 24px),
+      linear-gradient(180deg, #F4F4F5 0%, #E4E4E7 100%);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;
+    color:var(--ink-mute);font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .shot.dark .ph{
+    background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,.02) 0 12px, transparent 12px 24px),
+      linear-gradient(180deg, #1A1A1E 0%, #0F0F11 100%);
+    color:#54545C;
+  }
+  .shot .ph .label{font-size:11px;color:var(--ink-dim);letter-spacing:.1em}
+  .shot .ph .hint{font-size:10px;opacity:.6;font-family:var(--mono);text-transform:none;letter-spacing:0}
+
+  /* ——— ICON GRID (Editor features) ——— */
+  .icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:40px 56px;max-width:960px;margin:0 auto}
+  .ig{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+  .ig .i{
+    width:44px;height:44px;border-radius:10px;
+    background:var(--bg-alt);border:1px solid var(--hair);
+    display:flex;align-items:center;justify-content:center;color:var(--accent);
+  }
+  .section.dark .ig .i{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08)}
+  .ig h4{font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+  .ig p{font-size:13.5px;color:var(--ink-dim);line-height:1.55;max-width:280px}
+  .section.dark .ig p{color:#A1A1AA}
+
+  /* ——— VALUES GRID (5 items) ——— */
+  .values{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:14px;overflow:hidden}
+  .val{background:#fff;padding:28px 24px;min-height:200px;display:flex;flex-direction:column;gap:12px}
+  .val .i{
+    width:36px;height:36px;border-radius:8px;
+    background:var(--accent-soft);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .val h4{font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .val p{font-size:13px;color:var(--ink-dim);line-height:1.55}
+
+  /* ——— THEME SHOWCASE ——— */
+  .theme-split{
+    display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--hair);border-radius:16px;overflow:hidden;
+    background:var(--bg-alt);box-shadow:var(--shadow-lg);
+  }
+  .theme-half{position:relative;min-height:360px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+  .theme-half.light{background:#fff;color:var(--ink)}
+  .theme-half.dark{background:#0F0F11;color:#E8E8E8}
+  .theme-half .lab{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.5}
+  .theme-half .val{font-family:var(--mono);font-size:12px;opacity:.7}
+  .theme-half .ph{
+    width:90%;aspect-ratio:16/10;border-radius:8px;
+    background:repeating-linear-gradient(45deg, currentColor 0 10px, transparent 10px 22px);
+    opacity:.07;margin:8px 0;
+  }
+
+  /* ——— FINAL CTA ——— */
+  .finalcta{
+    padding:140px 0;text-align:center;
+    background:
+      radial-gradient(600px 300px at 50% 50%, rgba(10,132,255,.1), transparent 70%),
+      linear-gradient(180deg, #FAFAFA 0%, #fff 100%);
+    border-bottom:1px solid var(--hair);
+  }
+  .finalcta h2{
+    font-size:clamp(40px, 5vw, 72px);font-weight:700;line-height:1.04;letter-spacing:-.035em;
+    max-width:820px;margin:0 auto 18px;
+  }
+  .finalcta h2 .blue{color:var(--accent)}
+  .finalcta p{color:var(--ink-dim);font-size:18px;max-width:520px;margin:0 auto 34px}
+  .finalcta .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+  /* ——— FEATURED ON ——— */
+  .feat-on{padding:64px 0;background:var(--bg-soft);border-bottom:1px solid var(--hair)}
+  .feat-on .eb{text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:28px}
+  .feat-on .row{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;align-items:center}
+  .feat-on .slot{
+    height:32px;min-width:120px;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:600;font-size:15px;color:var(--ink-mute);letter-spacing:-.01em;
+    filter:grayscale(1);opacity:.65;transition:opacity .15s;
+  }
+  .feat-on .slot:hover{opacity:1}
+
+  /* ——— FOOTER ——— */
+  footer{background:var(--bg-deep);color:#ECECEE;padding:80px 0 36px}
+  .foot-grid{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:48px;margin-bottom:56px}
+  .foot-brand .brand{color:#fff;margin-bottom:18px}
+  .foot-brand p{color:#8A8A92;font-size:14px;line-height:1.55;max-width:320px;margin-bottom:24px}
+  .foot-brand .social{display:flex;gap:10px}
+  .foot-brand .social a{
+    width:34px;height:34px;border-radius:8px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);
+    display:flex;align-items:center;justify-content:center;color:#C0C0C6;
+    transition:background .15s;
+  }
+  .foot-brand .social a:hover{background:rgba(255,255,255,.1);color:#fff}
+  .foot-col h5{font-size:12px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#8A8A92;margin-bottom:18px;font-weight:500}
+  .foot-col ul{list-style:none}
+  .foot-col li{padding:5px 0;font-size:14px;color:#C0C0C6}
+  .foot-col a:hover{color:#fff}
+  .foot-bottom{
+    padding-top:28px;border-top:1px solid rgba(255,255,255,.08);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;
+    font-family:var(--mono);font-size:12px;color:#54545C;
+  }
+  .foot-bottom .news{display:flex;gap:8px;align-items:center}
+  .foot-bottom .news input{
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;
+    padding:0 12px;height:34px;color:#ECECEE;font-family:var(--mono);font-size:12px;width:220px;
+  }
+  .foot-bottom .news input:focus{outline:none;border-color:var(--accent)}
+  .foot-bottom .news button{
+    height:34px;padding:0 14px;border-radius:6px;background:var(--accent);color:#fff;border:none;
+    font-family:var(--sans);font-size:12.5px;font-weight:500;cursor:pointer;
+  }
+  .foot-bottom .news button:hover{background:#0A6EE0}
+
+  /* REVEAL */
+  .reveal{opacity:0;transform:translateY(16px);animation:rv .8s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes rv{to{opacity:1;transform:translateY(0)}}
+  .d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.28s}.d4{animation-delay:.42s}.d5{animation-delay:.58s}
+
+  /* RESPONSIVE */
+  @media (max-width:1020px){
+    .nav-links{display:none}
+    .feat,.feat.reverse{grid-template-columns:1fr;gap:40px;margin-bottom:96px}
+    .feat.reverse .feat-txt{order:0}
+    .surf-grid{grid-template-columns:repeat(2,1fr)}
+    .icon-grid{grid-template-columns:repeat(2,1fr);gap:32px}
+    .values{grid-template-columns:repeat(2,1fr)}
+    .logo-row{grid-template-columns:repeat(3,1fr);gap:24px}
+    .theme-split{grid-template-columns:1fr}
+    .foot-grid{grid-template-columns:1fr 1fr}
+    .pf-body{grid-template-columns:1fr}
+    .pf-side,.pf-ins{display:none}
+  }
+  @media (max-width:640px){
+    section.hero{padding:48px 0 24px}
+    .section{padding:80px 0}
+    .finalcta{padding:96px 0}
+    .surf-grid,.icon-grid,.values{grid-template-columns:1fr}
+    .foot-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- PROMO -->
+<div class="promo">
+  <span class="tag">New</span>
+  <span><b>IdxBeaver v1.0</b> is now available on the Chrome Web Store</span>
+  <a href="#install">Get it →</a>
+</div>
+
+<!-- NAV -->
+<nav class="top">
+  <div class="wrap-wide nav">
+    <a href="#" class="brand">
+      <span class="logo"></span>
+      <span>IdxBeaver</span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#query">Query</a>
+      <a href="#editor">Editor</a>
+      <a href="#details">Details</a>
+      <a href="#install">Install</a>
+    </div>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="#">Docs</a>
+      <a class="btn btn-primary" href="#install">
+        Add to Chrome
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 6h6M6 3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <span class="pill reveal d1"><span class="dot"></span>v1.0 · <b>Now on the Chrome Web Store</b></span>
+    <h1 class="reveal d2">
+      Browser storage,<br/>
+      managed like a <span class="blue">database.</span>
+    </h1>
+    <p class="sub reveal d3">
+      A <b>modern, native-feeling database client</b> for IndexedDB, LocalStorage, SessionStorage,
+      Cookies and Cache Storage — right inside Chrome DevTools.
+    </p>
+    <div class="hero-ctas reveal d4">
+      <a class="btn btn-primary btn-lg" href="#install">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v10m0 0l-3-3m3 3l3-3M2 13h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Add to Chrome — it's free
+      </a>
+      <a class="btn btn-lg" href="#features">See how it works</a>
+    </div>
+    <div class="hero-meta reveal d4">
+      <span>Chromium 110+</span>·<span>Manifest V3</span>·<span>MIT licensed</span>·<span>No telemetry</span>
+    </div>
+  </div>
+
+  <!-- HERO VISUAL -->
+  <div class="hero-visual reveal d5">
+    <div class="product-frame">
+      <div class="pf-title">
+        <div class="pf-dots"><i></i><i></i><i></i></div>
+        <div class="pf-t">idxbeaver · devtools panel · app.acme.com</div>
+      </div>
+      <div class="pf-bar">
+        <span class="chip b">● calendar-db</span>
+        <span class="chip">store: events</span>
+        <span class="chip">24,918 rows</span>
+        <span style="margin-left:auto">plan: <span style="color:#78B8FF">idx(date)</span> · 12ms</span>
+      </div>
+      <div class="pf-body">
+        <div class="pf-side">
+          <div class="pf-sect">Databases</div>
+          <div class="pf-row"><span class="i db"></span>auth-cache<span class="n">2</span></div>
+          <div class="pf-row"><span class="i db"></span>calendar-db<span class="n">7</span></div>
+          <div class="pf-row"><span class="i db"></span>inbox-sync<span class="n">5</span></div>
+          <div class="pf-sect" style="margin-top:8px">Stores</div>
+          <div class="pf-row"><span class="i"></span>attendees<span class="n">41k</span></div>
+          <div class="pf-row act"><span class="i"></span>events<span class="n">24k</span></div>
+          <div class="pf-row"><span class="i"></span>reminders<span class="n">7k</span></div>
+          <div class="pf-row"><span class="i"></span>rsvp<span class="n">18k</span></div>
+          <div class="pf-sect" style="margin-top:8px">Other</div>
+          <div class="pf-row"><span class="i" style="background:#F59E0B"></span>LocalStorage</div>
+          <div class="pf-row"><span class="i" style="background:#E5484D;opacity:.75"></span>Cookies</div>
+          <div class="pf-row"><span class="i" style="background:#16A34A"></span>Cache</div>
+        </div>
+        <div class="pf-grid">
+          <div class="gh"><div>#</div><div>kind</div><div>title</div><div>date ↓</div><div>seats</div></div>
+          <div class="gr"><div class="k">1</div><div><span class="s">"standup"</span></div><div><span class="s">"Eng weekly sync"</span></div><div><span class="s">"2026-04-14"</span></div><div><span class="n">12</span></div></div>
+          <div class="gr sel"><div class="k">2</div><div><span class="s">"review"</span></div><div><span class="s">"Q2 architecture review"</span></div><div><span class="s">"2026-04-15"</span></div><div><span class="n">8</span></div></div>
+          <div class="gr"><div class="k">3</div><div><span class="s">"1:1"</span></div><div><span class="s">"Priya ↔ Marcus"</span></div><div><span class="s">"2026-04-15"</span></div><div><span class="n">2</span></div></div>
+          <div class="gr"><div class="k">4</div><div><span class="s">"demo"</span></div><div><span class="s">"Platform demo · internal"</span></div><div><span class="s">"2026-04-16"</span></div><div><span class="n">24</span></div></div>
+          <div class="gr"><div class="k">5</div><div><span class="s">"standup"</span></div><div><span class="s">"Frontend sync"</span></div><div><span class="s">"2026-04-17"</span></div><div><span class="n">7</span></div></div>
+          <div class="gr"><div class="k">6</div><div><span class="s">"offsite"</span></div><div><span class="s">"Design offsite · day 1"</span></div><div><span class="s">"2026-04-18"</span></div><div><span class="n">32</span></div></div>
+          <div class="gr"><div class="k">7</div><div><span class="s">"1:1"</span></div><div><span class="s">"Elena ↔ Roshan"</span></div><div><span class="s">"2026-04-18"</span></div><div><span class="n">2</span></div></div>
+          <div class="gr"><div class="k">8</div><div><span class="nu">null</span></div><div><span class="s">"Unsaved draft…"</span></div><div><span class="nu">null</span></div><div><span class="nu">null</span></div></div>
+          <div class="gr"><div class="k">9</div><div><span class="s">"review"</span></div><div><span class="s">"Security review — auth"</span></div><div><span class="s">"2026-04-21"</span></div><div><span class="n">6</span></div></div>
+          <div class="gr"><div class="k">10</div><div><span class="s">"demo"</span></div><div><span class="s">"Customer: Nordstrum"</span></div><div><span class="s">"2026-04-22"</span></div><div><span class="n">14</span></div></div>
+        </div>
+        <div class="pf-ins">
+          <div class="k">Record · row 2</div>
+          <div class="irow"><span class="kk">id</span><span class="vv mono">evt_9f3c…a210</span></div>
+          <div class="irow"><span class="kk">kind</span><span class="vv" style="color:#FF7AB6">"review"</span></div>
+          <div class="irow"><span class="kk">title</span><span class="vv" style="color:#FF7AB6">"Q2 architecture review"</span></div>
+          <div class="irow"><span class="kk">date</span><span class="vv" style="color:#FF7AB6">"2026-04-15"</span></div>
+          <div class="irow"><span class="kk">seats</span><span class="vv" style="color:#78D2FA">8</span></div>
+          <div class="irow"><span class="kk">remote</span><span class="vv" style="color:#D09CFE">true</span></div>
+          <div class="jsonbox">
+<span class="p">{</span><br/>
+&nbsp;&nbsp;<span class="k">"attendees"</span><span class="p">:</span> <span class="p">[</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">"priya@"</span><span class="p">,</span> <span class="s">"marcus@"</span><span class="p">,</span><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">"elena@"</span><br/>
+&nbsp;&nbsp;<span class="p">]</span><span class="p">,</span><br/>
+&nbsp;&nbsp;<span class="k">"durationMin"</span><span class="p">:</span> <span class="n">45</span><br/>
+<span class="p">}</span>
+          </div>
+        </div>
+      </div>
+      <div class="pf-footer">
+        <span class="pr">›</span>
+        <span><span style="color:#7FD1FF">{</span> <span style="color:#7FD1FF">"store"</span>: <span style="color:#FF7AB6">"events"</span>, <span style="color:#7FD1FF">"filter"</span>: { <span style="color:#7FD1FF">"date"</span>: { <span style="color:#D09CFE">"$gte"</span>: <span style="color:#FF7AB6">"2026-04-14"</span> } }, <span style="color:#7FD1FF">"sort"</span>: { <span style="color:#7FD1FF">"date"</span>: <span style="color:#78D2FA">1</span> } <span style="color:#7FD1FF">}</span><span class="cursor"></span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STORAGE SURFACES (supported DBs equivalent) -->
+<section class="surfaces" id="features">
+  <div class="wrap">
+    <h2>Every storage surface the browser has —<br/>in <span class="blue">one panel.</span></h2>
+    <p class="sub">No more flipping between the Application panel's half-finished views. IdxBeaver treats every storage surface as a first-class database.</p>
+    <div class="surf-grid">
+      <div class="surf">
+        <div class="ico" style="background:linear-gradient(135deg,#0A84FF,#0055D4)">DB</div>
+        <h4>IndexedDB</h4>
+        <p>Full cursor-walks, per-store inspection, index-aware queries.</p>
+        <div class="meta">Multi-origin · Multi-frame</div>
+      </div>
+      <div class="surf">
+        <div class="ico" style="background:linear-gradient(135deg,#F59E0B,#D97706)">LS</div>
+        <h4>LocalStorage</h4>
+        <p>Browse, add, edit, bulk-delete — with proper typing hints.</p>
+        <div class="meta">Key · Value · Origin</div>
+      </div>
+      <div class="surf">
+        <div class="ico" style="background:linear-gradient(135deg,#A855F7,#7E22CE)">SS</div>
+        <h4>SessionStorage</h4>
+        <p>Live view per tab, scoped to the session with clear hints.</p>
+        <div class="meta">Tab-scoped · Ephemeral</div>
+      </div>
+      <div class="surf">
+        <div class="ico" style="background:linear-gradient(135deg,#E5484D,#B91C1C)">CK</div>
+        <h4>Cookies</h4>
+        <p>Flags, expiry, domain, SameSite — everything an auditor wants.</p>
+        <div class="meta">Secure · HttpOnly · Partitioned</div>
+      </div>
+      <div class="surf">
+        <div class="ico" style="background:linear-gradient(135deg,#16A34A,#15803D)">C$</div>
+        <h4>Cache Storage</h4>
+        <p>Inspect the Service Worker cache by entry, not by magic.</p>
+        <div class="meta">Request · Response · TTL</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SOCIAL PROOF -->
+<section class="logos">
+  <div class="wrap">
+    <div class="eb">Trusted by developers at teams around the world</div>
+    <div class="logo-row">
+      <div class="logo-slot"><div class="ph">LOGO · 01</div></div>
+      <div class="logo-slot"><div class="ph">LOGO · 02</div></div>
+      <div class="logo-slot"><div class="ph">LOGO · 03</div></div>
+      <div class="logo-slot"><div class="ph">LOGO · 04</div></div>
+      <div class="logo-slot"><div class="ph">LOGO · 05</div></div>
+      <div class="logo-slot"><div class="ph">LOGO · 06</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE: DATA GRID -->
+<section class="section">
+  <div class="wrap">
+    <div class="feat">
+      <div class="feat-txt">
+        <div class="feat-eb">01 / DATA GRID</div>
+        <h3 class="feat-h">A proper, dense data grid — not a dev-tools table.</h3>
+        <p class="feat-p">22-pixel rows, tabular numerics, sticky headers, pinnable columns, column resize, zebra striping. Inline edit any cell. Select thousands of rows with keyboard. Export the result in four formats.</p>
+        <ul class="feat-list">
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Column pinning, resizing, reordering</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Per-cell edit with type-aware inputs</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Keyboard nav — arrow, tab, shift-select</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Toggle mono or sans font per table</li>
+        </ul>
+      </div>
+      <div class="shot">
+        <div class="ph">
+          <div class="label">Screenshot · Data Grid</div>
+          <div class="hint">16:10 · light or dark theme · replace with real PNG</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FEATURE: QUERY LANG -->
+    <div class="feat reverse" id="query">
+      <div class="shot dark">
+        <div class="ph">
+          <div class="label">Screenshot · Query Editor</div>
+          <div class="hint">Mongo-style JSON with autocomplete & plan hint</div>
+        </div>
+      </div>
+      <div class="feat-txt">
+        <div class="feat-eb">02 / QUERY LANGUAGE</div>
+        <h3 class="feat-h">MongoDB-style queries that run on browser storage.</h3>
+        <p class="feat-p">A single JSON document describes <span class="mono">store · filter · project · sort · limit</span>. Equality and range filters are served from IndexedDB indexes automatically — the query plan is visible in the toolbar.</p>
+        <ul class="feat-list">
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>$eq · $gt · $gte · $lt · $lte · $in · $nin · $regex · $exists · $and · $or</b></span></li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Index-aware plan, in-memory fallback for compounds</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Schema-aware autocomplete from inferred columns</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>History (100 per origin) + starred saved queries</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FEATURE: INSPECTOR -->
+    <div class="feat">
+      <div class="feat-txt">
+        <div class="feat-eb">03 / ROW INSPECTOR</div>
+        <h3 class="feat-h">Inspect and edit every field, without a modal.</h3>
+        <p class="feat-p">Each row opens in a side inspector with type indicators, inline NULL handling, syntax-highlighted nested JSON and a tree that collapses cleanly. Dates, BigInts, Maps, Sets, RegExps, Blobs and circular refs all round-trip.</p>
+        <ul class="feat-list">
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Type-aware field editors (string, number, bool, null, JSON)</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Syntax-highlighted nested JSON tree</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Preserves Date, BigInt, Map, Set, RegExp, Blob, ArrayBuffer</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Keyboard-only editing flow</li>
+        </ul>
+      </div>
+      <div class="shot">
+        <div class="ph">
+          <div class="label">Screenshot · Row Inspector</div>
+          <div class="hint">Side panel · JSON tree · field types</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FEATURE: SNAPSHOTS -->
+    <div class="feat reverse">
+      <div class="shot">
+        <div class="ph">
+          <div class="label">Screenshot · Snapshots &amp; Diffs</div>
+          <div class="hint">Before / after · field-level diff</div>
+        </div>
+      </div>
+      <div class="feat-txt">
+        <div class="feat-eb">04 / SNAPSHOTS &amp; DIFFS</div>
+        <h3 class="feat-h">Capture state. Diff it. Roll it back.</h3>
+        <p class="feat-p">Before a risky migration or deploy, snapshot a store — or an entire database. Come back later and diff against the live state, field by field. Restore with one click.</p>
+        <ul class="feat-list">
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Per-store, per-database, per-origin snapshots</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Field-level diff view (add / remove / change)</li>
+          <li><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Restore a single row or the whole snapshot</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- THEME SHOWCASE -->
+<section class="section alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eb">Appearance</div>
+      <h2>Pixel-aligned light &amp; dark — whichever DevTools runs in.</h2>
+      <p>Follows DevTools' theme automatically, or pin the one you prefer. Every color, radius and hairline is engineered for long-session readability.</p>
+    </div>
+
+    <div class="theme-split">
+      <div class="theme-half light">
+        <div class="lab">Light</div>
+        <div class="ph"></div>
+        <div class="val">TablePlus-white · #FFFFFF</div>
+      </div>
+      <div class="theme-half dark">
+        <div class="lab">Dark</div>
+        <div class="ph"></div>
+        <div class="val">#1E1E1E · DevTools-native</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EDITOR FEATURES ICON GRID -->
+<section class="section" id="editor">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eb">Query Editor</div>
+      <h2>Built for the keyboard.</h2>
+      <p>CodeMirror 6 under the hood, hot-swappable themes, context-aware completions, hover tooltips, and global shortcuts everywhere.</p>
+    </div>
+
+    <div class="icon-grid">
+      <div class="ig">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <h4>Autocomplete</h4>
+        <p>Context-aware suggestions from inferred schema — stores, fields, operators.</p>
+      </div>
+      <div class="ig">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 9l-2 3 2 3M17 9l2 3-2 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h4>Syntax highlight</h4>
+        <p>JSON, SQL and NDJSON each with their own refined color palette.</p>
+      </div>
+      <div class="ig">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="8" height="14" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="5" width="8" height="14" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <h4>Split panes</h4>
+        <p>Query on one side, result grid on the other — or stack them vertically.</p>
+      </div>
+      <div class="ig">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <h4>Reformatter</h4>
+        <p>One keystroke to pretty-print the JSON query, aligned to consistent indent.</p>
+      </div>
+      <div class="ig">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <h4>History</h4>
+        <p>Every run auto-saved per origin (last 100). Star the ones worth keeping.</p>
+      </div>
+      <div class="ig">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-8 4 16 3-8h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h4>Live plan</h4>
+        <p>The query plan updates as you type — see whether you'll hit an index.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- "ELEGANT IN EVERY DETAIL" VALUES -->
+<section class="section alt" id="details">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eb">The principles</div>
+      <h2>Elegant in every detail.</h2>
+      <p>A small, opinionated tool with an obsessively short list of values. Native feel over web feel. Density over whitespace. Keyboard over mouse.</p>
+    </div>
+
+    <div class="values">
+      <div class="val">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <h4>Clean &amp; focused</h4>
+        <p>Hairline borders, one accent color, zero gradients. The data is the interface.</p>
+      </div>
+      <div class="val">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <h4>High performance</h4>
+        <p>Frame-parallel discovery, index-aware queries, 24k+ rows without a stutter.</p>
+      </div>
+      <div class="val">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <h4>Keyboard shortcuts</h4>
+        <p>⌘K palette, tab nav, inline edit, run-query — you should never need a mouse.</p>
+      </div>
+      <div class="val">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <h4>Always improving</h4>
+        <p>Open-source, MIT-licensed, shipping regularly — and your issues actually get fixed.</p>
+      </div>
+      <div class="val">
+        <div class="i"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 15a4 4 0 01-4 4H7l-4 4V7a4 4 0 014-4h10a4 4 0 014 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <h4>Quick support</h4>
+        <p>One maintainer, one inbox, one GitHub. Expect replies in hours, not quarters.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURED ON -->
+<section class="feat-on">
+  <div class="wrap">
+    <div class="eb">Featured on</div>
+    <div class="row">
+      <div class="slot">Hacker News</div>
+      <div class="slot">Product Hunt</div>
+      <div class="slot">Chrome DevRel</div>
+      <div class="slot">JS Weekly</div>
+      <div class="slot">Frontend Focus</div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="finalcta" id="install">
+  <div class="wrap">
+    <h2>Ready to treat browser storage<br/>like a <span class="blue">real database?</span></h2>
+    <p>Install the extension and open DevTools. That's the whole setup.</p>
+    <div class="ctas">
+      <a class="btn btn-primary btn-lg" href="#">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v10m0 0l-3-3m3 3l3-3M2 13h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Add to Chrome — it's free
+      </a>
+      <a class="btn btn-lg" href="#">Build from source</a>
+    </div>
+    <div class="hero-meta" style="margin-top:22px">
+      <span>Chromium 110+</span>·<span>Manifest V3</span>·<span>MIT</span>·<span>No telemetry, no accounts</span>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap-wide">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a href="#" class="brand" style="color:#fff">
+          <span class="logo"></span>
+          <span>IdxBeaver</span>
+        </a>
+        <p>A modern, native-feeling database client for the storage your browser already has.</p>
+        <div class="social">
+          <a href="#" aria-label="GitHub"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 00-3.8 23.38c.6.12.82-.26.82-.58v-2.04c-3.34.72-4.04-1.6-4.04-1.6-.54-1.38-1.34-1.74-1.34-1.74-1.08-.74.08-.72.08-.72 1.2.08 1.84 1.24 1.84 1.24 1.08 1.84 2.8 1.3 3.48 1 .1-.78.42-1.3.76-1.6-2.66-.3-5.46-1.34-5.46-5.94 0-1.32.46-2.4 1.24-3.24-.14-.3-.54-1.54.1-3.2 0 0 1-.32 3.3 1.24a11.4 11.4 0 016 0c2.3-1.56 3.3-1.24 3.3-1.24.64 1.66.24 2.9.1 3.2.78.84 1.24 1.92 1.24 3.24 0 4.62-2.8 5.62-5.48 5.92.44.38.82 1.1.82 2.22v3.28c0 .32.22.7.82.58A12 12 0 0012 .3z"/></svg></a>
+          <a href="#" aria-label="X"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7.5 8.6L23 22h-6.8l-5.3-7-6.1 7H1.7l8.1-9.2L1 2h7l4.8 6.4L18.9 2zm-2.4 18h1.9L7.6 4H5.6l10.9 16z"/></svg></a>
+          <a href="#" aria-label="Email"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/><path d="M3 7l9 6 9-6"/></svg></a>
+        </div>
+      </div>
+      <div class="foot-col">
+        <h5>Product</h5>
+        <ul>
+          <li><a>Features</a></li>
+          <li><a>Query</a></li>
+          <li><a>Changelog</a></li>
+          <li><a>Roadmap</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h5>Resources</h5>
+        <ul>
+          <li><a>Docs</a></li>
+          <li><a>GitHub</a></li>
+          <li><a>Issues</a></li>
+          <li><a>Discussions</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h5>Project</h5>
+        <ul>
+          <li><a>License · MIT</a></li>
+          <li><a>Privacy</a></li>
+          <li><a>Credits</a></li>
+          <li><a>Contact</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h5>Community</h5>
+        <ul>
+          <li><a>Discord</a></li>
+          <li><a>Newsletter</a></li>
+          <li><a>Blog</a></li>
+          <li><a>Speak at a meetup</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <div>© 2026 IdxBeaver · Built with hairlines · v1.0.0</div>
+      <form class="news" onsubmit="event.preventDefault()">
+        <input type="email" placeholder="you@company.com" />
+        <button type="submit">Subscribe</button>
+      </form>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
