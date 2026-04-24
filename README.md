@@ -109,7 +109,7 @@ npx vitest run src/shared/query.test.ts   # single test file
 
 ## Project Tracking
 
-[`PROJECT_BOARD.md`](PROJECT_BOARD.md) is the durable task board. [`BUGS.md`](BUGS.md) tracks known deferred issues with code references.
+[`docs/PROJECT_BOARD.md`](docs/PROJECT_BOARD.md) is the durable task board. [`docs/BUGS.md`](docs/BUGS.md) tracks known deferred issues with code references.
 
 ## License
 

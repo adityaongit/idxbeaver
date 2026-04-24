@@ -87,4 +87,4 @@ The MongoDB-style query runs on two levels:
 
 ### Known deferred issues
 
-See `BUGS.md` for a catalogue of known issues with code references.
+See `docs/BUGS.md` for a catalogue of known issues with code references.
