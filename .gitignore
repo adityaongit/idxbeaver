@@ -7,3 +7,8 @@ console-errors*.txt
 storage-panel-snapshot.yml
 storage-users-snapshot.yml
 storage-studio-*.png
+
+# Playwright MCP local screenshots
+.playwright-mcp/
+hero-*.png
+
