@@ -22,7 +22,7 @@ export default function Home() {
         <section className="relative">
           <Hero />
           <Divider />
-          <div className="mt-10 sm:mt-12 lg:mt-14">
+          <div className="mt-20 sm:mt-28 lg:mt-40">
             <HeroProduct />
           </div>
         </section>
