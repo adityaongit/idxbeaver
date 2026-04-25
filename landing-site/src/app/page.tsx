@@ -21,7 +21,9 @@ export default function Home() {
       <main>
         <section className="relative">
           <Hero />
-          <Divider />
+          <div className="mt-10 sm:mt-14 lg:mt-20">
+            <Divider />
+          </div>
           <div className="mt-20 sm:mt-28 lg:mt-40">
             <HeroProduct />
           </div>
