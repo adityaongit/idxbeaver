@@ -30,9 +30,26 @@ Chrome's built-in Application panel treats browser storage as an afterthought: n
 - **Multi-origin, multi-frame** — IndexedDB is partitioned per origin; IdxBeaver follows the partitioning and labels sources correctly.
 - **Dark + light themes** — pixel-aligned with TablePlus conventions; fonts, sizes, and table font (mono or sans) configurable from Settings.
 
-## Install (Developer Mode)
+## Install from zip
+
+For most users — no build step.
+
+1. Download the latest `idxbeaver-*.zip` from the [Releases](https://github.com/adityaongit/idxbeaver/releases/latest) page.
+2. Unzip it somewhere permanent (don't delete the folder afterwards — Chrome loads from it).
+3. Open `chrome://extensions`.
+4. Enable **Developer mode** (top right).
+5. Click **Load unpacked** → select the unzipped folder.
+6. Open DevTools on any page → pick the **IdxBeaver** panel.
+
+To update, download the new zip, replace the folder contents, and click **Reload** on the extension card.
+
+## Install from source
+
+For contributors and anyone who wants to build locally.
 
 ```bash
+git clone https://github.com/adityaongit/idxbeaver.git
+cd idxbeaver
 npm install
 npm run build
 ```
