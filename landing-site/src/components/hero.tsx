@@ -7,23 +7,27 @@ function HeroMark() {
       aria-hidden="true"
     >
       <div
-        className="pointer-events-none absolute inset-[-40px] lg:inset-[-60px]"
+        className="hero-glow pointer-events-none absolute inset-[-40px] lg:inset-[-60px]"
         style={{
           background:
             "radial-gradient(closest-side, rgba(138,92,246,.34), rgba(244,114,182,.14) 50%, transparent 78%)",
           filter: "blur(28px)",
         }}
       />
-      <div className="absolute inset-0 rounded-full border border-[var(--color-hair-3)]" />
-      <div className="absolute inset-[14px] rounded-full border border-[var(--color-hair-2)] lg:inset-[20px]" />
-      <div className="absolute inset-[28px] rounded-full border border-[var(--color-hair)] lg:inset-[40px]" />
+      {/* Sonar ping rings (emerge from center, fade outward) */}
+      <div className="hero-ping pointer-events-none absolute inset-0 rounded-full border border-[rgba(167,139,250,.35)]" />
+      <div className="hero-ping-2 pointer-events-none absolute inset-0 rounded-full border border-[rgba(244,114,182,.22)]" />
+      {/* Static-ish concentric rings, each breathing at its own tempo */}
+      <div className="hero-ring-1 absolute inset-0 rounded-full border border-[var(--color-hair-3)]" />
+      <div className="hero-ring-2 absolute inset-[14px] rounded-full border border-[var(--color-hair-2)] lg:inset-[20px]" />
+      <div className="hero-ring-3 absolute inset-[28px] rounded-full border border-[var(--color-hair)] lg:inset-[40px]" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/brand/logo-mark-256.png"
         alt="IdxBeaver"
         width={256}
         height={256}
-        className="relative h-[112px] w-[112px] select-none sm:h-[128px] sm:w-[128px] lg:h-[184px] lg:w-[184px]"
+        className="hero-mark relative h-[112px] w-[112px] select-none sm:h-[128px] sm:w-[128px] lg:h-[184px] lg:w-[184px]"
         style={{
           filter:
             "drop-shadow(0 14px 32px rgba(138,92,246,.45)) drop-shadow(0 4px 10px rgba(0,0,0,.55))",

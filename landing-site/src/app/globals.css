@@ -305,6 +305,42 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
+   Hero mark — concentric rings breathe + glow pulse, sonar ping
+   ────────────────────────────────────────────────────────────── */
+@keyframes hero-ring-breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.022); opacity: .6; }
+}
+@keyframes hero-glow-pulse {
+  0%, 100% { opacity: .85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@keyframes hero-ping {
+  0% { transform: scale(.55); opacity: 0; }
+  12% { opacity: .55; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+@keyframes hero-mark-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.hero-ring-1 { animation: hero-ring-breathe 7s var(--ease) infinite; }
+.hero-ring-2 { animation: hero-ring-breathe 5.5s var(--ease) infinite; animation-delay: -1.6s; }
+.hero-ring-3 { animation: hero-ring-breathe 4.4s var(--ease) infinite; animation-delay: -.8s; }
+.hero-glow   { animation: hero-glow-pulse 6s var(--ease) infinite; transform-origin: center; }
+.hero-ping   { animation: hero-ping 4.6s var(--ease) infinite; }
+.hero-ping-2 { animation: hero-ping 4.6s var(--ease) infinite; animation-delay: -2.3s; }
+.hero-mark   { animation: hero-mark-float 6.5s var(--ease) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-ring-1, .hero-ring-2, .hero-ring-3,
+  .hero-glow, .hero-ping, .hero-ping-2, .hero-mark {
+    animation: none;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
    Compare slider — light ↔ dark product screenshots
    ────────────────────────────────────────────────────────────── */
 .compare {
