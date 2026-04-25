@@ -14,20 +14,34 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-const SITE_URL = "https://idxbeaver.netlify.app";
+// Resolve the deployed origin at build time so canonical / og:url match the host.
+// Order: explicit override → Netlify → Vercel (prod, then preview) → localhost.
+function resolveSiteUrl(): string {
+  const fromEnv =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.URL || // Netlify production
+    process.env.DEPLOY_PRIME_URL || // Netlify deploy previews
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL;
+  if (fromEnv) return fromEnv.startsWith("http") ? fromEnv : `https://${fromEnv}`;
+  return "http://localhost:3000";
+}
+
+const SITE_URL = resolveSiteUrl();
 const TITLE = "IdxBeaver — A database client for browser storage";
 const DESCRIPTION =
-  "A native-feeling database client for IndexedDB, LocalStorage, Sessions, Cookies and Cache Storage — inside Chrome DevTools. Dense grid. Mongo-style queries. Row inspector. Schema inference.";
+  "Native-feeling database client for IndexedDB, LocalStorage, Sessions, Cookies and Cache — inside Chrome DevTools. Mongo-style queries, dense grid.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: DESCRIPTION,
   applicationName: "IdxBeaver",
+  alternates: { canonical: "/" },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    url: SITE_URL,
+    url: "/",
     siteName: "IdxBeaver",
     type: "website",
   },

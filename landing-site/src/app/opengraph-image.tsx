@@ -7,11 +7,32 @@ export const alt = "IdxBeaver — A database client for browser storage";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+// Google's CSS endpoint only returns TTF/OTF (Satori-compatible) when the
+// User-Agent is *not* a modern browser. With a modern UA it serves woff2,
+// which Satori can't parse — hence the explicit legacy UA.
+async function loadInter(weight: 500 | 600): Promise<ArrayBuffer> {
+  const cssUrl = `https://fonts.googleapis.com/css2?family=Inter:wght@${weight}&display=swap`;
+  const css = await fetch(cssUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6) AppleWebKit/533.19.4 (KHTML, like Gecko) Version/5.0.3 Safari/533.19.4",
+    },
+  }).then((r) => r.text());
+  const match = css.match(/src:\s*url\((.+?)\)\s*format\(['"](?:opentype|truetype)['"]\)/);
+  if (!match) throw new Error(`Could not extract Inter ${weight} URL from CSS`);
+  return await fetch(match[1]).then((r) => r.arrayBuffer());
+}
+
 export default async function OpengraphImage() {
   const logo = await readFile(
     join(process.cwd(), "public", "brand", "logo-mark-512.png"),
   );
   const logoSrc = `data:image/png;base64,${logo.toString("base64")}`;
+
+  const [interMedium, interSemiBold] = await Promise.all([
+    loadInter(500),
+    loadInter(600),
+  ]);
 
   return new ImageResponse(
     (
@@ -25,7 +46,7 @@ export default async function OpengraphImage() {
           background:
             "radial-gradient(circle at 20% 20%, #1a0e2e 0%, #08090a 60%)",
           color: "#fafafa",
-          fontFamily: "Geist",
+          fontFamily: "Inter",
         }}
       >
         <img
@@ -40,7 +61,7 @@ export default async function OpengraphImage() {
             style={{
               display: "flex",
               fontSize: 96,
-              fontWeight: 700,
+              fontWeight: 600,
               letterSpacing: "-0.04em",
               lineHeight: 1,
             }}
@@ -51,6 +72,7 @@ export default async function OpengraphImage() {
           <div
             style={{
               fontSize: 36,
+              fontWeight: 500,
               color: "#a3a3a3",
               lineHeight: 1.3,
               maxWidth: 600,
@@ -80,6 +102,12 @@ export default async function OpengraphImage() {
         </div>
       </div>
     ),
-    { ...size },
+    {
+      ...size,
+      fonts: [
+        { name: "Inter", data: interMedium, weight: 500, style: "normal" },
+        { name: "Inter", data: interSemiBold, weight: 600, style: "normal" },
+      ],
+    },
   );
 }
