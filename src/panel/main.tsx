@@ -1268,13 +1268,14 @@ function App() {
       >
         {/* Left: brand + db picker + query toggle */}
         <div className="flex shrink-0 items-center gap-1">
-          <span
-            className="grid h-[22px] w-[22px] place-items-center rounded-[4px] text-[9px] font-bold tracking-wider"
-            style={{ backgroundColor: "var(--foreground)", color: "var(--background)" }}
+          <img
+            src={chrome.runtime.getURL("public/icons/icon-48.png")}
+            alt="IdxBeaver"
             title="IdxBeaver"
-          >
-            IB
-          </span>
+            width={22}
+            height={22}
+            className="h-[22px] w-[22px] shrink-0 select-none"
+          />
           <Button
             size="icon-xs"
             variant="ghost"
