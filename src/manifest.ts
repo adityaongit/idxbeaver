@@ -8,6 +8,12 @@ export default defineManifest({
   version: pkg.version,
   minimum_chrome_version: "120",
   devtools_page: "devtools.html",
+  icons: {
+    "16": "public/icons/icon-16.png",
+    "32": "public/icons/icon-32.png",
+    "48": "public/icons/icon-48.png",
+    "128": "public/icons/icon-128.png"
+  },
   background: {
     service_worker: "src/background/index.ts",
     type: "module"
