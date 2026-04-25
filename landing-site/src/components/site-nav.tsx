@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,11 +10,11 @@ function Logo() {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src="/brand/logo-mark-64.png"
+      src="/brand/logo-mark-128.png"
       alt=""
-      width={26}
-      height={26}
-      className="h-[26px] w-[26px] shrink-0 select-none"
+      width={28}
+      height={28}
+      className="h-[28px] w-[28px] shrink-0 select-none"
     />
   );
 }
@@ -43,6 +44,11 @@ const LINKS = [
 
 export function SiteNav() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Lock body scroll while drawer open + close on Escape
   useEffect(() => {
@@ -59,128 +65,139 @@ export function SiteNav() {
     };
   }, [open]);
 
-  return (
-    <nav className="sticky top-0 z-50 border-b border-[var(--color-hair)] bg-[rgba(8,9,10,.85)] nav-glass">
-      <div className="mx-auto flex h-[56px] max-w-[1360px] items-center justify-between px-5 sm:px-6">
-        <Brand />
-
-        {/* Desktop links */}
-        <div className="mx-auto hidden gap-7 text-[13.5px] font-[450] text-[var(--color-ink-dim)] lg:flex">
+  const drawer = (
+    <div
+      className={cn(
+        "fixed inset-0 z-[60] lg:hidden",
+        open ? "pointer-events-auto" : "pointer-events-none",
+      )}
+      aria-hidden={!open}
+    >
+      <div
+        className={cn(
+          "absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300",
+          open ? "opacity-100" : "opacity-0",
+        )}
+        onClick={() => setOpen(false)}
+      />
+      <div
+        className={cn(
+          "absolute right-0 top-0 flex h-full w-[min(86vw,360px)] flex-col border-l border-[var(--color-hair-2)] bg-[var(--color-bg-2)] shadow-2xl transition-transform duration-300",
+          open ? "translate-x-0" : "translate-x-full",
+        )}
+      >
+        <div className="flex h-[56px] shrink-0 items-center justify-between border-b border-[var(--color-hair)] px-5">
+          <Brand />
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] text-[var(--color-ink)] hover:bg-white/[.06]"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
           {LINKS.map((l) => (
             <a
               key={l.href}
               href={l.href}
-              className="py-1 transition-colors hover:text-[var(--color-ink)]"
+              onClick={() => setOpen(false)}
+              className="rounded-[8px] px-3 py-3 text-[15px] font-medium text-[var(--color-ink-2)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
             >
               {l.label}
             </a>
           ))}
-        </div>
-
-        {/* Desktop CTAs */}
-        <div className="hidden items-center gap-1 lg:flex">
-          <Button as="a" href="https://github.com/adityaongit/idxbeaver#readme" variant="ghost">
-            Docs
-          </Button>
-          <Button as="a" href="https://github.com/adityaongit/idxbeaver" variant="ghost">
-            GitHub
-          </Button>
-          <Button as="a" href="#install" variant="primary">
-            Add to Chrome
-          </Button>
-        </div>
-
-        {/* Mobile CTA + hamburger */}
-        <div className="flex items-center gap-2 lg:hidden">
-          <Button as="a" href="#install" variant="primary" className="hidden sm:inline-flex">
-            Add to Chrome
-          </Button>
-          <button
-            type="button"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-            className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] border border-[var(--color-hair-2)] bg-white/[.02] text-[var(--color-ink)] transition-colors hover:bg-white/[.06]"
+          <div className="my-3 h-px bg-[var(--color-hair)]" />
+          <a
+            href="https://github.com/adityaongit/idxbeaver#readme"
+            onClick={() => setOpen(false)}
+            className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              {open ? (
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-              ) : (
-                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-              )}
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile drawer */}
-      <div
-        className={cn(
-          "fixed inset-0 z-40 lg:hidden",
-          open ? "pointer-events-auto" : "pointer-events-none"
-        )}
-        aria-hidden={!open}
-      >
-        <div
-          className={cn(
-            "absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300",
-            open ? "opacity-100" : "opacity-0"
-          )}
-          onClick={() => setOpen(false)}
-        />
-        <div
-          className={cn(
-            "absolute right-0 top-0 h-full w-[min(86vw,360px)] border-l border-[var(--color-hair-2)] bg-[var(--color-bg-2)] shadow-2xl transition-transform duration-300",
-            open ? "translate-x-0" : "translate-x-full"
-          )}
-        >
-          <div className="flex h-[56px] items-center justify-between border-b border-[var(--color-hair)] px-5">
-            <Brand />
-            <button
-              type="button"
-              aria-label="Close menu"
+            Docs
+          </a>
+          <a
+            href="https://github.com/adityaongit/idxbeaver"
+            onClick={() => setOpen(false)}
+            className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
+          >
+            GitHub
+          </a>
+          <div className="mt-3">
+            <Button
+              as="a"
+              href="#install"
+              variant="primary"
+              size="lg"
+              className="w-full"
               onClick={() => setOpen(false)}
-              className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] text-[var(--color-ink)] hover:bg-white/[.06]"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-              </svg>
-            </button>
+              Add to Chrome
+            </Button>
           </div>
-          <nav className="flex flex-col gap-1 p-4">
+        </nav>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <nav className="sticky top-0 z-50 border-b border-[var(--color-hair)] bg-[rgba(8,9,10,.85)] nav-glass">
+        <div className="mx-auto flex h-[56px] max-w-[1360px] items-center justify-between px-5 sm:px-6">
+          <Brand />
+
+          {/* Desktop links */}
+          <div className="mx-auto hidden gap-7 text-[13.5px] font-[450] text-[var(--color-ink-dim)] lg:flex">
             {LINKS.map((l) => (
               <a
                 key={l.href}
                 href={l.href}
-                onClick={() => setOpen(false)}
-                className="rounded-[8px] px-3 py-3 text-[15px] font-medium text-[var(--color-ink-2)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
+                className="py-1 transition-colors hover:text-[var(--color-ink)]"
               >
                 {l.label}
               </a>
             ))}
-            <div className="my-3 h-px bg-[var(--color-hair)]" />
-            <a
-              href="https://github.com/adityaongit/idxbeaver#readme"
-              onClick={() => setOpen(false)}
-              className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
-            >
+          </div>
+
+          {/* Desktop CTAs */}
+          <div className="hidden items-center gap-1 lg:flex">
+            <Button as="a" href="https://github.com/adityaongit/idxbeaver#readme" variant="ghost">
               Docs
-            </a>
-            <a
-              href="https://github.com/adityaongit/idxbeaver"
-              onClick={() => setOpen(false)}
-              className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
-            >
+            </Button>
+            <Button as="a" href="https://github.com/adityaongit/idxbeaver" variant="ghost">
               GitHub
-            </a>
-            <div className="mt-3">
-              <Button as="a" href="#install" variant="primary" size="lg" className="w-full">
-                Add to Chrome
-              </Button>
-            </div>
-          </nav>
+            </Button>
+            <Button as="a" href="#install" variant="primary">
+              Add to Chrome
+            </Button>
+          </div>
+
+          {/* Mobile CTA + hamburger */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <Button as="a" href="#install" variant="primary" className="hidden sm:inline-flex">
+              Add to Chrome
+            </Button>
+            <button
+              type="button"
+              aria-label={open ? "Close menu" : "Open menu"}
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+              className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] border border-[var(--color-hair-2)] bg-white/[.02] text-[var(--color-ink)] transition-colors hover:bg-white/[.06]"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                {open ? (
+                  <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                ) : (
+                  <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                )}
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+      {mounted ? createPortal(drawer, document.body) : null}
+    </>
   );
 }

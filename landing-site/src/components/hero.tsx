@@ -2,7 +2,35 @@ import { Button } from "@/components/ui/button";
 
 export function Hero() {
   return (
-    <div className="mx-auto max-w-[960px] px-5 pt-14 pb-10 text-center sm:pt-20 lg:pt-24">
+    <div className="mx-auto max-w-[960px] px-5 pt-12 pb-10 text-center sm:pt-16 lg:pt-20">
+      <div
+        className="r-init ri1 relative mx-auto mb-8 flex h-[160px] w-[160px] items-center justify-center sm:mb-10 sm:h-[180px] sm:w-[180px]"
+        aria-hidden="true"
+      >
+        <div
+          className="pointer-events-none absolute inset-[-40px]"
+          style={{
+            background:
+              "radial-gradient(closest-side, rgba(138,92,246,.34), rgba(244,114,182,.14) 50%, transparent 78%)",
+            filter: "blur(28px)",
+          }}
+        />
+        <div className="absolute inset-0 rounded-full border border-[var(--color-hair-3)]" />
+        <div className="absolute inset-[14px] rounded-full border border-[var(--color-hair-2)]" />
+        <div className="absolute inset-[28px] rounded-full border border-[var(--color-hair)]" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/logo-mark-256.png"
+          alt="IdxBeaver"
+          width={256}
+          height={256}
+          className="relative h-[112px] w-[112px] select-none sm:h-[128px] sm:w-[128px]"
+          style={{
+            filter:
+              "drop-shadow(0 14px 32px rgba(138,92,246,.45)) drop-shadow(0 4px 10px rgba(0,0,0,.55))",
+          }}
+        />
+      </div>
       <h1
         className="r-init ri2 mx-auto font-sans font-semibold text-[var(--color-ink)]"
         style={{

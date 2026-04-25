@@ -2,11 +2,11 @@ function Logo() {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src="/brand/logo-mark-64.png"
+      src="/brand/logo-mark-128.png"
       alt=""
-      width={26}
-      height={26}
-      className="h-[26px] w-[26px] shrink-0 select-none"
+      width={28}
+      height={28}
+      className="h-[28px] w-[28px] shrink-0 select-none"
     />
   );
 }
