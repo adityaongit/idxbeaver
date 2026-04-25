@@ -14,11 +14,28 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+const SITE_URL = "https://idxbeaver.netlify.app";
+const TITLE = "IdxBeaver — A database client for browser storage";
+const DESCRIPTION =
+  "A native-feeling database client for IndexedDB, LocalStorage, Sessions, Cookies and Cache Storage — inside Chrome DevTools. Dense grid. Mongo-style queries. Row inspector. Schema inference.";
+
 export const metadata: Metadata = {
-  title: "IdxBeaver — A database client for browser storage",
-  description:
-    "A native-feeling database client for IndexedDB, LocalStorage, Sessions, Cookies and Cache Storage — inside Chrome DevTools. Dense grid. Mongo-style queries. Row inspector. Schema inference.",
-  icons: { icon: "/favicon.svg" },
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: "IdxBeaver",
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE_URL,
+    siteName: "IdxBeaver",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

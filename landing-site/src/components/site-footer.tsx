@@ -1,22 +1,13 @@
 function Logo() {
   return (
-    <span
-      className="relative h-[22px] w-[22px] shrink-0 rounded-[6px]"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 25% 20%, rgba(255,255,255,.35), transparent 55%), linear-gradient(135deg, #F472B6 0%, #8A5CF6 100%)",
-        boxShadow:
-          "0 0 0 1px rgba(255,255,255,.12), 0 2px 10px -2px rgba(244,114,182,.5)",
-      }}
-    >
-      <span
-        className="absolute inset-[5px] rounded-[2px]"
-        style={{
-          background:
-            "linear-gradient(rgba(255,255,255,.95),rgba(255,255,255,.95)) 0 20%/100% 1px no-repeat,linear-gradient(rgba(255,255,255,.85),rgba(255,255,255,.85)) 0 55%/100% 1px no-repeat,linear-gradient(rgba(255,255,255,.75),rgba(255,255,255,.75)) 0 90%/100% 1px no-repeat",
-        }}
-      />
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/logo-mark-64.png"
+      alt=""
+      width={26}
+      height={26}
+      className="h-[26px] w-[26px] shrink-0 select-none"
+    />
   );
 }
 
