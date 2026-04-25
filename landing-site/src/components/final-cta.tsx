@@ -23,12 +23,19 @@ export function FinalCta() {
         >
           Treat browser storage like a <span className="ir">real database.</span>
         </h2>
-        <p className="mx-auto mt-5 max-w-[520px] text-[15px] text-[var(--color-ink-dim)] sm:mt-6 sm:text-[18px]">
-          Install the extension, open DevTools. That&apos;s the whole setup.
+        <p className="mx-auto mt-5 max-w-[560px] text-[15px] text-[var(--color-ink-dim)] sm:mt-6 sm:text-[18px]">
+          While we wait for the Chrome Web Store, grab the latest build and load it
+          unpacked. Two minutes, then open DevTools.
         </p>
         <div className="mt-9 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
-          <Button as="a" href="#" variant="primary" size="lg" className="w-full sm:w-auto">
-            Add to Chrome
+          <Button
+            as="a"
+            href="https://github.com/adityaongit/idxbeaver/releases/latest"
+            variant="primary"
+            size="lg"
+            className="w-full sm:w-auto"
+          >
+            Download latest .zip
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path
                 d="M3 6h6M6 3l3 3-3 3"
@@ -39,8 +46,14 @@ export function FinalCta() {
               />
             </svg>
           </Button>
-          <Button as="a" href="#" variant="outline" size="lg" className="w-full sm:w-auto">
-            Build from source
+          <Button
+            as="a"
+            href="https://github.com/adityaongit/idxbeaver#install-from-zip"
+            variant="outline"
+            size="lg"
+            className="w-full sm:w-auto"
+          >
+            Install guide
           </Button>
         </div>
       </div>

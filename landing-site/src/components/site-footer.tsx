@@ -36,10 +36,38 @@ export function SiteFooter() {
           </div>
           <FooterCol
             heading="Product"
-            links={["Features", "Query", "Changelog", "Roadmap"]}
+            links={[
+              { label: "Features", href: "#features" },
+              { label: "Query", href: "#query" },
+              { label: "Install", href: "#install" },
+              {
+                label: "Releases",
+                href: "https://github.com/adityaongit/idxbeaver/releases",
+              },
+            ]}
           />
-          <FooterCol heading="Resources" links={["Docs", "GitHub", "Issues"]} />
-          <FooterCol heading="Project" links={["License · MIT", "Privacy · none", "Contact"]} />
+          <FooterCol
+            heading="Resources"
+            links={[
+              { label: "Docs", href: "https://github.com/adityaongit/idxbeaver#readme" },
+              { label: "GitHub", href: "https://github.com/adityaongit/idxbeaver" },
+              { label: "Issues", href: "https://github.com/adityaongit/idxbeaver/issues" },
+            ]}
+          />
+          <FooterCol
+            heading="Project"
+            links={[
+              {
+                label: "License · MIT",
+                href: "https://github.com/adityaongit/idxbeaver/blob/main/LICENSE",
+              },
+              { label: "Privacy · none", href: "#" },
+              {
+                label: "Contact",
+                href: "https://github.com/adityaongit/idxbeaver/issues/new",
+              },
+            ]}
+          />
         </div>
         <div className="mono flex flex-wrap justify-between gap-4 border-t border-[var(--color-hair)] pt-6 text-[11px] text-[var(--color-ink-faint)]">
           <div>© 2026 IdxBeaver · v1.0.0</div>
@@ -50,7 +78,9 @@ export function SiteFooter() {
   );
 }
 
-function FooterCol({ heading, links }: { heading: string; links: string[] }) {
+type FooterLink = { label: string; href: string };
+
+function FooterCol({ heading, links }: { heading: string; links: FooterLink[] }) {
   return (
     <div>
       <h5 className="mono mb-4 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-ink-mute)]">
@@ -59,10 +89,10 @@ function FooterCol({ heading, links }: { heading: string; links: string[] }) {
       <ul className="list-none">
         {links.map((l) => (
           <li
-            key={l}
+            key={l.label}
             className="py-[5px] text-[13.5px] text-[var(--color-ink-dim)] transition-colors hover:text-[var(--color-ink)]"
           >
-            <a href="#">{l}</a>
+            <a href={l.href}>{l.label}</a>
           </li>
         ))}
       </ul>

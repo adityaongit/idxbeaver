@@ -88,10 +88,10 @@ export function SiteNav() {
 
         {/* Desktop CTAs */}
         <div className="hidden items-center gap-1 lg:flex">
-          <Button as="a" href="#" variant="ghost">
+          <Button as="a" href="https://github.com/adityaongit/idxbeaver#readme" variant="ghost">
             Docs
           </Button>
-          <Button as="a" href="#" variant="ghost">
+          <Button as="a" href="https://github.com/adityaongit/idxbeaver" variant="ghost">
             GitHub
           </Button>
           <Button as="a" href="#install" variant="primary">
@@ -169,14 +169,14 @@ export function SiteNav() {
             ))}
             <div className="my-3 h-px bg-[var(--color-hair)]" />
             <a
-              href="#"
+              href="https://github.com/adityaongit/idxbeaver#readme"
               onClick={() => setOpen(false)}
               className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
             >
               Docs
             </a>
             <a
-              href="#"
+              href="https://github.com/adityaongit/idxbeaver"
               onClick={() => setOpen(false)}
               className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
             >
