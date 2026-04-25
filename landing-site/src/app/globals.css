@@ -321,8 +321,8 @@
   100% { transform: scale(1.55); opacity: 0; }
 }
 @keyframes hero-mark-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  0%, 100% { transform: translate(var(--hero-mark-shift, -6px), 0); }
+  50% { transform: translate(var(--hero-mark-shift, -6px), -3px); }
 }
 
 .hero-ring-1 { animation: hero-ring-breathe 7s var(--ease) infinite; }
