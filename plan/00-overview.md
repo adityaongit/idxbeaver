@@ -2,7 +2,7 @@
 
 ## Context
 
-Storage Studio is currently ~45% of the v1 PRD. The session that produced this
+IdxBeaver is currently ~45% of the v1 PRD. The session that produced this
 plan bundle was triggered by a gap audit: the team wants to know exactly what
 still needs building to marry the PRD and the TablePlus UI we are modelling.
 This overview groups the per-feature plans into coherent delivery phases so
@@ -61,7 +61,7 @@ roughly two engineers.
 - **Preferences store** — new `src/shared/prefs.ts` wrapping `chrome.storage.local`
   keyed by origin + global scope. Plans 05, 06, and parts of 10/13 all write here.
 - **Persistent query store** — new `src/shared/persisted.ts` using a single internal
-  IndexedDB database (`storage-studio`) with stores `history`, `saved_queries`,
+  IndexedDB database (`idxbeaver`) with stores `history`, `saved_queries`,
   `snapshots`. Plans 06 and 15 share this.
 - **Serialization v2** — `src/shared/serialize.ts` upgrade documented once in plan 19
   and referenced from plans 11, 12, 15, 16.
@@ -102,7 +102,7 @@ The build passes if every step completes without console errors.
 13. Take a snapshot of a store → restore overwrites the store after typed confirmation (Plans 15, 17).
 14. Open Cookies tab → edit a cookie → reload page → cookie persists (Plan 11).
 15. Open Cache Storage → preview a JSON response body (Plan 12).
-16. Export the whole origin as `.storage-studio.zip`, import on a fresh origin, values round-trip (Plan 16).
+16. Export the whole origin as `.idxbeaver.zip`, import on a fresh origin, values round-trip (Plan 16).
 17. Force-terminate the service worker mid-query (chrome://serviceworker-internals) → UI recovers and retries (Plan 18).
 18. `npm run test` green; `npm run build` produces a bundle ≤ 2 MB zipped.
 

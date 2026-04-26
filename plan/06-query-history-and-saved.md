@@ -12,7 +12,7 @@ persistence around it.
 ## Files to change
 
 - New file: `src/shared/persisted.ts` — wraps an extension-owned IndexedDB
-  database named `storage-studio` with object stores:
+  database named `idxbeaver` with object stores:
   - `history` (keyPath `id`, autoIncrement; indexes: `origin`, `createdAt`)
   - `saved_queries` (keyPath `id`; indexes: `origin`, `updatedAt`)
   - `snapshots` (keyPath `id`; indexes: `origin`, `createdAt`) — used by Plan 15.

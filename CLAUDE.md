@@ -62,7 +62,7 @@ Inspected page (injected inline — no content script file)
 | `indexed.ts` | `keyStrategy()` — infers whether a store uses auto, inline, or out-of-line keys from `IndexedDbStoreInfo`. Used when constructing draft rows. |
 | `schemaInfer.ts` | `inferSchema(rows)` — samples up to 500 rows and returns `InferredColumn[]` (name, type, nullable, coverage). Used to power autocomplete and the Structure view. |
 | `schemaExport.ts` | `toTypeScript()` / `toDexieSchema()` — exports inferred schema as code. |
-| `persisted.ts` | Extension-owned IndexedDB (`storage-studio` DB) for query history and saved queries. History is auto-trimmed to 100 entries per origin. |
+| `persisted.ts` | Extension-owned IndexedDB (`idxbeaver` DB) for query history and saved queries. History is auto-trimmed to 100 entries per origin. |
 | `prefs.ts` | `Prefs` type and `chrome.storage.local` helpers (`getPrefs`, `setPrefs`, `watchPrefs`). Key: `prefs.v1`. |
 | `serialize.ts` | Utilities for round-tripping `SerializedCell` values. |
 | `wire.ts` | Versioned wire format (`WIRE_VERSION = 2`) with `$t`-tagged envelopes for round-tripping arbitrary JS values (BigInt, Date, RegExp, Map, Set, TypedArrays, etc.). All persisted artefacts (snapshots, archive manifests) are stamped with this version — bump it only with a migration. |

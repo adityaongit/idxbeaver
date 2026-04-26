@@ -42,7 +42,7 @@ export interface SnapshotRowChunk {
 }
 ```
 
-- Stored in the internal `storage-studio` IDB.
+- Stored in the internal `idxbeaver` IDB.
 - `snapshots` holds manifests; `snapshot_chunks` holds body rows (50k rows per
   chunk) to keep individual transactions reasonable.
 - Deleting a manifest deletes its chunks.

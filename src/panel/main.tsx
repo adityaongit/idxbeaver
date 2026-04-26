@@ -1125,7 +1125,7 @@ function App() {
         mimeType = "application/json";
         ext = "json";
     }
-    const fileName = `storage-studio-${Date.now()}.${ext}`;
+    const fileName = `idxbeaver-${Date.now()}.${ext}`;
     downloadBlob(new Blob([content], { type: mimeType }), fileName);
     setNotice({ tone: "success", message: `Exported ${fileName}.` });
   };
@@ -2518,21 +2518,21 @@ function FieldInput({
 }
 
 const inspectorJsonStyles = {
-  container: "storage-studio-json-tree",
-  childFieldsContainer: "storage-studio-json-tree__children",
-  basicChildStyle: "storage-studio-json-tree__row",
-  label: "storage-studio-json-tree__label",
-  clickableLabel: "storage-studio-json-tree__label storage-studio-json-tree__label--clickable",
-  collapseIcon: "storage-studio-json-tree__chevron storage-studio-json-tree__chevron--collapse",
-  expandIcon: "storage-studio-json-tree__chevron storage-studio-json-tree__chevron--expand",
-  collapsedContent: "storage-studio-json-tree__collapsed",
-  nullValue: "storage-studio-json-tree__null",
-  undefinedValue: "storage-studio-json-tree__null",
-  numberValue: "storage-studio-json-tree__number",
-  stringValue: "storage-studio-json-tree__string",
-  booleanValue: "storage-studio-json-tree__boolean",
-  otherValue: "storage-studio-json-tree__other",
-  punctuation: "storage-studio-json-tree__punctuation"
+  container: "idxbeaver-json-tree",
+  childFieldsContainer: "idxbeaver-json-tree__children",
+  basicChildStyle: "idxbeaver-json-tree__row",
+  label: "idxbeaver-json-tree__label",
+  clickableLabel: "idxbeaver-json-tree__label idxbeaver-json-tree__label--clickable",
+  collapseIcon: "idxbeaver-json-tree__chevron idxbeaver-json-tree__chevron--collapse",
+  expandIcon: "idxbeaver-json-tree__chevron idxbeaver-json-tree__chevron--expand",
+  collapsedContent: "idxbeaver-json-tree__collapsed",
+  nullValue: "idxbeaver-json-tree__null",
+  undefinedValue: "idxbeaver-json-tree__null",
+  numberValue: "idxbeaver-json-tree__number",
+  stringValue: "idxbeaver-json-tree__string",
+  booleanValue: "idxbeaver-json-tree__boolean",
+  otherValue: "idxbeaver-json-tree__other",
+  punctuation: "idxbeaver-json-tree__punctuation"
 } as const;
 
 function JsonDocumentView({ value }: { value: SerializableValue }) {
@@ -2816,7 +2816,7 @@ function openPort(
   portRef: React.MutableRefObject<chrome.runtime.Port | null>,
   pendingRef: React.MutableRefObject<Map<string, PendingRequest>>
 ): chrome.runtime.Port {
-  const port = chrome.runtime.connect({ name: "storage-studio-panel" });
+  const port = chrome.runtime.connect({ name: "idxbeaver-panel" });
   portRef.current = port;
 
   port.onMessage.addListener((reply: PanelReply) => {

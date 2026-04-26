@@ -1,4 +1,4 @@
-# Storage Studio Project Board
+# IdxBeaver Project Board
 
 Last updated: 2026-04-20
 
@@ -50,8 +50,8 @@ No blocked tasks.
 - [x] `E1-T1` Build DevTools panel shell
   - Epic: DevTools Panel Shell
   - Completed: 2026-04-20
-  - Verification: Playwright screenshot `storage-studio-panel.png`; no console errors after favicon fix.
-  - Result: Panel renders three-pane Storage Studio workspace with overview, empty/loading/error, and inspector states.
+  - Verification: Playwright screenshot `idxbeaver-panel.png`; no console errors after favicon fix.
+  - Result: Panel renders three-pane IdxBeaver workspace with overview, empty/loading/error, and inspector states.
 - [x] `E2-T1` Implement inspected-tab storage RPC
   - Epic: Inspected-Tab Storage RPC
   - Completed: 2026-04-20
@@ -60,7 +60,7 @@ No blocked tasks.
 - [x] `E3-T1` IndexedDB discovery and browsing
   - Epic: IndexedDB Discovery and Browsing
   - Completed: 2026-04-20
-  - Verification: Playwright screenshot `storage-studio-users.png`; `npm run build`
+  - Verification: Playwright screenshot `idxbeaver-users.png`; `npm run build`
   - Result: Databases, stores, schema metadata, counts, and sampled records render in the panel.
 - [x] `E4-T1` IndexedDB editing
   - Epic: Editing
@@ -70,7 +70,7 @@ No blocked tasks.
 - [x] `E5-T1` SELECT query MVP
   - Epic: Query MVP
   - Completed: 2026-04-20
-  - Verification: `npm test`; Playwright screenshot `storage-studio-query-inspector.png`
+  - Verification: `npm test`; Playwright screenshot `idxbeaver-query-inspector.png`
   - Result: Users can run a SELECT-only query subset and see result rows plus scan/index plan text.
 - [x] `E6-T1` LocalStorage and SessionStorage
   - Epic: LocalStorage and SessionStorage

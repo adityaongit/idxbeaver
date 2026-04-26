@@ -47,7 +47,7 @@ export interface SnapshotRowChunk {
   rows: IndexedDbRecord[];
 }
 
-const DB_NAME = "storage-studio";
+const DB_NAME = "idxbeaver";
 const DB_VERSION = 2;
 const HISTORY_LIMIT = 100;
 

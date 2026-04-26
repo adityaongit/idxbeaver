@@ -456,36 +456,36 @@
  * JSON tree (inspector document mode)
  * -------------------------------------------------------------------------- */
 
-.storage-studio-json-preview {
+.idxbeaver-json-preview {
   color: var(--foreground);
 }
 
-.storage-studio-json-tree {
+.idxbeaver-json-tree {
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.55;
   color: var(--foreground);
 }
 
-.storage-studio-json-tree__children {
+.idxbeaver-json-tree__children {
   margin: 0;
   padding: 0 0 0 0.75rem;
 }
 
-.storage-studio-json-tree__row {
+.idxbeaver-json-tree__row {
   padding: 0.0625rem 0;
 }
 
-.storage-studio-json-tree__label {
+.idxbeaver-json-tree__label {
   color: var(--muted-foreground);
   margin-right: 0.5rem;
 }
 
-.storage-studio-json-tree__label--clickable {
+.idxbeaver-json-tree__label--clickable {
   cursor: pointer;
 }
 
-.storage-studio-json-tree__chevron {
+.idxbeaver-json-tree__chevron {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -494,40 +494,40 @@
   font-size: 10px;
 }
 
-.storage-studio-json-tree__chevron::after {
+.idxbeaver-json-tree__chevron::after {
   content: "›";
 }
 
-.storage-studio-json-tree__chevron--collapse::after {
+.idxbeaver-json-tree__chevron--collapse::after {
   transform: rotate(90deg);
 }
 
-.storage-studio-json-tree__collapsed,
-.storage-studio-json-tree__punctuation,
-.storage-studio-json-tree__other {
+.idxbeaver-json-tree__collapsed,
+.idxbeaver-json-tree__punctuation,
+.idxbeaver-json-tree__other {
   color: var(--muted-foreground);
 }
 
-.storage-studio-json-tree button {
+.idxbeaver-json-tree button {
   font-family: inherit;
 }
 
-.storage-studio-json-tree__string,
+.idxbeaver-json-tree__string,
 .text-json-string {
   color: var(--json-string);
 }
 
-.storage-studio-json-tree__number,
+.idxbeaver-json-tree__number,
 .text-json-number {
   color: var(--json-number);
 }
 
-.storage-studio-json-tree__boolean,
+.idxbeaver-json-tree__boolean,
 .text-json-boolean {
   color: var(--json-boolean);
 }
 
-.storage-studio-json-tree__null,
+.idxbeaver-json-tree__null,
 .text-json-null {
   color: var(--json-null);
 }

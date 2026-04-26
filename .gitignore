@@ -6,7 +6,7 @@ dist/
 console-errors*.txt
 storage-panel-snapshot.yml
 storage-users-snapshot.yml
-storage-studio-*.png
+idxbeaver-*.png
 
 # Playwright MCP local screenshots
 .playwright-mcp/

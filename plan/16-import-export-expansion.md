@@ -24,7 +24,7 @@ Today we only export the current view as JSON or CSV. PRD F-5 calls for:
 - **SQL-insert** — `INSERT INTO "<store>" ("col", …) VALUES (…);` per row.
   Use JSON-encoded strings for non-primitive cells. Clearly a best-effort
   format; safe to re-parse only by `src/shared/import.ts`.
-- **Origin archive** — `.storage-studio.zip` containing:
+- **Origin archive** — `.idxbeaver.zip` containing:
   - `manifest.json` with origin, surface list, version.
   - `indexeddb/<db>/<store>.ndjson` per store.
   - `localStorage.json`, `sessionStorage.json`, `cookies.json`.
