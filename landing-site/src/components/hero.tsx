@@ -42,7 +42,7 @@ export function Hero() {
     <div className="mx-auto flex min-h-[calc(100svh-57px)] max-w-[960px] flex-col justify-center px-5 py-12 sm:py-16 lg:max-w-[1180px] lg:py-20">
       <div className="flex flex-col items-center gap-8 text-center sm:gap-10 lg:flex-row lg:items-center lg:justify-between lg:gap-14 lg:text-left">
         {/* Mobile: mark sits above the headline. Desktop: order swaps so text is on the left. */}
-        <div className="order-1 lg:order-2 lg:shrink-0">
+        <div className="order-1 hidden lg:order-2 lg:block lg:shrink-0">
           <HeroMark />
         </div>
 
