@@ -148,7 +148,7 @@ function App() {
   const [databasePickerOpen, setDatabasePickerOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(true);
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(true);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTER_STATE);
@@ -1237,6 +1237,12 @@ function App() {
     );
   }, [discovery, tableResult?.columns]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 2500);
+    return () => clearTimeout(t);
+  }, [notice]);
+
   const breadcrumb = useMemo(() => {
     const hostname = (() => {
       try { return new URL(discovery?.url ?? discovery?.origin ?? "").hostname; } catch { return discovery?.origin ?? ""; }
@@ -1268,14 +1274,14 @@ function App() {
       >
         {/* Left: brand + db picker + query toggle */}
         <div className="flex shrink-0 items-center gap-1">
-          <img
-            src={chrome.runtime.getURL("public/icons/icon-48.png")}
-            alt="IdxBeaver"
+          <span
             title="IdxBeaver"
-            width={22}
-            height={22}
-            className="h-[22px] w-[22px] shrink-0 select-none"
-          />
+            aria-label="IdxBeaver"
+            className="select-none whitespace-nowrap px-1 text-[12px] font-semibold tracking-[-0.01em] text-foreground"
+            style={{ fontFamily: "var(--font-brand)" }}
+          >
+            <span style={{ color: "var(--brand-accent)" }}>idx</span>beaver
+          </span>
           <Button
             size="icon-xs"
             variant="ghost"
@@ -1300,13 +1306,24 @@ function App() {
         {/* Center: breadcrumb path bar */}
         <div className="flex min-w-0 flex-1 justify-center px-2">
           <button
-            className="flex w-full max-w-xl cursor-pointer items-center justify-center rounded-md px-3 py-1 text-center font-mono text-[11px] text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-            style={{ border: "1px solid var(--hairline)", backgroundColor: "var(--background)" }}
+            className="flex w-full max-w-xl cursor-pointer items-center justify-center rounded-md px-3 py-1 text-center font-mono text-[11px] transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            style={{ border: "1px solid var(--toolbar-input-border)", backgroundColor: "var(--toolbar-input-bg)", color: "var(--toolbar-input-fg)" }}
             onClick={() => setDatabasePickerOpen(true)}
             aria-label="Open database picker"
             title="Click to open database picker"
           >
-            <span className="flex min-w-0 items-baseline truncate">{breadcrumb}</span>
+            {notice ? (
+              <span className="flex min-w-0 items-center gap-1.5 truncate">
+                <span
+                  className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                    notice.tone === "error" ? "bg-destructive" : notice.tone === "success" ? "bg-emerald-500" : "bg-muted-foreground"
+                  }`}
+                />
+                <span className="truncate">{notice.message}</span>
+              </span>
+            ) : (
+              <span className="flex min-w-0 items-baseline truncate">{breadcrumb}</span>
+            )}
           </button>
         </div>
 
@@ -1530,33 +1547,6 @@ function App() {
               </div>
             )}
 
-            {notice && (
-              <div
-                className={`flex shrink-0 items-center gap-2 border-b px-3 py-1 text-[11px] ${
-                  notice.tone === "error"
-                    ? "border-destructive/30 bg-destructive/10 text-destructive"
-                    : notice.tone === "success"
-                      ? "border-primary/40 bg-primary/20 text-foreground"
-                      : "border-border bg-muted/30 text-foreground/70"
-                }`}
-              >
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${
-                  notice.tone === "error" ? "bg-destructive" : notice.tone === "success" ? "bg-primary" : "bg-muted-foreground"
-                }`} />
-                <span className="font-medium">{notice.tone === "error" ? "Error" : notice.tone === "success" ? "Done" : "Info"}</span>
-                <span className="text-muted-foreground">·</span>
-                <span className="truncate">{notice.message}</span>
-                <button
-                  type="button"
-                  className="ml-auto text-muted-foreground hover:text-foreground"
-                  onClick={() => setNotice(null)}
-                  aria-label="Dismiss"
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-            )}
-
             {activeTabId === "overview" && (
               <OriginDashboard
                 discovery={discovery}
@@ -1571,39 +1561,6 @@ function App() {
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="78%" minSize="260px">
                   <div className="flex h-full min-h-0 flex-col">
-                    <section className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/40 px-3 py-1 text-[11px]">
-                      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                        {gridView === "structure" ? (
-                          <>
-                            <span className="font-mono tabular-nums text-foreground/80">{tableColumns.length}</span>
-                            <span>columns</span>
-                            <span className="text-border">·</span>
-                            <span className="font-mono tabular-nums text-foreground/80">{selectedStore?.indexes.length ?? 0}</span>
-                            <span>indexes</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="font-mono tabular-nums text-foreground/80">{filteredTableRows.length}</span>
-                            <span>rows</span>
-                            {activeRuleCount(filterState) > 0 && (
-                              <>
-                                <span className="text-border">·</span>
-                                <span>filtered from {allTableRows.length}</span>
-                              </>
-                            )}
-                          </>
-                        )}
-                        {selectedStore && gridView === "data" && (
-                          <>
-                            <span className="text-border">·</span>
-                            <span>key</span>
-                            <span className="font-mono text-foreground/80">{JSON.stringify(selectedStore.keyPath)}</span>
-                            <span className="text-border">·</span>
-                            <span>auto-incr {String(selectedStore.autoIncrement)}</span>
-                          </>
-                        )}
-                      </div>
-                    </section>
                     {filterState.open && (
                       <FilterBar
                         state={filterState}
@@ -1916,7 +1873,7 @@ function App() {
           panelRef={rightPanelRef}
           collapsible
           collapsedSize="0%"
-          defaultSize="26%"
+          defaultSize="0%"
           minSize="280px"
           maxSize="560px"
           onResize={(size) => setRightPanelCollapsed(isCollapsedPanelSize(size))}

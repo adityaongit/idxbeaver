@@ -49,6 +49,10 @@
   /* Hairlines, titlebar */
   --hairline: rgba(0, 0, 0, 0.1);
   --titlebar-bg: #E5E5E5;
+  --toolbar-input-bg: #F8F8F8;
+  --toolbar-input-fg: #000000;
+  --toolbar-input-border: rgba(0, 0, 0, 0.08);
+  --brand-accent: #6D28D9;
 
   /* Icons — blue-tinted, no green */
   --icon-store: #4A90E2;
@@ -159,6 +163,10 @@
   /* Hairlines */
   --hairline: rgba(255, 255, 255, 0.1);
   --titlebar-bg: #2A2A2A;
+  --toolbar-input-bg: #696B6E;
+  --toolbar-input-fg: #FFFFFF;
+  --toolbar-input-border: rgba(255, 255, 255, 0.1);
+  --brand-accent: #A78BFA;
 
   /* Icons */
   --icon-store: #5AC8FA;
