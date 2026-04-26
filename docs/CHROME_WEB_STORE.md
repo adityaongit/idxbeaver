@@ -31,7 +31,7 @@ The zip should be **under 10 MB**. If larger, investigate `panel.js` chunk size 
 ## 3. Required assets
 
 - **Icons** — 16×16, 48×48, 128×128 PNGs. Add to `src/manifest.ts` under `icons` and keep the source files in `public/icons/`.
-- **Screenshots** — 1280×800 or 640×400 PNG/JPEG. Minimum 1, maximum 5. Use `landing-site/public/screenshots/product_demo.png` as one of them.
+- **Screenshots** — 1280×800 or 640×400 PNG/JPEG. Minimum 1, maximum 5. Use `docs/assets/light_v1.png` / `docs/assets/dark_v1.png` as starting points.
 - **Small promo tile** (optional but recommended) — 440×280 PNG.
 - **Marquee promo tile** (optional, for featuring) — 1400×560 PNG.
 
