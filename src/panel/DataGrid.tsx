@@ -410,7 +410,7 @@ export function DataGrid({
                   <ContextMenuTrigger asChild>
                     <th
                       className={cn(
-                        "group/th sticky top-0 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[10px] font-medium lowercase tracking-wide text-muted-foreground backdrop-blur-sm last:border-r-0",
+                        "group/th sticky top-0 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[11px] font-semibold text-foreground backdrop-blur-sm last:border-r-0",
                         isPinned && "z-20",
                         !isPinned && "z-10",
                         dragOverCol === colId && "bg-primary/20"
