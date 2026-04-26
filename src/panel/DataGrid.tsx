@@ -150,15 +150,23 @@ export function DataGrid({
   storageKey,
   inlineKeyPath,
 }: DataGridProps) {
-  const visibleColumns = columns.length > 0 ? columns : ["value"];
+  const rawColumns = columns.length > 0 ? columns : ["value"];
 
   const hideKeyColumn = (() => {
     if (inlineKeyPath == null) return false;
     if (Array.isArray(inlineKeyPath)) {
-      return inlineKeyPath.length > 0 && inlineKeyPath.every((p) => visibleColumns.includes(p));
+      return inlineKeyPath.length > 0 && inlineKeyPath.every((p) => rawColumns.includes(p));
     }
-    return visibleColumns.includes(inlineKeyPath);
+    return rawColumns.includes(inlineKeyPath);
   })();
+
+  const keyPathFields = hideKeyColumn
+    ? (Array.isArray(inlineKeyPath) ? inlineKeyPath : inlineKeyPath ? [inlineKeyPath] : [])
+    : [];
+
+  const visibleColumns = hideKeyColumn
+    ? [...keyPathFields, ...rawColumns.filter((c) => !keyPathFields.includes(c))]
+    : rawColumns;
 
   // Edit state
   const [editing, setEditing] = useState<{ rowKey: string; column: string } | null>(null);
