@@ -191,10 +191,10 @@ No, I am not using remote code.
 (Everything runs from the bundled `dist/` assets. No `eval`, no remote script loading, no WASM from CDNs.)
 
 ### Privacy policy URL
-Use one of these — whichever you go with, make sure the URL is live before submitting:
+Make sure the URL is live before submitting:
 
-- Preferred: `https://github.com/adityaongit/idxbeaver/blob/main/docs/PRIVACY.md` (commit the file below first)
-- Or: host the same content as a GitHub Pages page and use that URL.
+- Preferred: `https://idxbeaver.netlify.app/privacy/` (rendered from `landing-site/src/app/privacy/page.tsx`)
+- Fallback: `https://github.com/adityaongit/idxbeaver/blob/main/docs/PRIVACY.md`
 
 ---
 

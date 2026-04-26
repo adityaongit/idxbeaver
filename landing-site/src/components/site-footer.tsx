@@ -52,7 +52,7 @@ export function SiteFooter() {
                 label: "License · MIT",
                 href: "https://github.com/adityaongit/idxbeaver/blob/main/LICENSE",
               },
-              { label: "Privacy · none", href: "#" },
+              { label: "Privacy", href: "/privacy" },
               {
                 label: "Contact",
                 href: "https://github.com/adityaongit/idxbeaver/issues/new",
