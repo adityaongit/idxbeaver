@@ -128,6 +128,8 @@ export interface DataGridProps {
   onDuplicate?: (record: IndexedDbRecord) => void;
   onPushUndo?: (cmd: UndoCommand) => void;
   storageKey?: string;
+  /** If the store has an inline keyPath, pass it here so the synthetic `key` column can be hidden when it duplicates a visible field. */
+  inlineKeyPath?: string | string[] | null;
 }
 
 export function DataGrid({
@@ -146,8 +148,17 @@ export function DataGrid({
   onDuplicate,
   onPushUndo,
   storageKey,
+  inlineKeyPath,
 }: DataGridProps) {
   const visibleColumns = columns.length > 0 ? columns : ["value"];
+
+  const hideKeyColumn = (() => {
+    if (inlineKeyPath == null) return false;
+    if (Array.isArray(inlineKeyPath)) {
+      return inlineKeyPath.length > 0 && inlineKeyPath.every((p) => visibleColumns.includes(p));
+    }
+    return visibleColumns.includes(inlineKeyPath);
+  })();
 
   // Edit state
   const [editing, setEditing] = useState<{ rowKey: string; column: string } | null>(null);
@@ -344,14 +355,14 @@ export function DataGrid({
   // Column defs — no size here; minWidth is applied via columnSizing in style props
   const columnDefs = useMemo<ColumnDef<IndexedDbRecord>[]>(
     () => [
-      {
+      ...(hideKeyColumn ? [] : [{
         id: "key",
         header: "key",
-        accessorFn: (row) => JSON.stringify(row.key),
-        cell: ({ getValue }) => (
+        accessorFn: (row: IndexedDbRecord) => JSON.stringify(row.key),
+        cell: ({ getValue }: { getValue: () => unknown }) => (
           <span className="font-mono font-semibold tabular-nums text-foreground">{String(getValue())}</span>
         ),
-      },
+      } satisfies ColumnDef<IndexedDbRecord>]),
       ...visibleColumns.map<ColumnDef<IndexedDbRecord>>((col) => ({
         id: col,
         header: col,
@@ -363,10 +374,13 @@ export function DataGrid({
         },
       })),
     ],
-    [visibleColumns, schemaMap]
+    [visibleColumns, schemaMap, hideKeyColumn]
   );
 
-  const allColIds = useMemo(() => ["key", ...visibleColumns], [visibleColumns]);
+  const allColIds = useMemo(
+    () => (hideKeyColumn ? visibleColumns : ["key", ...visibleColumns]),
+    [visibleColumns, hideKeyColumn]
+  );
 
   const table = useReactTable({
     data: indexedRows,
@@ -405,6 +419,7 @@ export function DataGrid({
               const colId = header.column.id;
               const isPinned = columnPinning.left?.includes(colId);
               const isKey = colId === "key";
+              const isPrimaryKeyCol = isKey || (hideKeyColumn && (Array.isArray(inlineKeyPath) ? inlineKeyPath.includes(colId) : inlineKeyPath === colId));
               return (
                 <ContextMenu key={header.id}>
                   <ContextMenuTrigger asChild>
@@ -413,7 +428,7 @@ export function DataGrid({
                         "group/th sticky top-0 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[11px] font-semibold text-foreground backdrop-blur-sm last:border-r-0",
                         isPinned && "z-20",
                         !isPinned && "z-10",
-                        isKey && "key-col-cell",
+                        isPrimaryKeyCol && "key-col-cell",
                         dragOverCol === colId && "bg-primary/20"
                       )}
                       style={{
@@ -563,7 +578,7 @@ export function DataGrid({
                       const isEditing = editing?.rowKey === rowKey && editing.column === colId;
                       const isEditable = Boolean(onSaveCell) && colId !== "key";
 
-                      const isKeyCol = colId === "key";
+                      const isKeyCol = colId === "key" || (hideKeyColumn && (Array.isArray(inlineKeyPath) ? inlineKeyPath.includes(colId) : inlineKeyPath === colId));
                       return (
                         <td
                           key={cell.id}

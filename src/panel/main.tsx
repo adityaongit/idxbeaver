@@ -1611,6 +1611,7 @@ function App() {
                         onDuplicate={handleDuplicateRow}
                         onPushUndo={pushUndo}
                         storageKey={selected.kind === "indexeddb" ? `${selected.origin}::${selected.dbName}::${selected.storeName}` : undefined}
+                        inlineKeyPath={selectedStore?.keyPath ?? null}
                       />
                     )}
                     <DataFooter
@@ -1853,6 +1854,7 @@ function App() {
                               onSelect={selectRecord}
                               onDelete={deleteIndexedRecord}
                               inferredSchema={inferredSchema}
+                              inlineKeyPath={selectedStore?.keyPath ?? null}
                             />
                           </>
                         ) : (
