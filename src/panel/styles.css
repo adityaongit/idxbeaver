@@ -347,6 +347,25 @@
   color: var(--muted-foreground);
 }
 
+/* Unified form control used inside the Settings page so dropdowns + inputs
+ * share the same chrome as the topbar URL pill. */
+.settings-control {
+  background-color: var(--toolbar-input-bg);
+  color: var(--toolbar-input-fg);
+  border: 1px solid var(--toolbar-input-border);
+  border-radius: 5px;
+}
+.settings-control:hover {
+  border-color: color-mix(in srgb, var(--toolbar-input-border) 60%, var(--foreground) 40%);
+}
+.settings-control:focus,
+.settings-control:focus-visible,
+.settings-control[data-state="open"] {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+}
+
 /* TablePlus-style row heights */
 .tp-row {
   height: 22px;
