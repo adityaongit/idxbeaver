@@ -420,15 +420,14 @@
   font-size: var(--cell-font-size, 11px);
 }
 
-/* Key column highlight — TablePlus-style tinted background + stronger right border */
+/* Key column highlight — subtle tinted background, no extra border */
 .data-grid-root .key-col-cell {
-  background-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
-  border-right: 1px solid var(--primary) !important;
+  background-color: color-mix(in srgb, var(--accent) 30%, transparent) !important;
   color: var(--foreground);
 }
 
 .data-grid-root th.key-col-cell {
-  background-color: color-mix(in srgb, var(--accent) 55%, var(--card)) !important;
+  background-color: color-mix(in srgb, var(--accent) 50%, var(--card)) !important;
 }
 
 .chip {
