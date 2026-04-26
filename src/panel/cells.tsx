@@ -27,7 +27,7 @@ function BlobCell({ value }: { value: { type: string; size?: number; preview?: s
     <>
       <button
         type="button"
-        className="font-mono text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+        className="font-mono text-foreground underline-offset-2 hover:underline"
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
       >
         {label}
@@ -44,7 +44,7 @@ function BlobCell({ value }: { value: { type: string; size?: number; preview?: s
             {value.type.startsWith("image/") && value.preview ? (
               <img src={value.preview} alt="Blob preview" className="max-h-[70vh] max-w-full" />
             ) : (
-              <pre className="font-mono text-[11px] text-foreground">{value.preview ?? label}</pre>
+              <pre className="font-mono text-foreground">{value.preview ?? label}</pre>
             )}
             <button
               type="button"
@@ -71,7 +71,7 @@ function CollapseCell({ value }: { value: SerializableValue }) {
     return (
       <button
         type="button"
-        className="text-left font-mono text-[10px] text-foreground/80"
+        className="text-left font-mono text-foreground/80"
         onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
       >
         {JSON.stringify(value, null, 1)}
@@ -82,7 +82,7 @@ function CollapseCell({ value }: { value: SerializableValue }) {
   return (
     <button
       type="button"
-      className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+      className="font-mono text-foreground"
       onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
     >
       {preview}
@@ -94,7 +94,7 @@ export function renderCell(col: InferredColumn | undefined, rawValue: unknown): 
   const type: InferredType = col?.type ?? "mixed";
 
   if (rawValue === null || rawValue === undefined) {
-    return <span className="font-mono text-[11px] italic text-muted-foreground/60">null</span>;
+    return <span className="font-mono italic text-muted-foreground/60">null</span>;
   }
 
   if (
@@ -102,30 +102,21 @@ export function renderCell(col: InferredColumn | undefined, rawValue: unknown): 
     (type === "mixed" && typeof rawValue === "number")
   ) {
     return (
-      <span className="font-mono text-[11px] tabular-nums text-right block text-foreground">
+      <span className="font-mono tabular-nums text-right block text-foreground">
         {String(rawValue)}
       </span>
     );
   }
 
   if (type === "boolean" || (type === "mixed" && typeof rawValue === "boolean")) {
-    const bool = rawValue as boolean;
     return (
-      <span
-        className={`inline-flex items-center rounded-full px-1.5 py-0 font-mono text-[10px] font-medium ${
-          bool
-            ? "bg-green-500/20 text-green-600 dark:text-green-400"
-            : "bg-muted/60 text-muted-foreground"
-        }`}
-      >
-        {bool ? "true" : "false"}
-      </span>
+      <span className="font-mono text-foreground">{String(rawValue)}</span>
     );
   }
 
   if (type === "date" || (type === "mixed" && typeof rawValue === "string" && /^\d{4}-\d{2}-\d{2}/.test(rawValue as string))) {
     return (
-      <span title={String(rawValue)} className="font-mono text-[11px] text-foreground">
+      <span title={String(rawValue)} className="font-mono text-foreground">
         {formatDate(String(rawValue))}
       </span>
     );
@@ -146,6 +137,6 @@ export function renderCell(col: InferredColumn | undefined, rawValue: unknown): 
   }
 
   return (
-    <span className="font-mono text-[11px] text-foreground">{String(rawValue)}</span>
+    <span className="font-mono text-foreground">{String(rawValue)}</span>
   );
 }

@@ -1,3 +1,3 @@
-- user's gets to choose which indexeddb out of multiple dbs for that particular site he wants to connects with, he can open multiple connections as well
-- connection of each db is shown seperately
-- the ui should be improved and should look like tableplus, or any nosql database viewer
+- bad ui in cmd+k section
+- bad ui in filters section
+- 

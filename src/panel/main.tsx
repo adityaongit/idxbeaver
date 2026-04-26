@@ -242,7 +242,8 @@ function App() {
     document.documentElement.style.setProperty("--font-mono", prefs.cellFont);
     document.documentElement.style.setProperty("--font-table", prefs.tableFont);
     document.documentElement.style.setProperty("font-size", `${prefs.uiFontSize}px`);
-  }, [prefs.uiFont, prefs.cellFont, prefs.tableFont, prefs.uiFontSize]);
+    document.documentElement.style.setProperty("--cell-font-size", `${prefs.cellFontSize}px`);
+  }, [prefs.uiFont, prefs.cellFont, prefs.tableFont, prefs.uiFontSize, prefs.cellFontSize]);
 
   // Keep visible DBs consistent with discovery, but never auto-select — the user
   // picks which databases to browse.

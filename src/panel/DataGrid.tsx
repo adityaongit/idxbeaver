@@ -106,7 +106,7 @@ function CellEditor({
             else onTabNext?.();
           }
         }}
-        className="h-5 min-w-0 flex-1 rounded-[2px] border-0 bg-transparent px-1 font-mono text-[11px] text-foreground outline-none ring-1 ring-primary/60 focus:ring-primary"
+        className="h-5 min-w-0 flex-1 rounded-[2px] border-0 bg-transparent px-1 font-mono text-foreground outline-none ring-1 ring-primary/60 focus:ring-primary"
       />
     </div>
   );
@@ -349,7 +349,7 @@ export function DataGrid({
         header: "key",
         accessorFn: (row) => JSON.stringify(row.key),
         cell: ({ getValue }) => (
-          <span className="font-mono text-muted-foreground tabular-nums">{String(getValue())}</span>
+          <span className="font-mono font-semibold tabular-nums text-foreground">{String(getValue())}</span>
         ),
       },
       ...visibleColumns.map<ColumnDef<IndexedDbRecord>>((col) => ({
@@ -398,7 +398,7 @@ export function DataGrid({
       tabIndex={0}
       style={{ outline: "none" }}
     >
-      <table className="w-full border-collapse text-[11px]">
+      <table className="w-full border-collapse">
         <thead>
           <tr>
             {orderedHeaders.map((header) => {
@@ -413,6 +413,7 @@ export function DataGrid({
                         "group/th sticky top-0 border-b border-r border-border bg-card/95 px-2 py-1 text-left text-[11px] font-semibold text-foreground backdrop-blur-sm last:border-r-0",
                         isPinned && "z-20",
                         !isPinned && "z-10",
+                        isKey && "key-col-cell",
                         dragOverCol === colId && "bg-primary/20"
                       )}
                       style={{
@@ -514,7 +515,7 @@ export function DataGrid({
                       }
                     }}
                     placeholder={col}
-                    className="h-5 w-full border-0 bg-transparent px-2 font-mono text-[11px] text-foreground outline-none ring-1 ring-inset ring-primary/40 focus:ring-primary"
+                    className="h-5 w-full border-0 bg-transparent px-2 font-mono text-foreground outline-none ring-1 ring-inset ring-primary/40 focus:ring-primary"
                   />
                 </td>
               ))}
@@ -562,6 +563,7 @@ export function DataGrid({
                       const isEditing = editing?.rowKey === rowKey && editing.column === colId;
                       const isEditable = Boolean(onSaveCell) && colId !== "key";
 
+                      const isKeyCol = colId === "key";
                       return (
                         <td
                           key={cell.id}
@@ -569,7 +571,8 @@ export function DataGrid({
                             "overflow-hidden whitespace-nowrap border-b border-r border-border leading-5 last:border-r-0",
                             isEditing ? "p-0" : "text-ellipsis px-2 py-0.5",
                             isPinned && "sticky left-0 z-[2]",
-                            isPinned && (isSelected || isBulkSelected ? "bg-[var(--row-selected)]" : rowIdx % 2 === 1 ? "bg-[var(--row-odd)]" : "bg-[var(--row-even)]")
+                            isPinned && (isSelected || isBulkSelected ? "bg-[var(--row-selected)]" : rowIdx % 2 === 1 ? "bg-[var(--row-odd)]" : "bg-[var(--row-even)]"),
+                            isKeyCol && "key-col-cell"
                           )}
                           style={{
                             left: isPinned ? 0 : undefined,

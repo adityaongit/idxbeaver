@@ -1,5 +1,5 @@
 import React from "react";
-import { Database, Search, Table2 } from "lucide-react";
+import { Database, Table2 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatKeys, SHORTCUTS } from "./shortcuts";
@@ -52,10 +52,9 @@ export function CommandPalette({
           <DialogTitle>Command palette</DialogTitle>
           <DialogDescription>Search commands, stores, and saved queries.</DialogDescription>
         </DialogHeader>
-        <Command className="rounded-none bg-background">
-          <div className="flex items-center border-b border-border px-3">
-            <Search className="mr-2 size-4 shrink-0 text-muted-foreground" />
-            <CommandInput placeholder="Search commands, stores, queries…" className="flex-1 border-0 bg-transparent py-3 text-[13px] outline-none placeholder:text-muted-foreground" />
+        <Command className="cmd-palette rounded-none bg-background">
+          <div className="border-b border-border px-1.5 py-1">
+            <CommandInput placeholder="Search commands, stores, queries…" />
           </div>
           <CommandList className="max-h-[min(56vh,28rem)] overflow-auto py-1">
             <CommandEmpty className="py-6 text-center text-[12px] text-muted-foreground">
@@ -72,7 +71,7 @@ export function CommandPalette({
                       onOpenNode({ kind: "indexeddb", dbName: db.name, dbVersion: db.version, storeName: store.name, origin: db.origin, frameId: db.frameId }, { persist: true });
                       onOpenChange(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
+                    className="flex items-center gap-2 px-2.5 py-1.5 text-[11.5px]"
                   >
                     <Table2 className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="flex-1">
@@ -100,7 +99,7 @@ export function CommandPalette({
                         onLoadQuery(q.queryText);
                         onOpenChange(false);
                       }}
-                      className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
+                      className="flex items-center gap-2 px-2.5 py-1.5 text-[11.5px]"
                     >
                       <Database className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="flex-1 font-medium">{q.name}</span>
@@ -119,30 +118,30 @@ export function CommandPalette({
 
             <CommandSeparator />
             <CommandGroup heading="Actions">
-              <CommandItem value="open picker databases" onSelect={() => { onOpenPicker(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+              <CommandItem value="open picker databases" onSelect={() => { onOpenPicker(); onOpenChange(false); }} className="px-2.5 py-1.5 text-[11.5px]">
                 <Database className="mr-2 size-3.5 shrink-0 text-muted-foreground" />
                 Open database picker
                 <CommandShortcut>{formatKeys("mod+shift+t")}</CommandShortcut>
               </CommandItem>
               {onToggleFilters && (
-                <CommandItem value="filters open" onSelect={() => { onToggleFilters(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+                <CommandItem value="filters open" onSelect={() => { onToggleFilters(); onOpenChange(false); }} className="px-2.5 py-1.5 text-[11.5px]">
                   Open filters
                   <CommandShortcut>{formatKeys("mod+shift+f")}</CommandShortcut>
                 </CommandItem>
               )}
               {onNewRow && (
-                <CommandItem value="new row inline" onSelect={() => { onNewRow(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+                <CommandItem value="new row inline" onSelect={() => { onNewRow(); onOpenChange(false); }} className="px-2.5 py-1.5 text-[11.5px]">
                   New inline row
                   <CommandShortcut>{formatKeys("mod+shift+n")}</CommandShortcut>
                 </CommandItem>
               )}
-              <CommandItem value="export json" onSelect={() => { onExport("json"); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+              <CommandItem value="export json" onSelect={() => { onExport("json"); onOpenChange(false); }} className="px-2.5 py-1.5 text-[11.5px]">
                 Export as JSON
               </CommandItem>
-              <CommandItem value="export csv" onSelect={() => { onExport("csv"); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+              <CommandItem value="export csv" onSelect={() => { onExport("csv"); onOpenChange(false); }} className="px-2.5 py-1.5 text-[11.5px]">
                 Export as CSV
               </CommandItem>
-              <CommandItem value="settings preferences" onSelect={() => { onOpenSettings(); onOpenChange(false); }} className="px-3 py-1.5 text-[12px]">
+              <CommandItem value="settings preferences" onSelect={() => { onOpenSettings(); onOpenChange(false); }} className="px-2.5 py-1.5 text-[11.5px]">
                 Open settings
                 <CommandShortcut>{formatKeys("mod+,")}</CommandShortcut>
               </CommandItem>

@@ -5,11 +5,11 @@
 :root {
   /* Surfaces — TablePlus light: pure whites + cool greys */
   --background: #FFFFFF;
-  --foreground: #1D1D1F;
+  --foreground: #000000;
   --card: #F2F2F2;
   --card-foreground: #1D1D1F;
   --popover: #FFFFFF;
-  --popover-foreground: #1D1D1F;
+  --popover-foreground: #000000;
 
   /* Sidebar — single column, TablePlus light grey */
   --sidebar: #EDEDED;
@@ -119,11 +119,11 @@
 .dark {
   /* Surfaces — TablePlus dark sampling */
   --background: #1E1E1E;
-  --foreground: #E8E8E8;
+  --foreground: #FFFFFF;
   --card: #2A2A2A;
   --card-foreground: #E8E8E8;
   --popover: #2A2A2A;
-  --popover-foreground: #E8E8E8;
+  --popover-foreground: #FFFFFF;
 
   /* Sidebar — single, slightly darker than content */
   --sidebar: #252525;
@@ -416,6 +416,21 @@
   font-family: var(--font-table, var(--font-mono));
 }
 
+.data-grid-root {
+  font-size: var(--cell-font-size, 11px);
+}
+
+/* Key column highlight — TablePlus-style tinted background + stronger right border */
+.data-grid-root .key-col-cell {
+  background-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
+  border-right: 1px solid var(--primary) !important;
+  color: var(--foreground);
+}
+
+.data-grid-root th.key-col-cell {
+  background-color: color-mix(in srgb, var(--accent) 55%, var(--card)) !important;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -574,6 +589,21 @@
 }
 
 .db-picker [data-slot="command-item"] > svg:last-child[class*="ml-auto"] {
+  display: none;
+}
+
+/* Command palette — text-only rows, subtle hover/selected indicator */
+.cmd-palette [data-slot="command-item"] {
+  background-color: transparent !important;
+  color: var(--foreground);
+}
+
+.cmd-palette [data-slot="command-item"][data-selected="true"] {
+  background-color: var(--sidebar-row-hover) !important;
+  color: var(--foreground);
+}
+
+.cmd-palette [data-slot="command-item"] > svg:last-child[class*="ml-auto"] {
   display: none;
 }
 
