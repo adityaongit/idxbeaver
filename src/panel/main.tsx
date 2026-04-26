@@ -24,6 +24,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "../components/ui/context-menu";
 import { parseMongoQuery } from "../shared/query";
+import { executeStorageRequest } from "../shared/executeStorageRequest";
 import { applyFilters, activeRuleCount, type FilterState, EMPTY_FILTER_STATE } from "../shared/filters";
 import { keyStrategy } from "../shared/indexed";
 import { getPrefs, setPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
@@ -184,7 +185,9 @@ function App() {
       setNotice({ tone: "error", message: response.error });
       return;
     }
-    setDiscovery(response.data as StorageDiscovery);
+    const data = response.data as StorageDiscovery;
+    setDiscovery(data);
+    registerDiscoveredDatabases(data.indexedDb);
     setStoreSummaries(new Map());
     setNotice({ tone: "success", message: "Storage refreshed." });
   }, [rpc]);
@@ -1898,7 +1901,7 @@ function App() {
 
       <Dialog open={databasePickerOpen} onOpenChange={setDatabasePickerOpen}>
         <DialogContent
-          className="max-h-[min(80vh,44rem)] max-w-[min(720px,calc(100vw-2.5rem))] gap-0 overflow-hidden rounded-xl border-border bg-background p-0 text-foreground shadow-2xl sm:max-w-[min(720px,calc(100vw-2.5rem))]"
+          className="flex max-h-[min(85vh,52rem)] max-w-[min(720px,calc(100vw-2.5rem))] flex-col gap-0 overflow-hidden rounded-xl border-border bg-background p-0 text-foreground shadow-2xl sm:max-w-[min(720px,calc(100vw-2.5rem))]"
           showCloseButton={false}
         >
           <DialogHeader className="space-y-0 border-b border-border px-4 pt-3 pb-2.5">
@@ -1917,11 +1920,11 @@ function App() {
               </Button>
             </div>
           </DialogHeader>
-          <Command className="db-picker rounded-none bg-background p-0">
+          <Command className="db-picker flex min-h-0 flex-1 flex-col rounded-none bg-background p-0">
             <div className="border-b border-border px-3 py-2">
               <CommandInput placeholder="Search databases…" className="text-[12px]" />
             </div>
-            <CommandList className="max-h-[min(56vh,26rem)] px-2 py-2">
+            <CommandList className="min-h-0 flex-1 px-2 py-2">
               <CommandEmpty className="py-8 text-center text-[11.5px] text-muted-foreground">
                 No matching databases.
               </CommandEmpty>
@@ -2010,7 +2013,7 @@ function App() {
               </CommandGroup>
             </CommandList>
           </Command>
-          <div className="flex items-center justify-between gap-3 border-t border-border bg-card/40 px-3.5 py-2 text-[11px] text-muted-foreground">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card/40 px-3.5 py-2 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="font-mono tabular-nums text-foreground/85">{visibleDbKeys.length}</span>
               <span>of</span>
@@ -2622,6 +2625,7 @@ function OriginBadge({ origin }: { origin: string }) {
   );
 }
 
+
 function isCollapsedPanelSize(size: PanelSize) {
   return size.asPercentage === 0 || size.inPixels === 0;
 }
@@ -2639,6 +2643,98 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Track which Storage Bucket each discovered DB lives in, so IDB-targeted
+// RPCs reopen via the right IDBFactory. Default-bucket DBs aren't recorded
+// (they're the implicit case).
+const dbBucketRegistry = new Map<string, string>();
+function dbBucketKey(frameId: number, dbName: string, dbVersion: number | undefined): string {
+  return `${frameId}::${dbName}::v${dbVersion ?? "?"}`;
+}
+export function registerDiscoveredDatabases(databases: Array<{ name: string; version: number; frameId: number; bucketName: string }>): void {
+  dbBucketRegistry.clear();
+  for (const db of databases) {
+    if (db.bucketName && db.bucketName !== "default") {
+      dbBucketRegistry.set(dbBucketKey(db.frameId, db.name, db.version), db.bucketName);
+    }
+  }
+}
+
+function enrichRequestRouting(request: StorageRequest): StorageRequest {
+  const r = request as StorageRequest & { frameId?: number; dbName?: string; dbVersion?: number };
+  if (typeof r.frameId !== "number" || !r.dbName) return request;
+  const bucketName = dbBucketRegistry.get(dbBucketKey(r.frameId, r.dbName, r.dbVersion));
+  if (!bucketName) return request;
+  return { ...request, bucketName } as StorageRequest;
+}
+
+// Fallback execution path for when the inspected page is itself a
+// chrome-extension:// URL of *another* extension. chrome.scripting.executeScript
+// refuses to inject into another extension's pages, but DevTools' own debugger
+// session — which chrome.devtools.inspectedWindow.eval rides on — is allowed
+// because DevTools owns the session. So when the user opens DevTools directly
+// on, say, chrome-extension://<sales-copilot>/sidepanel.html, idxbeaver can
+// still enumerate / read DBs via this path.
+async function runViaInspectedWindow(request: StorageRequest): Promise<StorageResponse> {
+  if (!extensionRuntime || !chrome.devtools?.inspectedWindow?.eval) {
+    return { ok: false, error: "chrome.devtools.inspectedWindow.eval not available." };
+  }
+  const id = crypto.randomUUID().replace(/-/g, "");
+  const fnSource = executeStorageRequest.toString();
+  const setupCode = `(() => {
+    const __idxb_run = ${fnSource};
+    Promise.resolve(__idxb_run(${JSON.stringify(request)}))
+      .then((r) => { window["__idxb_${id}"] = JSON.stringify(r); })
+      .catch((e) => { window["__idxb_${id}"] = JSON.stringify({ ok: false, error: String((e && e.message) || e) }); });
+    return "started";
+  })()`;
+  const setup: { ok: boolean; error?: string } = await new Promise((resolve) => {
+    chrome.devtools.inspectedWindow.eval(setupCode, (_result, exception) => {
+      if (exception) {
+        const msg = (exception as { value?: string; description?: string }).value
+          ?? (exception as { description?: string }).description
+          ?? "inspectedWindow.eval failed";
+        resolve({ ok: false, error: msg });
+      } else resolve({ ok: true });
+    });
+  });
+  if (!setup.ok) return { ok: false, error: setup.error ?? "eval setup failed" };
+
+  const start = Date.now();
+  while (Date.now() - start < 30000) {
+    const polled: string | null = await new Promise((resolve) => {
+      chrome.devtools.inspectedWindow.eval(`window["__idxb_${id}"] || null`, (val) => {
+        resolve(typeof val === "string" ? val : null);
+      });
+    });
+    if (polled) {
+      chrome.devtools.inspectedWindow.eval(`delete window["__idxb_${id}"]`, () => undefined);
+      try {
+        return JSON.parse(polled) as StorageResponse;
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    await new Promise<void>((r) => setTimeout(r, 75));
+  }
+  return { ok: false, error: "Timed out waiting for inspectedWindow.eval result." };
+}
+
+// Cache the inspected URL so we don't ask DevTools every RPC call. Refreshed
+// when the inspected location changes.
+let cachedInspectedUrl: string | null = null;
+if (extensionRuntime && chrome.devtools.inspectedWindow.eval) {
+  chrome.devtools.inspectedWindow.eval("location.href", (val) => {
+    if (typeof val === "string") cachedInspectedUrl = val;
+  });
+  chrome.devtools.network?.onNavigated?.addListener?.((url) => {
+    cachedInspectedUrl = url;
+  });
+}
+
+function shouldUseInspectedWindowEval(): boolean {
+  return Boolean(cachedInspectedUrl && cachedInspectedUrl.startsWith("chrome-extension://"));
+}
+
 function useStorageRpc() {
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const pendingRef = useRef(new Map<string, PendingRequest>());
@@ -2652,15 +2748,58 @@ function useStorageRpc() {
     };
   }, []);
 
-  return useCallback((request: StorageRequest) => {
-    if (!extensionRuntime) return Promise.resolve(mockStorageResponse(request));
+  return useCallback(async (request: StorageRequest): Promise<StorageResponse> => {
+    const enriched = enrichRequestRouting(request);
+    if (!extensionRuntime) return mockStorageResponse(enriched);
+
+    // Discover and per-frame IDB ops can run via inspectedWindow.eval when the
+    // inspected page is a chrome-extension:// URL — chrome.scripting refuses
+    // those frames. Cookies / chrome.cookies stay on the background path.
+    const usesEval = shouldUseInspectedWindowEval()
+      && enriched.type !== "readCookies"
+      && enriched.type !== "setCookie"
+      && enriched.type !== "removeCookie"
+      && enriched.type !== "clearCookies";
+    if (usesEval) {
+      const evalResp = await runViaInspectedWindow(enriched);
+      // Discover responses from eval are the raw per-frame payload — pad them
+      // out into a full StorageDiscovery so the panel can render without
+      // missing-field crashes.
+      if (enriched.type === "discover" && evalResp.ok) {
+        const data = evalResp.data as Partial<StorageDiscovery> & { origin: string; indexedDb: Array<{ name: string; version: number; stores: unknown[]; bucketName?: string }> };
+        const frameId = 0;
+        const indexedDb = (data.indexedDb ?? []).map((db) => ({
+          name: db.name,
+          version: db.version,
+          stores: db.stores,
+          origin: data.origin,
+          frameId,
+          bucketName: db.bucketName ?? "default"
+        }));
+        return {
+          ok: true,
+          data: {
+            origin: data.origin,
+            url: cachedInspectedUrl ?? data.origin,
+            indexedDb: indexedDb as StorageDiscovery["indexedDb"],
+            localStorage: data.localStorage ?? { count: 0, bytes: 0 },
+            sessionStorage: data.sessionStorage ?? { count: 0, bytes: 0 },
+            cookies: { count: 0, bytes: 0 },
+            cacheStorage: { caches: [] },
+            frames: [{ frameId, origin: data.origin, url: cachedInspectedUrl ?? data.origin }]
+          } as StorageDiscovery
+        };
+      }
+      return evalResp;
+    }
+
     const id = crypto.randomUUID();
     return new Promise<StorageResponse>((resolve) => {
-      const entry: PendingRequest = { resolve, request, idempotent: isIdempotent(request) };
+      const entry: PendingRequest = { resolve, request: enriched, idempotent: isIdempotent(enriched) };
       pendingRef.current.set(id, entry);
       const port = portRef.current ?? openPort(portRef, pendingRef);
       try {
-        port.postMessage({ id, request });
+        port.postMessage({ id, request: enriched });
       } catch (error) {
         portRef.current = null;
         pendingRef.current.delete(id);
@@ -2735,6 +2874,7 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
             version: 3,
             origin: "https://app.example.test",
             frameId: 0,
+            bucketName: "default",
             stores: [
               {
                 name: "users",
@@ -2757,6 +2897,7 @@ function mockStorageResponse(request: StorageRequest): StorageResponse {
             version: 2,
             origin: "https://child.example.test",
             frameId: 1,
+            bucketName: "default",
             stores: [
               {
                 name: "users",

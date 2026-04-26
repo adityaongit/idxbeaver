@@ -59,6 +59,10 @@ export interface IndexedDbDatabaseInfo {
   // follow-up RPCs to that frame.
   origin: string;
   frameId: number;
+  // Storage Buckets API name (https://wicg.github.io/storage-buckets/). "default"
+  // is the bucket-less default. Named buckets are invisible to a plain
+  // indexedDB.databases() call and require navigator.storageBuckets.open(name).
+  bucketName: string;
 }
 
 export interface CookieRecord {
@@ -139,16 +143,22 @@ export interface IndexedCellRecord {
   projected: Record<string, SerializedCell>;
 }
 
+// Optional bucket selector for IDB-targeted RPCs so reads/writes hit the right
+// IDBFactory when a DB lives in a non-default Storage Bucket.
+export interface IndexedDbTarget {
+  bucketName?: string;
+}
+
 export type StorageRequest =
   | { type: "discover"; tabId: number }
-  | { type: "readIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; limit: number }
-  | { type: "putIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key: SerializableValue; value: SerializableValue }
-  | { type: "addIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key?: SerializableValue; value: SerializableValue }
-  | { type: "deleteIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key: SerializableValue }
-  | { type: "runIndexedDbQuery"; tabId: number; frameId: number; dbName: string; dbVersion: number; query: NoSqlQuery }
-  | { type: "clearIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string }
-  | { type: "deleteIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string }
-  | { type: "deleteIndexedDbDatabase"; tabId: number; frameId: number; dbName: string }
+  | ({ type: "readIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; limit: number } & IndexedDbTarget)
+  | ({ type: "putIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key: SerializableValue; value: SerializableValue } & IndexedDbTarget)
+  | ({ type: "addIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key?: SerializableValue; value: SerializableValue } & IndexedDbTarget)
+  | ({ type: "deleteIndexedDbRecord"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; key: SerializableValue } & IndexedDbTarget)
+  | ({ type: "runIndexedDbQuery"; tabId: number; frameId: number; dbName: string; dbVersion: number; query: NoSqlQuery } & IndexedDbTarget)
+  | ({ type: "clearIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string } & IndexedDbTarget)
+  | ({ type: "deleteIndexedDbStore"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string } & IndexedDbTarget)
+  | ({ type: "deleteIndexedDbDatabase"; tabId: number; frameId: number; dbName: string } & IndexedDbTarget)
   | { type: "readKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage" }
   | { type: "setKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage"; key: string; value: string }
   | { type: "removeKeyValue"; tabId: number; surface: "localStorage" | "sessionStorage"; key: string }
@@ -162,10 +172,10 @@ export type StorageRequest =
   | { type: "readCacheResponse"; tabId: number; frameId: number; cacheName: string; url: string; requestMethod: string }
   | { type: "deleteCacheEntry"; tabId: number; frameId: number; cacheName: string; url: string; requestMethod: string }
   | { type: "clearCache"; tabId: number; frameId: number; cacheName: string }
-  | { type: "readStoreSummary"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string }
+  | ({ type: "readStoreSummary"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string } & IndexedDbTarget)
   | { type: "storageEstimate"; tabId: number }
-  | { type: "readIndexedDbStoreChunk"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; offset: number; limit: number }
-  | { type: "bulkPutIndexedDbRows"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; rows: Array<{ key: SerializableValue; value: SerializableValue }> };
+  | ({ type: "readIndexedDbStoreChunk"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; offset: number; limit: number } & IndexedDbTarget)
+  | ({ type: "bulkPutIndexedDbRows"; tabId: number; frameId: number; dbName: string; dbVersion: number; storeName: string; rows: Array<{ key: SerializableValue; value: SerializableValue }> } & IndexedDbTarget);
 
 export interface StoreSummary {
   rowCount: number | null;
