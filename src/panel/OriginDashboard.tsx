@@ -236,7 +236,7 @@ export function OriginDashboard({ discovery, storeSummaries, rpc, tabId, onNukeC
               className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
               onClick={() => setNukeOpen(true)}
             >
-              Nuke origin…
+              Nuke origin
             </Button>
           </div>
         </section>
