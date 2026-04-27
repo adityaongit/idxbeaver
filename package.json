@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "description": "A professional database client for browser storage.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

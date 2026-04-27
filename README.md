@@ -130,4 +130,4 @@ npx vitest run src/shared/query.test.ts   # single test file
 
 ## License
 
-Private / unreleased. Ask before redistributing.
+MIT — see [LICENSE](LICENSE).
