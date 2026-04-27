@@ -26,7 +26,9 @@ function Brand() {
       className="flex shrink-0 items-center gap-[10px] text-[15px] font-semibold tracking-[-.02em] text-[var(--color-ink)]"
     >
       <Logo />
-      <span>IdxBeaver</span>
+      <span>
+        <span className="text-[var(--color-brand)]">idx</span>beaver
+      </span>
       <span className="mx-1 hidden h-4 w-px bg-[var(--color-hair-3)] sm:block" />
       <span className="mono hidden text-[11.5px] font-normal text-[var(--color-ink-mute)] sm:block">
         v1.0

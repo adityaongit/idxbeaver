@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { DemoSeeder } from "@/components/demo-seeder";
+import { BRAND_PURPLE } from "@/lib/brand";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -62,6 +63,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      style={{ "--color-brand": BRAND_PURPLE } as React.CSSProperties}
     >
       <body className="grain">
         <div className="atmos" />

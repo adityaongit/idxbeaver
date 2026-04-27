@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { BRAND_PURPLE } from "@/lib/brand";
 
 export const dynamic = "force-static";
 export const alt = "IdxBeaver — A database client for browser storage";
@@ -66,7 +67,7 @@ export default async function OpengraphImage() {
               lineHeight: 1,
             }}
           >
-            <span style={{ color: "#a78bfa" }}>idx</span>
+            <span style={{ color: BRAND_PURPLE }}>idx</span>
             <span>beaver</span>
           </div>
           <div

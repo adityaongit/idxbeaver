@@ -30,6 +30,8 @@
   --color-ir-3: #FB923C;
   --color-accent: #F472B6;
 
+  /* --color-brand is injected on <html> from src/lib/brand.ts */
+
   /* Typography */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

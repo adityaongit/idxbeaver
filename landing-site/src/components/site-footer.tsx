@@ -19,7 +19,9 @@ export function SiteFooter() {
           <div>
             <a href="#" className="mb-4 flex items-center gap-[10px] text-[15px] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
               <Logo />
-              <span>IdxBeaver</span>
+              <span>
+                <span className="text-[var(--color-brand)]">idx</span>beaver
+              </span>
             </a>
             <p className="mb-5 max-w-[320px] text-[13.5px] leading-[1.55] text-[var(--color-ink-mute)]">
               A native-feeling database client for the storage your browser already has.
