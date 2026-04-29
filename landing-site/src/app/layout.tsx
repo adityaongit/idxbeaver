@@ -18,15 +18,26 @@ const geistMono = Geist_Mono({
 });
 
 const SITE_URL = resolveSiteUrl();
-const TITLE = "IdxBeaver — A database client for browser storage";
+const TITLE = "IdxBeaver — IndexedDB & storage client for Chrome DevTools";
 const DESCRIPTION =
-  "Native-feeling database client for IndexedDB, LocalStorage, Sessions, Cookies and Cache — inside Chrome DevTools. Mongo-style queries, dense grid.";
+  "Chrome DevTools extension that turns IndexedDB, LocalStorage, Cookies, and Cache Storage into a real database client — TablePlus-style grid, Mongo queries, schema inference.";
+const KEYWORDS = [
+  "IndexedDB Chrome extension",
+  "IndexedDB viewer",
+  "IndexedDB editor",
+  "browser storage inspector",
+  "Chrome DevTools extension",
+  "LocalStorage editor",
+  "Cookies inspector",
+  "Cache Storage viewer",
+];
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: DESCRIPTION,
   applicationName: "IdxBeaver",
+  keywords: KEYWORDS,
   alternates: { canonical: "/" },
   openGraph: {
     title: TITLE,

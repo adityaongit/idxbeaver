@@ -64,12 +64,13 @@ export function Hero() {
           <p
             className="r-init ri3 mt-6 max-w-[560px] text-[16px] leading-[1.55] tracking-[-.005em] text-[var(--color-ink-dim)] sm:text-[18px] lg:mx-0 mx-auto"
           >
-            A native-feeling database client for{" "}
+            A Chrome DevTools extension that gives you a real database client
+            for{" "}
             <b className="font-medium text-[var(--color-ink-2)]">
-              IndexedDB, LocalStorage, Sessions, Cookies and Cache Storage
-            </b>{" "}
-            — inside Chrome DevTools. Dense grid. Mongo-style queries. Row
-            inspector. Schema inference.
+              IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache
+              Storage
+            </b>
+            . Dense grid, Mongo-style queries, row inspector, schema inference.
           </p>
 
           <div className="r-init ri4 mt-9 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center lg:justify-start">
