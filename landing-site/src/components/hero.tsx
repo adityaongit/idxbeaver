@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { CwsBadge } from "@/components/cws-badge";
+import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 
 function HeroMark() {
   return (
@@ -73,8 +73,26 @@ export function Hero() {
             . Dense grid, Mongo-style queries, row inspector, schema inference.
           </p>
 
-          <div className="r-init ri4 mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start">
-            <CwsBadge size="medium" height={56} className="shrink-0" />
+          <div className="r-init ri4 mt-9 flex flex-col items-center justify-center gap-2 sm:flex-row lg:justify-start">
+            <a
+              href={CHROME_WEB_STORE_URL}
+              target="_blank"
+              rel="noopener"
+              aria-label="Install IdxBeaver from the Chrome Web Store"
+              className="group inline-flex h-[42px] items-center gap-2.5 rounded-[10px] bg-white px-[18px] text-[14px] font-medium text-[#1f2024] shadow-[0_1px_0_rgba(255,255,255,.04),0_8px_24px_-12px_rgba(0,0,0,.6)] ring-1 ring-inset ring-black/5 transition-all hover:bg-[#f5f5f7] hover:shadow-[0_1px_0_rgba(255,255,255,.04),0_10px_28px_-10px_rgba(0,0,0,.7)] active:translate-y-px"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/chrome-web-store-icon.svg"
+                alt=""
+                width={22}
+                height={22}
+                className="h-[22px] w-[22px] select-none"
+                draggable={false}
+              />
+              <span className="leading-none">Add to Chrome</span>
+              <span className="ml-0.5 text-[13px] text-[#5f6368]">— it&rsquo;s free</span>
+            </a>
             <Button as="a" href="#product" variant="outline" size="lg" className="w-full sm:w-auto">
               See the product
             </Button>
