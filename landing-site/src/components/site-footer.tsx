@@ -32,9 +32,9 @@ export function SiteFooter() {
           <FooterCol
             heading="Product"
             links={[
-              { label: "Features", href: "#features" },
-              { label: "Query", href: "#query" },
-              { label: "FAQ", href: "#faq" },
+              { label: "Features", href: "/#features" },
+              { label: "Query", href: "/#query" },
+              { label: "FAQ", href: "/faq" },
               { label: "Add to Chrome", href: CHROME_WEB_STORE_URL, external: true },
             ]}
           />
