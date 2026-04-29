@@ -137,6 +137,14 @@ export interface QueryResult {
   plan: string;
 }
 
+export interface QueryTab {
+  id: string;
+  name: string;
+  queryText: string;
+  savedQueryId: string | null;
+  lastResult: QueryResult | null;
+}
+
 export interface IndexedCellRecord {
   key: SerializableValue;
   value: SerializedCell;

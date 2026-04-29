@@ -2,8 +2,10 @@ export const SHORTCUTS = [
   { id: "cmd-palette",     keys: "mod+k",           label: "Command palette" },
   { id: "new-tab",         keys: "mod+shift+t",     label: "Open database picker" },
   { id: "run-query",       keys: "mod+enter",       label: "Run query" },
-  { id: "run-explain",     keys: "mod+shift+enter", label: "Run query (explain)" },
-  { id: "save-query",      keys: "mod+shift+s",     label: "Save current query" },
+  { id: "save-query",      keys: "mod+s",           label: "Save current query" },
+  { id: "new-query-tab",   keys: "mod+j",           label: "New query tab" },
+  { id: "open-query",      keys: "mod+e",           label: "Open query workspace / new tab" },
+  { id: "close-query-tab", keys: "mod+x",           label: "Close active tab" },
   { id: "open-filters",    keys: "mod+shift+f",     label: "Open filters" },
   { id: "new-row",         keys: "mod+shift+n",     label: "New inline row" },
   { id: "export",          keys: "mod+shift+e",     label: "Export current view" },
@@ -53,6 +55,9 @@ export function matchesShortcut(event: KeyboardEvent, keys: string): boolean {
   if (targetKey === "f" && eventKey !== "f") return false;
   if (targetKey === "n" && eventKey !== "n") return false;
   if (targetKey === "e" && eventKey !== "e") return false;
+  if (targetKey === "w" && eventKey !== "w") return false;
+  if (targetKey === "x" && eventKey !== "x") return false;
+  if (targetKey === "j" && eventKey !== "j") return false;
   if (targetKey === "?" && eventKey !== "?") return false;
 
   return true;

@@ -89,14 +89,28 @@ Supported filter operators: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `
 
 ## Keyboard Shortcuts
 
-| Action                    | Shortcut       |
-| ------------------------- | -------------- |
-| Open command palette      | `⌘K` / `Ctrl+K`|
-| Run query                 | `⌘↵` / `Ctrl+↵`|
-| Save query                | `⌘S` / `Ctrl+S`|
-| Toggle left / bottom / right panel | Buttons in topbar |
-| Commit cell edit          | `↵`            |
-| Cancel cell edit          | `Esc`          |
+Mac shortcuts shown below. On Windows / Linux, swap `⌘` for `Ctrl`.
+
+| Action                       | Shortcut          |
+| ---------------------------- | ----------------- |
+| Open command palette         | `⌘K`              |
+| Open database picker         | `⌘⇧T`             |
+| Open settings                | `⌘,`              |
+| Show keyboard shortcuts      | `?`               |
+| Run query                    | `⌘↵`              |
+| Save query                   | `⌘S`              |
+| Open query workspace         | `⌘E` (again to open new tab) |
+| New query tab                | `⌘J`              |
+| Close active tab             | `⌘X`              |
+| Open filters                 | `⌘⇧F`             |
+| New inline row               | `⌘⇧N`             |
+| Export current view (JSON)   | `⌘⇧E`             |
+| Undo last edit               | `⌘Z`              |
+| Redo last edit               | `⌘⇧Z`             |
+| Delete selected row          | `⌘⌫`              |
+| Commit cell edit             | `↵`               |
+| Cancel / close               | `Esc`             |
+
 
 ## Architecture
 

@@ -18,7 +18,6 @@ import { Badge } from "../components/ui/badge";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from "../components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
-import { Kbd, KbdGroup } from "../components/ui/kbd";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -42,6 +41,7 @@ import { ImportDialog } from "./ImportDialog";
 import { toNdjson, toSqlInsert, downloadBlob } from "../shared/export";
 import { QueryHistoryPanel } from "./QueryHistoryPanel";
 import { SavedQueriesPanel } from "./SavedQueriesPanel";
+import { QueryTabsStrip } from "./QueryTabsStrip";
 import { CommandPalette } from "./CommandPalette";
 import { DataGrid, type DraftRow } from "./DataGrid";
 import { JsonHighlight, SqlHighlight } from "./highlight";
@@ -59,6 +59,7 @@ import type {
   KvReadResult,
   PanelReply,
   QueryResult,
+  QueryTab,
   SerializableValue,
   StorageDiscovery,
   StorageRequest,
@@ -126,12 +127,86 @@ function App() {
   const [selected, setSelected] = useState<SelectedNode>({ kind: "overview" });
   const [tableResult, setTableResult] = useState<TableReadResult | null>(null);
   const [kvResult, setKvResult] = useState<KvReadResult | null>(null);
-  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [queryText, setQueryText] = useState(`{
+  const DEFAULT_QUERY_TEXT = `{
   "store": "",
   "filter": {},
   "limit": 100
-}`);
+}`;
+  const [queryTabs, setQueryTabs] = useState<QueryTab[]>(() => [
+    { id: crypto.randomUUID(), name: "Untitled 1", queryText: DEFAULT_QUERY_TEXT, savedQueryId: null, lastResult: null }
+  ]);
+  const [activeQueryTabId, setActiveQueryTabId] = useState<string>(() => queryTabs[0]?.id ?? "");
+  const activeQueryTab = useMemo(
+    () => queryTabs.find((t) => t.id === activeQueryTabId) ?? queryTabs[0],
+    [queryTabs, activeQueryTabId]
+  );
+  const queryText = activeQueryTab?.queryText ?? DEFAULT_QUERY_TEXT;
+  const queryResult = activeQueryTab?.lastResult ?? null;
+  const setQueryText = useCallback((next: string | ((prev: string) => string)) => {
+    setQueryTabs((prev) => prev.map((t) => {
+      if (t.id !== activeQueryTabId) return t;
+      const value = typeof next === "function" ? next(t.queryText) : next;
+      return { ...t, queryText: value };
+    }));
+  }, [activeQueryTabId]);
+  const setQueryResult = useCallback((next: QueryResult | null | ((prev: QueryResult | null) => QueryResult | null)) => {
+    setQueryTabs((prev) => prev.map((t) => {
+      if (t.id !== activeQueryTabId) return t;
+      const value = typeof next === "function" ? next(t.lastResult) : next;
+      return { ...t, lastResult: value };
+    }));
+  }, [activeQueryTabId]);
+  const nextUntitledName = useCallback((tabs: QueryTab[]): string => {
+    const used = new Set<number>();
+    for (const t of tabs) {
+      const m = t.name.match(/^Untitled (\d+)$/);
+      if (m) used.add(parseInt(m[1], 10));
+    }
+    let n = 1;
+    while (used.has(n)) n++;
+    return `Untitled ${n}`;
+  }, []);
+  const openNewQueryTab = useCallback((init?: { queryText?: string; name?: string; savedQueryId?: string | null }) => {
+    const newTab: QueryTab = {
+      id: crypto.randomUUID(),
+      name: init?.name ?? nextUntitledName(queryTabs),
+      queryText: init?.queryText ?? DEFAULT_QUERY_TEXT,
+      savedQueryId: init?.savedQueryId ?? null,
+      lastResult: null
+    };
+    setQueryTabs((prev) => [...prev, newTab]);
+    setActiveQueryTabId(newTab.id);
+    setActiveTabId("sql");
+  }, [queryTabs, nextUntitledName]);
+  const closeQueryTab = useCallback((id: string) => {
+    setQueryTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      if (idx === -1) return prev;
+      const next = prev.filter((t) => t.id !== id);
+      if (next.length === 0) {
+        setActiveQueryTabId("");
+        setActiveTabId("overview");
+        return [];
+      }
+      if (id === activeQueryTabId) {
+        const fallback = next[Math.max(0, idx - 1)] ?? next[0];
+        setActiveQueryTabId(fallback.id);
+      }
+      return next;
+    });
+  }, [activeQueryTabId]);
+  const renameQueryTab = useCallback((id: string, name: string) => {
+    setQueryTabs((prev) => prev.map((t) => (t.id === id ? { ...t, name } : t)));
+  }, []);
+  const openSavedQueryInTab = useCallback((saved: SavedQuery) => {
+    const existing = queryTabs.find((t) => t.savedQueryId === saved.id);
+    if (existing) {
+      setActiveQueryTabId(existing.id);
+      setActiveTabId("sql");
+      return;
+    }
+    openNewQueryTab({ queryText: saved.queryText, name: saved.name, savedQueryId: saved.id });
+  }, [queryTabs, openNewQueryTab]);
   const [selectedRecord, setSelectedRecord] = useState<IndexedDbRecord | KeyValueRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -159,6 +234,13 @@ function App() {
   const [queryOffset, setQueryOffset] = useState(0);
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
+  const isQueryTabDirty = useCallback((tab: QueryTab): boolean => {
+    if (tab.savedQueryId) {
+      const saved = savedQueries.find((q) => q.id === tab.savedQueryId);
+      return saved ? tab.queryText !== saved.queryText : false;
+    }
+    return tab.queryText.trim() !== "" && tab.queryText !== DEFAULT_QUERY_TEXT;
+  }, [savedQueries]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const undoStackRef = useRef(new UndoStack());
@@ -306,18 +388,26 @@ function App() {
   }, [discovery]);
 
   const renderedTabs = useMemo(() => {
-    const all = tabs.map((tab) => ({ value: tab.id, title: tab.title, closable: true, preview: false }));
+    const all: Array<{ value: string; title: string; closable: boolean; preview: boolean; kind: "storage" | "query" }> =
+      tabs.map((tab) => ({ value: tab.id, title: tab.title, closable: true, preview: false, kind: "storage" as const }));
     if (previewTab && !tabs.some((tab) => tab.id === previewTab.id)) {
-      all.push({ value: "preview", title: previewTab.title, closable: false, preview: true });
+      all.push({ value: "preview", title: previewTab.title, closable: false, preview: true, kind: "storage" });
+    }
+    for (const qt of queryTabs) {
+      all.push({ value: `query:${qt.id}`, title: qt.name, closable: true, preview: false, kind: "query" });
     }
     return all;
-  }, [previewTab, tabs]);
+  }, [previewTab, tabs, queryTabs]);
 
   const canToggleBottomPanel = activeTabId !== "sql" && selected.kind !== "overview" && selected.kind !== "cache" && selected.kind !== "cookies";
   useEffect(() => {
     if (canToggleBottomPanel) return;
     setBottomPanelCollapsed(true);
   }, [canToggleBottomPanel]);
+
+  useEffect(() => {
+    if (activeTabId === "sql" && queryTabs.length === 0) openNewQueryTab();
+  }, [activeTabId, queryTabs.length, openNewQueryTab]);
 
   useEffect(() => {
     const isDark = theme === "dark";
@@ -333,12 +423,32 @@ function App() {
   useEffect(() => {
     globalShortcutRef.current = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
+      // Tab-management shortcuts must fire even when focus is inside the editor
+      // (CodeMirror's content is contentEditable) — otherwise Chrome's defaults win.
+      if (matchesShortcut(e, "mod+j")) { e.preventDefault(); e.stopPropagation(); openNewQueryTab(); return; }
+      if (matchesShortcut(e, "mod+e")) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (activeTabId === "sql") openNewQueryTab();
+        else setActiveTabId("sql");
+        return;
+      }
+      if (matchesShortcut(e, "mod+x")) {
+        // Don't steal ⌘X from the editor / inputs — let cut work there.
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (activeTabId === "sql") closeQueryTab(activeQueryTabId);
+        else if (activeTabId !== "overview") closeTab(activeTabId);
+        return;
+      }
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
       if (matchesShortcut(e, "mod+k")) { e.preventDefault(); setCommandPaletteOpen(true); return; }
       if (matchesShortcut(e, "mod+,")) { e.preventDefault(); setSettingsOpen((o) => !o); return; }
       if (matchesShortcut(e, "mod+shift+t")) { e.preventDefault(); setDatabasePickerOpen(true); return; }
       if (matchesShortcut(e, "?")) { e.preventDefault(); setHelpOpen(true); return; }
-      if (matchesShortcut(e, "mod+shift+s") && activeTabId === "sql") { e.preventDefault(); setSaveQueryDialogOpen(true); return; }
+      if (matchesShortcut(e, "mod+s") && activeTabId === "sql") { e.preventDefault(); setSaveQueryDialogOpen(true); return; }
+      if (matchesShortcut(e, "mod+enter") && activeTabId === "sql") { e.preventDefault(); void runQuery(); return; }
       if (matchesShortcut(e, "mod+shift+f") && selected.kind === "indexeddb") { e.preventDefault(); setFilterState((prev) => ({ ...prev, open: !prev.open })); return; }
       if (matchesShortcut(e, "mod+shift+n") && selected.kind === "indexeddb") { e.preventDefault(); startDraftRow(); return; }
       if (matchesShortcut(e, "mod+shift+e")) { e.preventDefault(); exportVisible("json"); return; }
@@ -348,8 +458,12 @@ function App() {
   });
   useEffect(() => {
     const handler = (e: KeyboardEvent) => globalShortcutRef.current(e);
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
+    document.addEventListener("keydown", handler, true);
+    return () => {
+      window.removeEventListener("keydown", handler, true);
+      document.removeEventListener("keydown", handler, true);
+    };
   }, []);
 
   const loadIndexedStore = useCallback(
@@ -582,9 +696,10 @@ function App() {
 
   const handleSaveQuery = async (name: string, tags: string[]) => {
     const origin = discovery?.origin ?? "";
-    await saveQuery({ origin, name, queryText, tags });
+    const saved = await saveQuery({ origin, name, queryText, tags });
     const updated = await getSavedQueries(origin);
     setSavedQueries(updated);
+    setQueryTabs((prev) => prev.map((t) => (t.id === activeQueryTabId ? { ...t, name, savedQueryId: saved.id } : t)));
     setSaveQueryDialogOpen(false);
     setSaveQueryName("");
     setSaveQueryTags("");
@@ -1267,7 +1382,7 @@ function App() {
   }, [discovery, selected]);
 
   return (
-    <main className={`${theme} flex h-screen min-w-[1100px] flex-col bg-background text-foreground`}>
+    <main className={`${theme} flex h-full min-w-[1100px] flex-col overflow-hidden bg-background text-foreground`}>
       <header
         className="relative flex shrink-0 items-center gap-2 px-3"
         style={{
@@ -1490,7 +1605,10 @@ function App() {
                 {sidebarTab === "queries" && (
                   <SavedQueriesPanel
                     queries={savedQueries}
-                    onLoad={(text) => { setQueryText(text); setActiveTabId("sql"); }}
+                    onLoad={(_text, id) => {
+                      const saved = savedQueries.find((q) => q.id === id);
+                      if (saved) openSavedQueryInTab(saved);
+                    }}
                     onMutated={() => void getSavedQueries(discovery?.origin ?? "").then(setSavedQueries)}
                   />
                 )}
@@ -1498,7 +1616,7 @@ function App() {
                   <QueryHistoryPanel
                     entries={historyEntries}
                     origin={discovery?.origin ?? ""}
-                    onLoad={(text) => { setQueryText(text); setActiveTabId("sql"); }}
+                    onLoad={(text) => openNewQueryTab({ queryText: text })}
                     onClear={() => void getHistory(discovery?.origin ?? "").then(setHistoryEntries)}
                   />
                 )}
@@ -1514,33 +1632,52 @@ function App() {
             {renderedTabs.length > 0 && (
               <div className="flex shrink-0 items-stretch border-b border-border bg-card">
                 {renderedTabs.map((tab) => {
-                  const isActive = tab.value === activeTabId;
+                  const isQueryTab = tab.kind === "query";
+                  const queryTabId = isQueryTab ? tab.value.slice("query:".length) : null;
+                  const isActive = isQueryTab
+                    ? activeTabId === "sql" && queryTabId === activeQueryTabId
+                    : tab.value === activeTabId;
                   const select = () => {
+                    if (isQueryTab && queryTabId) {
+                      setActiveTabId("sql");
+                      setActiveQueryTabId(queryTabId);
+                      return;
+                    }
                     if (tab.value === "overview") { openNode({ kind: "overview" }); return; }
                     if (tab.value === "preview" && previewTab) { openNode(previewTab.node); return; }
                     const found = tabs.find((t) => t.id === tab.value);
                     if (found) chooseTab(found);
+                  };
+                  const handleClose = () => {
+                    if (isQueryTab && queryTabId) {
+                      closeQueryTab(queryTabId);
+                      return;
+                    }
+                    closeTab(tab.value);
                   };
                   return (
                     <button
                       key={tab.value}
                       onClick={select}
                       className={[
-                        "group flex min-w-0 max-w-[160px] items-center gap-1.5 border-r border-border/50 px-3 py-1.5 text-[11px] transition-colors",
+                        "group flex min-w-0 max-w-[180px] items-center gap-1.5 border-r border-border/50 px-3 py-1.5 text-[11px] transition-colors",
                         tab.preview ? "italic" : "",
                         isActive
                           ? "bg-background text-foreground"
                           : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
                       ].join(" ")}
                     >
+                      {isQueryTab && (
+                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-muted-foreground/70">SQL</span>
+                      )}
                       <span className="truncate">{tab.title}</span>
                       {tab.closable && (
                         <span
                           role="button"
                           tabIndex={0}
                           className="ml-0.5 shrink-0 text-[13px] leading-none opacity-40 transition-opacity hover:opacity-100"
-                          onClick={(e) => { e.stopPropagation(); closeTab(tab.value); }}
-                          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); closeTab(tab.value); } }}
+                          onClick={(e) => { e.stopPropagation(); handleClose(); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleClose(); } }}
                         >
                           ×
                         </span>
@@ -1548,6 +1685,15 @@ function App() {
                     </button>
                   );
                 })}
+                <button
+                  type="button"
+                  onClick={() => openNewQueryTab()}
+                  className="grid w-8 shrink-0 place-items-center text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                  title="New query tab (⌘J)"
+                  aria-label="New query tab"
+                >
+                  +
+                </button>
               </div>
             )}
 
@@ -1682,7 +1828,7 @@ function App() {
                               </div>
                               <button
                                 type="button"
-                                onClick={() => { setQueryText(entry.queryText); setActiveTabId("sql"); }}
+                                onClick={() => openNewQueryTab({ queryText: entry.queryText })}
                                 className="block w-full text-left font-mono hover:opacity-80"
                               >
                                 <pre className="m-0 whitespace-pre-wrap break-all">
@@ -1792,15 +1938,18 @@ function App() {
             )}
 
             {activeTabId === "sql" && (
-              <ResizablePanelGroup orientation="vertical" className="h-full">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                     <ResizablePanel defaultSize="45%" minSize="150px">
-                      <div className="flex h-full flex-col">
+                      <div className="flex h-full min-w-0 flex-col overflow-hidden">
                         <div className="min-h-0 flex-1 bg-card">
                           <Suspense fallback={<div className="flex min-h-[120px] items-center justify-center text-[11px] text-muted-foreground">Loading editor…</div>}>
                             <QueryEditor
+                              key={activeQueryTabId}
                               value={queryText}
                               onChange={setQueryText}
                               onRun={() => void runQuery()}
+                              onSave={() => setSaveQueryDialogOpen(true)}
                               suggestions={querySuggestionPool}
                               theme={theme}
                               databases={discovery?.indexedDb ?? []}
@@ -1808,14 +1957,14 @@ function App() {
                             />
                           </Suspense>
                         </div>
-                        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card/50 px-3 py-1.5 text-[11px] text-muted-foreground">
-                          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-hidden">
+                        <div className="flex shrink-0 items-center gap-3 overflow-hidden border-t border-border bg-card/50 px-3 py-1.5 text-[11px] text-muted-foreground">
+                          <div className="hidden min-w-0 flex-1 items-center gap-1 overflow-hidden lg:flex">
                             <span className="section-label mr-1">Examples</span>
                             <QueryExampleButton onClick={() => setQueryText(exampleFindActive(selected))}>active</QueryExampleButton>
                             <QueryExampleButton onClick={() => setQueryText(exampleTopByCreated(selected))}>top 10 by createdAt</QueryExampleButton>
                             <QueryExampleButton onClick={() => setQueryText(exampleRegex(selected))}>email regex</QueryExampleButton>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="ml-auto flex shrink-0 items-center gap-2">
                             <span className="hidden max-w-[220px] truncate font-mono md:inline">
                               {selected.kind === "indexeddb"
                                 ? `${selected.dbName} v${selected.dbVersion} · ${selected.storeName}`
@@ -1823,19 +1972,11 @@ function App() {
                                   ? `${queryDbContext.dbName} v${queryDbContext.dbVersion} · any store`
                                   : "no database opened"}
                             </span>
-                            <Button size="xs" variant="outline" onClick={() => setSaveQueryDialogOpen(true)}>
+                            <Button size="xs" variant="outline" onClick={() => setSaveQueryDialogOpen(true)} title="Save query (⌘S)">
                               Save
-                              <KbdGroup className="ml-1 opacity-70">
-                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">⌘</Kbd>
-                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">S</Kbd>
-                              </KbdGroup>
                             </Button>
-                            <Button size="xs" onClick={() => void runQuery()} disabled={busy || !queryDbContext}>
+                            <Button size="xs" onClick={() => void runQuery()} disabled={busy || !queryDbContext} title="Run query (⌘↵)">
                               Run
-                              <KbdGroup className="ml-1 opacity-70">
-                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">⌘</Kbd>
-                                <Kbd className="border-current/15 bg-background/20 text-[8px] text-current">↵</Kbd>
-                              </KbdGroup>
                             </Button>
                           </div>
                         </div>
@@ -1846,15 +1987,32 @@ function App() {
                       <div className="flex h-full flex-col overflow-hidden">
                         {queryResult ? (
                           <>
-                            <p className="shrink-0 border-b border-border bg-muted/20 px-3 py-1 font-mono text-[10px] text-muted-foreground">{queryResult.plan}</p>
+                            {filterState.open && (
+                              <FilterBar
+                                state={filterState}
+                                columns={queryResult.columns}
+                                onChange={(next) => setFilterState(next)}
+                                onClose={() => setFilterState((prev) => ({ ...prev, open: false }))}
+                              />
+                            )}
                             <DataGrid
                               columns={queryResult.columns}
-                              indexedRows={queryResult.rows.map((row) => ({ key: row.key, value: row.value }))}
+                              indexedRows={applyFilters(
+                                queryResult.rows.map((row) => ({ key: row.key, value: row.value })),
+                                filterState
+                              )}
                               selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
                               onSelect={selectRecord}
                               onDelete={deleteIndexedRecord}
                               inferredSchema={inferredSchema}
                               inlineKeyPath={selectedStore?.keyPath ?? null}
+                            />
+                            <QueryResultsFooter
+                              plan={queryResult.plan}
+                              filtersOpen={filterState.open}
+                              filterRuleCount={activeRuleCount(filterState)}
+                              onToggleFilters={() => setFilterState((prev) => ({ ...prev, open: !prev.open }))}
+                              onExport={(fmt) => exportVisible(fmt)}
                             />
                           </>
                         ) : (
@@ -1869,6 +2027,7 @@ function App() {
                       </div>
                     </ResizablePanel>
               </ResizablePanelGroup>
+              </div>
             )}
           </section>
         </ResizablePanel>
@@ -3348,6 +3507,81 @@ function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
 }
 
 type PopoverKind = "columns" | "pagination" | "export" | null;
+
+function QueryResultsFooter({
+  plan,
+  filtersOpen,
+  filterRuleCount,
+  onToggleFilters,
+  onExport,
+}: {
+  plan: string;
+  filtersOpen: boolean;
+  filterRuleCount: number;
+  onToggleFilters: () => void;
+  onExport: (format: "json" | "csv" | "ndjson" | "sql") => void;
+}) {
+  const [exportOpen, setExportOpen] = useState(false);
+  const wrapperRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (event: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(event.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportOpen]);
+
+  return (
+    <footer ref={wrapperRef} className="relative flex shrink-0 items-center gap-2 border-t border-border bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground">
+      <span className="min-w-0 flex-1 truncate font-mono text-[10px]" title={plan}>{plan}</span>
+      <button
+        type="button"
+        onClick={onToggleFilters}
+        className={cn(
+          "flex items-center gap-1 rounded-sm border border-border bg-background px-2 py-0.5 text-[11px] font-medium",
+          filtersOpen ? "text-foreground shadow-sm" : "text-foreground hover:bg-muted/60"
+        )}
+        title="Toggle filters (⌘⇧F)"
+      >
+        <Search className="size-3" />
+        Filters{filterRuleCount > 0 ? ` (${filterRuleCount})` : ""}
+      </button>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setExportOpen((prev) => !prev)}
+          className={cn(
+            "flex items-center gap-1 rounded-sm border border-border bg-background px-2 py-0.5 text-[11px] font-medium",
+            exportOpen ? "text-foreground shadow-sm" : "text-foreground hover:bg-muted/60"
+          )}
+        >
+          Export
+          <ChevronDown className="size-3" />
+        </button>
+        {exportOpen && (
+          <div
+            role="menu"
+            className="absolute bottom-[calc(100%+6px)] right-0 z-40 w-40 overflow-hidden rounded-md border border-border bg-card text-[11px] shadow-xl"
+          >
+            {(["json", "csv", "ndjson", "sql"] as const).map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/60"
+                onClick={() => { onExport(fmt); setExportOpen(false); }}
+              >
+                {fmt.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </footer>
+  );
+}
 
 function DataFooter({
   totalRows,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { EditorView, drawSelection, highlightActiveLine, hoverTooltip, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
@@ -20,6 +20,7 @@ type QueryEditorProps = {
   value: string;
   onChange: (value: string) => void;
   onRun: () => void;
+  onSave?: () => void;
   suggestions: QuerySuggestion[];
   theme: "dark" | "light";
   databases?: IndexedDbDatabaseInfo[];
@@ -214,9 +215,13 @@ function buildHoverExtension(
   });
 }
 
-export function QueryEditor({ value, onChange, onRun, suggestions, theme, databases = [], inferredColumns = [] }: QueryEditorProps) {
+export function QueryEditor({ value, onChange, onRun, onSave, suggestions, theme, databases = [], inferredColumns = [] }: QueryEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<EditorView | null>(null);
+  const onRunRef = useRef(onRun);
+  const onSaveRef = useRef(onSave);
+  onRunRef.current = onRun;
+  onSaveRef.current = onSave;
 
   const completionExtension = useMemo(
     () => buildCompletionExtension(suggestions, databases, inferredColumns),
@@ -242,20 +247,33 @@ export function QueryEditor({ value, onChange, onRun, suggestions, theme, databa
         closeBrackets(),
         foldGutter(),
         highlightActiveLine(),
+        Prec.highest(
+          keymap.of([
+            {
+              key: "Mod-Enter",
+              preventDefault: true,
+              run: () => {
+                onRunRef.current();
+                return true;
+              }
+            },
+            {
+              key: "Mod-s",
+              preventDefault: true,
+              run: () => {
+                onSaveRef.current?.();
+                return true;
+              }
+            }
+          ])
+        ),
         keymap.of([
           indentWithTab,
           ...defaultKeymap,
           ...historyKeymap,
           ...closeBracketsKeymap,
           ...completionKeymap,
-          ...searchKeymap,
-          {
-            key: "Mod-Enter",
-            run: () => {
-              onRun();
-              return true;
-            }
-          }
+          ...searchKeymap
         ]),
         json(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),

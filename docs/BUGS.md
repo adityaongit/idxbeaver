@@ -16,6 +16,8 @@ Remapped all browser-intercepted shortcuts to `mod+shift` variants:
 | ⌘N | ⌘⇧N | New inline row |
 | ⌘E | ⌘⇧E | Export current view |
 
+Chrome DevTools also reserves `⌘T`, `⌘W`, and `⌘N` at the browser-accelerator level — panel iframes never receive those `keydown` events, so capture-phase `preventDefault` cannot reclaim them. Tab management uses `⌘J` (new tab), `⌘E` (focus workspace; press again to open a new tab), and `⌘X` (close active tab — handler skips inputs/CodeMirror so cut still works) instead.
+
 **Files:** `src/panel/shortcuts.ts`, `src/panel/main.tsx`, `src/panel/CommandPalette.tsx`
 
 ---
