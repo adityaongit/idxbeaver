@@ -36,7 +36,7 @@ export function CwsInstallButton({ className }: { className?: string }) {
         className="flex flex-col items-start gap-[2px] leading-none text-[#3c4043]"
         style={{ fontFamily: FONT_STACK }}
       >
-        <span className="text-[11px] font-normal">Available in the</span>
+        <span className="text-[11px] pl-0.25 font-normal">Available in the</span>
         <span className="text-[15px] font-medium tracking-[-0.005em]">
           Chrome Web Store
         </span>
