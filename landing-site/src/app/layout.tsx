@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { DemoSeeder } from "@/components/demo-seeder";
-import { BRAND_PURPLE } from "@/lib/brand";
+import { BRAND_PURPLE, CHROME_WEB_STORE_URL } from "@/lib/brand";
 import { resolveSiteUrl } from "@/lib/site";
 
 const geistSans = Geist({
@@ -57,6 +57,35 @@ export default function RootLayout({
       style={{ "--color-brand": BRAND_PURPLE } as React.CSSProperties}
     >
       <body className="grain">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "IdxBeaver",
+              alternateName: "IdxBeaver — IndexedDB & Storage Inspector",
+              applicationCategory: "DeveloperApplication",
+              operatingSystem: "Chromium 110+",
+              description: DESCRIPTION,
+              url: SITE_URL,
+              downloadUrl: CHROME_WEB_STORE_URL,
+              installUrl: CHROME_WEB_STORE_URL,
+              softwareVersion: "1.0",
+              license: "https://github.com/adityaongit/idxbeaver/blob/main/LICENSE",
+              offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+              author: {
+                "@type": "Person",
+                name: "Aditya Jindal",
+                url: "https://github.com/adityaongit",
+              },
+              sameAs: [
+                "https://github.com/adityaongit/idxbeaver",
+                CHROME_WEB_STORE_URL,
+              ],
+            }),
+          }}
+        />
         <div className="atmos" />
         <DemoSeeder />
         {children}
