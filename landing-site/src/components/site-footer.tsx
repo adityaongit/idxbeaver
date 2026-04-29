@@ -41,6 +41,8 @@ export function SiteFooter() {
           <FooterCol
             heading="Resources"
             links={[
+              { label: "Blog", href: "/blog" },
+              { label: "vs DevTools panel", href: "/vs/chrome-devtools-application-panel" },
               { label: "Docs", href: "https://github.com/adityaongit/idxbeaver#readme", external: true },
               { label: "GitHub", href: "https://github.com/adityaongit/idxbeaver", external: true },
               {
@@ -48,7 +50,6 @@ export function SiteFooter() {
                 href: "https://github.com/adityaongit/idxbeaver/releases",
                 external: true,
               },
-              { label: "Issues", href: "https://github.com/adityaongit/idxbeaver/issues", external: true },
             ]}
           />
           <FooterCol
