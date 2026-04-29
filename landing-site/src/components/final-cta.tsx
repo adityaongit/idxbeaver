@@ -13,6 +13,9 @@ export function FinalCta() {
         }}
       />
       <div className="relative mx-auto max-w-[920px] px-5 sm:px-8">
+        <p className="mb-4 text-[12px] font-medium uppercase tracking-[0.18em] text-[var(--color-ink-dim)]">
+          Open source · MIT
+        </p>
         <h2
           className="font-semibold text-[var(--color-ink)]"
           style={{
@@ -21,21 +24,24 @@ export function FinalCta() {
             letterSpacing: "-0.04em",
           }}
         >
-          Treat browser storage like a <span className="ir">real database.</span>
+          Inspect the <span className="ir">inspector.</span>
         </h2>
-        <p className="mx-auto mt-5 max-w-[560px] text-[15px] text-[var(--color-ink-dim)] sm:mt-6 sm:text-[18px]">
-          While we wait for the Chrome Web Store, grab the latest build and load it
-          unpacked. Two minutes, then open DevTools.
+        <p className="mx-auto mt-5 max-w-[620px] text-[15px] text-[var(--color-ink-dim)] sm:mt-6 sm:text-[18px]">
+          IdxBeaver runs entirely in your browser — no telemetry, no servers, no
+          account. Read the source, file an issue, or grab the unpacked build to
+          run a fork.
         </p>
         <div className="mt-9 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
           <Button
             as="a"
-            href="https://github.com/adityaongit/idxbeaver/releases/latest"
+            href="https://github.com/adityaongit/idxbeaver"
+            target="_blank"
+            rel="noopener"
             variant="primary"
             size="lg"
             className="w-full sm:w-auto"
           >
-            Download latest .zip
+            View on GitHub
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path
                 d="M3 6h6M6 3l3 3-3 3"
@@ -48,12 +54,14 @@ export function FinalCta() {
           </Button>
           <Button
             as="a"
-            href="https://github.com/adityaongit/idxbeaver#install-from-zip"
+            href="https://github.com/adityaongit/idxbeaver/releases/latest"
+            target="_blank"
+            rel="noopener"
             variant="outline"
             size="lg"
             className="w-full sm:w-auto"
           >
-            Install guide
+            Download .zip
           </Button>
         </div>
       </div>
