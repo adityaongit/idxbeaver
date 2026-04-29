@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { Button } from "@/components/ui/button";
 import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +15,29 @@ function Logo() {
       width={28}
       height={28}
       className="h-[28px] w-[28px] shrink-0 select-none"
+    />
+  );
+}
+
+function GithubIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.08 3.29 9.39 7.86 10.92.57.1.78-.25.78-.55 0-.27-.01-1.18-.02-2.13-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18.92-.26 1.9-.39 2.88-.39s1.96.13 2.88.39c2.2-1.49 3.16-1.18 3.16-1.18.62 1.58.23 2.75.11 3.04.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.68.41.36.78 1.07.78 2.16 0 1.56-.01 2.81-.01 3.19 0 .31.21.66.79.55 4.57-1.53 7.85-5.84 7.85-10.92C23.5 5.74 18.27.5 12 .5Z" />
+    </svg>
+  );
+}
+
+function ChromeStoreIcon({ size = 20 }: { size?: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/chrome-web-store-icon.svg"
+      alt=""
+      width={size}
+      height={size}
+      className="shrink-0 select-none"
+      style={{ height: size, width: size }}
+      draggable={false}
     />
   );
 }
@@ -127,24 +149,21 @@ export function SiteNav() {
             target="_blank"
             rel="noopener"
             onClick={() => setOpen(false)}
-            className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
+            className="flex items-center gap-2 rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
           >
-            GitHub
+            <GithubIcon />
+            <span>GitHub</span>
           </a>
-          <div className="mt-3">
-            <Button
-              as="a"
-              href={CHROME_WEB_STORE_URL}
-              target="_blank"
-              rel="noopener"
-              variant="primary"
-              size="lg"
-              className="w-full"
-              onClick={() => setOpen(false)}
-            >
-              Add to Chrome
-            </Button>
-          </div>
+          <a
+            href={CHROME_WEB_STORE_URL}
+            target="_blank"
+            rel="noopener"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
+          >
+            <ChromeStoreIcon size={20} />
+            <span>Install</span>
+          </a>
         </nav>
       </div>
     </div>
@@ -206,17 +225,17 @@ export function SiteNav() {
           </div>
 
           {/* Mobile CTA + hamburger */}
-          <div className="flex items-center gap-2 lg:hidden">
-            <Button
-              as="a"
+          <div className="flex items-center gap-1 lg:hidden">
+            <a
               href={CHROME_WEB_STORE_URL}
               target="_blank"
               rel="noopener"
-              variant="primary"
-              className="hidden sm:inline-flex"
+              aria-label="Install IdxBeaver from the Chrome Web Store"
+              className="hidden h-9 items-center gap-2 rounded-[8px] px-2.5 text-[13.5px] font-medium text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.05] hover:text-[var(--color-ink)] sm:inline-flex"
             >
-              Add to Chrome
-            </Button>
+              <ChromeStoreIcon size={20} />
+              <span>Install</span>
+            </a>
             <button
               type="button"
               aria-label={open ? "Close menu" : "Open menu"}
