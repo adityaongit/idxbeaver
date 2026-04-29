@@ -12,7 +12,7 @@ npm run build
 npm run build:watch
 
 # UI preview in browser — no extension APIs needed
-npm run dev          # then open http://127.0.0.1:5174/panel.html
+npm run dev          # then open http://127.0.0.1:5175/panel.html
 
 # Tests
 npm test             # run once (vitest)
