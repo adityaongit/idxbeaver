@@ -135,6 +135,7 @@ export interface QueryResult {
   rows: IndexedCellRecord[];
   columns: string[];
   plan: string;
+  elapsedMs?: number;
 }
 
 export interface QueryTab {

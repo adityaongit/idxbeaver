@@ -132,9 +132,7 @@ function App() {
   "filter": {},
   "limit": 100
 }`;
-  const [queryTabs, setQueryTabs] = useState<QueryTab[]>(() => [
-    { id: crypto.randomUUID(), name: "Untitled 1", queryText: DEFAULT_QUERY_TEXT, savedQueryId: null, lastResult: null }
-  ]);
+  const [queryTabs, setQueryTabs] = useState<QueryTab[]>(() => []);
   const [activeQueryTabId, setActiveQueryTabId] = useState<string>(() => queryTabs[0]?.id ?? "");
   const activeQueryTab = useMemo(
     () => queryTabs.find((t) => t.id === activeQueryTabId) ?? queryTabs[0],
@@ -229,6 +227,7 @@ function App() {
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTER_STATE);
   const [gridView, setGridView] = useState<"data" | "structure">("data");
+  const [queryResultView, setQueryResultView] = useState<"data" | "message">("data");
   const [draftRow, setDraftRow] = useState<DraftRow | null>(null);
   const [queryLimit, setQueryLimit] = useState(300);
   const [queryOffset, setQueryOffset] = useState(0);
@@ -684,7 +683,7 @@ function App() {
         setNotice({ tone: "error", message: response.error });
         return;
       }
-      setQueryResult(response.data as QueryResult);
+      setQueryResult({ ...(response.data as QueryResult), elapsedMs: durationMs });
       setTableResult(null);
       setSelectedRecord(null);
       setNotice({ tone: "success", message: `Query completed · ${rowCount} rows · ${durationMs}ms` });
@@ -1667,9 +1666,6 @@ function App() {
                           : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
                       ].join(" ")}
                     >
-                      {isQueryTab && (
-                        <span className="shrink-0 text-[9px] uppercase tracking-wider text-muted-foreground/70">SQL</span>
-                      )}
                       <span className="truncate">{tab.title}</span>
                       {tab.closable && (
                         <span
@@ -1707,7 +1703,7 @@ function App() {
               />
             )}
 
-            {activeTabId !== "sql" && selected.kind === "indexeddb" && (
+            {activeTabId !== "sql" && activeTabId !== "overview" && selected.kind === "indexeddb" && (
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="78%" minSize="260px">
                   <div className="flex h-full min-h-0 flex-col">
@@ -1850,7 +1846,7 @@ function App() {
               </ResizablePanelGroup>
             )}
 
-            {activeTabId !== "sql" && selected.kind === "kv" && (
+            {activeTabId !== "sql" && activeTabId !== "overview" && selected.kind === "kv" && (
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="72%" minSize="260px">
                   <KvGrid
@@ -1882,7 +1878,7 @@ function App() {
               </ResizablePanelGroup>
             )}
 
-            {activeTabId !== "sql" && selected.kind === "cache" && (
+            {activeTabId !== "sql" && activeTabId !== "overview" && selected.kind === "cache" && (
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <CacheView
                   rpc={rpc}
@@ -1894,7 +1890,7 @@ function App() {
               </div>
             )}
 
-            {activeTabId !== "sql" && selected.kind === "cookies" && (
+            {activeTabId !== "sql" && activeTabId !== "overview" && selected.kind === "cookies" && (
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <CookieGrid
                   rows={cookieRows}
@@ -1987,28 +1983,40 @@ function App() {
                       <div className="flex h-full flex-col overflow-hidden">
                         {queryResult ? (
                           <>
-                            {filterState.open && (
-                              <FilterBar
-                                state={filterState}
-                                columns={queryResult.columns}
-                                onChange={(next) => setFilterState(next)}
-                                onClose={() => setFilterState((prev) => ({ ...prev, open: false }))}
-                              />
+                            {queryResultView === "data" ? (
+                              <>
+                                {filterState.open && (
+                                  <FilterBar
+                                    state={filterState}
+                                    columns={queryResult.columns}
+                                    onChange={(next) => setFilterState(next)}
+                                    onClose={() => setFilterState((prev) => ({ ...prev, open: false }))}
+                                  />
+                                )}
+                                <DataGrid
+                                  columns={queryResult.columns}
+                                  indexedRows={applyFilters(
+                                    queryResult.rows.map((row) => ({ key: row.key, value: row.value })),
+                                    filterState
+                                  )}
+                                  selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
+                                  onSelect={selectRecord}
+                                  onDelete={deleteIndexedRecord}
+                                  inferredSchema={inferredSchema}
+                                  inlineKeyPath={selectedStore?.keyPath ?? null}
+                                />
+                              </>
+                            ) : (
+                              <div className="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap">
+                                {queryResult.plan}
+                              </div>
                             )}
-                            <DataGrid
-                              columns={queryResult.columns}
-                              indexedRows={applyFilters(
-                                queryResult.rows.map((row) => ({ key: row.key, value: row.value })),
-                                filterState
-                              )}
-                              selectedRecord={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? selectedRecord : null}
-                              onSelect={selectRecord}
-                              onDelete={deleteIndexedRecord}
-                              inferredSchema={inferredSchema}
-                              inlineKeyPath={selectedStore?.keyPath ?? null}
-                            />
                             <QueryResultsFooter
                               plan={queryResult.plan}
+                              rowCount={queryResult.rows.length}
+                              elapsedMs={queryResult.elapsedMs}
+                              view={queryResultView}
+                              onChangeView={setQueryResultView}
                               filtersOpen={filterState.open}
                               filterRuleCount={activeRuleCount(filterState)}
                               onToggleFilters={() => setFilterState((prev) => ({ ...prev, open: !prev.open }))}
@@ -3509,13 +3517,21 @@ function Overview({ discovery }: { discovery: StorageDiscovery | null }) {
 type PopoverKind = "columns" | "pagination" | "export" | null;
 
 function QueryResultsFooter({
-  plan,
+  plan: _plan,
+  rowCount,
+  elapsedMs,
+  view,
+  onChangeView,
   filtersOpen,
   filterRuleCount,
   onToggleFilters,
   onExport,
 }: {
   plan: string;
+  rowCount: number;
+  elapsedMs?: number;
+  view: "data" | "message";
+  onChangeView: (v: "data" | "message") => void;
   filtersOpen: boolean;
   filterRuleCount: number;
   onToggleFilters: () => void;
@@ -3535,8 +3551,36 @@ function QueryResultsFooter({
   }, [exportOpen]);
 
   return (
-    <footer ref={wrapperRef} className="relative flex shrink-0 items-center gap-2 border-t border-border bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground">
-      <span className="min-w-0 flex-1 truncate font-mono text-[10px]" title={plan}>{plan}</span>
+    <footer ref={wrapperRef} className="relative flex shrink-0 items-center gap-1.5 border-t border-border bg-card/60 px-2 py-1 text-[11px]">
+      <button
+        type="button"
+        onClick={() => onChangeView("data")}
+        className={cn(
+          "rounded-sm border px-2 py-0.5 text-[11px] font-medium",
+          view === "data"
+            ? "border-border bg-background text-foreground shadow-sm"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        )}
+        aria-pressed={view === "data"}
+      >
+        Data
+      </button>
+      <button
+        type="button"
+        onClick={() => onChangeView("message")}
+        className={cn(
+          "rounded-sm border px-2 py-0.5 text-[11px] font-medium",
+          view === "message"
+            ? "border-border bg-background text-foreground shadow-sm"
+            : "border-transparent text-muted-foreground hover:text-foreground"
+        )}
+        aria-pressed={view === "message"}
+      >
+        Message
+      </button>
+      <span className="ml-2 flex-1 truncate text-center text-muted-foreground">
+        {elapsedMs !== undefined ? `${elapsedMs} ms · ` : ""}{rowCount} {rowCount === 1 ? "row" : "rows"}
+      </span>
       <button
         type="button"
         onClick={onToggleFilters}
