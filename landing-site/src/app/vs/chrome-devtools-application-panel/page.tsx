@@ -297,10 +297,18 @@ function ComparisonTable({ rows }: { rows: Array<[string, Cell, Cell]> }) {
 function ComparisonCell({ value, positive = false }: { value: Cell; positive?: boolean }) {
   const trimmed = value.trim().toLowerCase();
   if (trimmed === "no" || trimmed === "none" || trimmed === "n/a") {
-    return <NoIcon />;
+    return (
+      <span className="flex h-full items-center justify-center">
+        <NoIcon />
+      </span>
+    );
   }
   if (trimmed === "yes") {
-    return <YesIcon />;
+    return (
+      <span className="flex h-full items-center justify-center">
+        <YesIcon />
+      </span>
+    );
   }
   return (
     <span
