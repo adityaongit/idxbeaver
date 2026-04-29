@@ -55,6 +55,7 @@ export function SiteFooter() {
           <FooterCol
             heading="Project"
             links={[
+              { label: "About", href: "/about" },
               {
                 label: "License · MIT",
                 href: "https://github.com/adityaongit/idxbeaver/blob/main/LICENSE",
