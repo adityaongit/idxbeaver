@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { DemoSeeder } from "@/components/demo-seeder";
 import { BRAND_PURPLE } from "@/lib/brand";
+import { resolveSiteUrl } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,19 +16,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
   display: "swap",
 });
-
-// Resolve the deployed origin at build time so canonical / og:url match the host.
-// Order: explicit override → Netlify → Vercel (prod, then preview) → localhost.
-function resolveSiteUrl(): string {
-  const fromEnv =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.URL || // Netlify production
-    process.env.DEPLOY_PRIME_URL || // Netlify deploy previews
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-    process.env.VERCEL_URL;
-  if (fromEnv) return fromEnv.startsWith("http") ? fromEnv : `https://${fromEnv}`;
-  return "http://localhost:3000";
-}
 
 const SITE_URL = resolveSiteUrl();
 const TITLE = "IdxBeaver — A database client for browser storage";
