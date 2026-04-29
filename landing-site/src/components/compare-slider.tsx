@@ -76,18 +76,33 @@ export function CompareSlider() {
 
   return (
     <div ref={cmpRef} className="compare" id="cmp">
-      <img
-        className="img-base"
-        src="/screenshots/dark.png"
-        alt="IdxBeaver · dark theme"
-        draggable={false}
-      />
-      <img
-        className="img-top"
-        src="/screenshots/light.png"
-        alt="IdxBeaver · light theme"
-        draggable={false}
-      />
+      <picture>
+        <source srcSet="/screenshots/dark.avif" type="image/avif" />
+        <source srcSet="/screenshots/dark.webp" type="image/webp" />
+        <img
+          className="img-base"
+          src="/screenshots/dark.png"
+          alt="IdxBeaver · dark theme — IndexedDB grid view in Chrome DevTools"
+          width={2940}
+          height={1728}
+          decoding="async"
+          fetchPriority="high"
+          draggable={false}
+        />
+      </picture>
+      <picture>
+        <source srcSet="/screenshots/light.avif" type="image/avif" />
+        <source srcSet="/screenshots/light.webp" type="image/webp" />
+        <img
+          className="img-top"
+          src="/screenshots/light.png"
+          alt="IdxBeaver · light theme — IndexedDB grid view in Chrome DevTools"
+          width={2940}
+          height={1728}
+          decoding="async"
+          draggable={false}
+        />
+      </picture>
       <span className="cmp-tag l">Light</span>
       <span className="cmp-tag d">Dark</span>
       <div className="cmp-line" />
