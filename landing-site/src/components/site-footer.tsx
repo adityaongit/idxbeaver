@@ -1,3 +1,5 @@
+import { CHROME_WEB_STORE_URL } from "@/lib/brand";
+
 function Logo() {
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -32,19 +34,21 @@ export function SiteFooter() {
             links={[
               { label: "Features", href: "#features" },
               { label: "Query", href: "#query" },
-              { label: "Install", href: "#install" },
-              {
-                label: "Releases",
-                href: "https://github.com/adityaongit/idxbeaver/releases",
-              },
+              { label: "FAQ", href: "#faq" },
+              { label: "Add to Chrome", href: CHROME_WEB_STORE_URL, external: true },
             ]}
           />
           <FooterCol
             heading="Resources"
             links={[
-              { label: "Docs", href: "https://github.com/adityaongit/idxbeaver#readme" },
-              { label: "GitHub", href: "https://github.com/adityaongit/idxbeaver" },
-              { label: "Issues", href: "https://github.com/adityaongit/idxbeaver/issues" },
+              { label: "Docs", href: "https://github.com/adityaongit/idxbeaver#readme", external: true },
+              { label: "GitHub", href: "https://github.com/adityaongit/idxbeaver", external: true },
+              {
+                label: "Releases",
+                href: "https://github.com/adityaongit/idxbeaver/releases",
+                external: true,
+              },
+              { label: "Issues", href: "https://github.com/adityaongit/idxbeaver/issues", external: true },
             ]}
           />
           <FooterCol
@@ -53,11 +57,13 @@ export function SiteFooter() {
               {
                 label: "License · MIT",
                 href: "https://github.com/adityaongit/idxbeaver/blob/main/LICENSE",
+                external: true,
               },
               { label: "Privacy", href: "/privacy" },
               {
                 label: "Contact",
                 href: "https://github.com/adityaongit/idxbeaver/issues/new",
+                external: true,
               },
             ]}
           />
@@ -71,7 +77,7 @@ export function SiteFooter() {
   );
 }
 
-type FooterLink = { label: string; href: string };
+type FooterLink = { label: string; href: string; external?: boolean };
 
 function FooterCol({ heading, links }: { heading: string; links: FooterLink[] }) {
   return (
@@ -85,7 +91,12 @@ function FooterCol({ heading, links }: { heading: string; links: FooterLink[] })
             key={l.label}
             className="py-[5px] text-[13.5px] text-[var(--color-ink-dim)] transition-colors hover:text-[var(--color-ink)]"
           >
-            <a href={l.href}>{l.label}</a>
+            <a
+              href={l.href}
+              {...(l.external ? { target: "_blank", rel: "noopener" } : {})}
+            >
+              {l.label}
+            </a>
           </li>
         ))}
       </ul>
