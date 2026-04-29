@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 
 function HeroMark() {
   return (
@@ -72,7 +73,15 @@ export function Hero() {
           </p>
 
           <div className="r-init ri4 mt-9 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center lg:justify-start">
-            <Button as="a" href="#install" variant="primary" size="lg" className="w-full sm:w-auto">
+            <Button
+              as="a"
+              href={CHROME_WEB_STORE_URL}
+              target="_blank"
+              rel="noopener"
+              variant="primary"
+              size="lg"
+              className="w-full sm:w-auto"
+            >
               Add to Chrome
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <path

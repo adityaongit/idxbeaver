@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
+import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 function Logo() {
@@ -130,7 +131,9 @@ export function SiteNav() {
           <div className="mt-3">
             <Button
               as="a"
-              href="#install"
+              href={CHROME_WEB_STORE_URL}
+              target="_blank"
+              rel="noopener"
               variant="primary"
               size="lg"
               className="w-full"
@@ -171,14 +174,21 @@ export function SiteNav() {
             <Button as="a" href="https://github.com/adityaongit/idxbeaver" variant="ghost">
               GitHub
             </Button>
-            <Button as="a" href="#install" variant="primary">
+            <Button as="a" href={CHROME_WEB_STORE_URL} target="_blank" rel="noopener" variant="primary">
               Add to Chrome
             </Button>
           </div>
 
           {/* Mobile CTA + hamburger */}
           <div className="flex items-center gap-2 lg:hidden">
-            <Button as="a" href="#install" variant="primary" className="hidden sm:inline-flex">
+            <Button
+              as="a"
+              href={CHROME_WEB_STORE_URL}
+              target="_blank"
+              rel="noopener"
+              variant="primary"
+              className="hidden sm:inline-flex"
+            >
               Add to Chrome
             </Button>
             <button
