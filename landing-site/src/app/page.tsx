@@ -1,6 +1,7 @@
 "use client";
 
 import { Divider } from "@/components/divider";
+import { FaqSection } from "@/components/faq-section";
 import { FeaturesGrid } from "@/components/features-grid";
 import { FinalCta } from "@/components/final-cta";
 import { Hero } from "@/components/hero";
@@ -46,6 +47,10 @@ export default function Home() {
         <Divider />
 
         <Quote />
+
+        <Divider />
+
+        <FaqSection />
 
         <Divider />
 
