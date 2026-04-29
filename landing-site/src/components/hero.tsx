@@ -77,23 +77,25 @@ export function Hero() {
               href={CHROME_WEB_STORE_URL}
               target="_blank"
               rel="noopener"
-              aria-label="Install IdxBeaver from the Chrome Web Store"
-              className="group inline-flex h-[52px] items-center gap-3 rounded-[12px] bg-white px-5 text-[#1f2024] shadow-[0_1px_0_rgba(255,255,255,.04),0_10px_28px_-12px_rgba(0,0,0,.6)] ring-1 ring-inset ring-black/5 transition-all hover:bg-[#f5f5f7] hover:shadow-[0_1px_0_rgba(255,255,255,.04),0_14px_32px_-12px_rgba(0,0,0,.7)] active:translate-y-px"
+              aria-label="Available in the Chrome Web Store — install IdxBeaver"
+              className="group inline-flex h-[52px] items-center gap-3 rounded-[8px] border border-[#dadce0] bg-white px-4 text-[#3c4043] transition-colors hover:bg-[#f8f9fa] active:translate-y-px"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/brand/chrome-web-store-icon.svg"
                 alt=""
-                width={28}
-                height={28}
-                className="h-7 w-7 shrink-0 select-none"
+                width={32}
+                height={32}
+                className="h-8 w-8 shrink-0 select-none"
                 draggable={false}
               />
-              <span className="text-[16px] font-semibold leading-none tracking-[-0.01em]">
-                Add to Chrome
-              </span>
-              <span className="text-[14px] leading-none text-[#5f6368]">
-                <span className="mr-1.5 text-[#c4c7cc]">|</span> it&rsquo;s free
+              <span className="flex flex-col items-start gap-[2px] leading-none">
+                <span className="text-[10.5px] font-normal text-[#5f6368]">
+                  Available in the
+                </span>
+                <span className="text-[15px] font-medium tracking-[-0.005em] text-[#3c4043]">
+                  Chrome Web Store
+                </span>
               </span>
             </a>
             <a
