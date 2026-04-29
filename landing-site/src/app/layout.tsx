@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
   },
   verification: {
-    google: "raoATIK68dRpqbuNs0ZX2Z9FLbtb0B06EK8rBhykNng",
+    google: "PKWYf_6WmNLKpXbJMZTJ49YOJDZbBqZns_C1BhJ2xQE",
   },
 };
 
