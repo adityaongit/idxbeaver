@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SiteNav } from "@/components/site-nav";
 import { SiteFooter } from "@/components/site-footer";
+import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — IdxBeaver",
@@ -10,8 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPage() {
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([{ name: "Privacy", path: "/privacy" }]);
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <SiteNav />
       <main className="mx-auto max-w-[760px] px-5 py-24 sm:px-8 sm:py-32">
         <header className="mb-12">

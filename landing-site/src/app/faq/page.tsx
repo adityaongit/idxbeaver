@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { ContentShell } from "@/components/content-shell";
+import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
 
 const TITLE = "FAQ — IdxBeaver";
 const DESCRIPTION =
@@ -176,14 +177,7 @@ const GROUPS: FaqGroup[] = [
 ];
 
 export default function FaqPage() {
-  const breadcrumbJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Home", item: "https://indexbeaver.vercel.app/" },
-      { "@type": "ListItem", position: 2, name: "FAQ", item: "https://indexbeaver.vercel.app/faq" },
-    ],
-  };
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([{ name: "FAQ", path: "/faq" }]);
 
   return (
     <>

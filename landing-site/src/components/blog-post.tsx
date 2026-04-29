@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { ContentShell } from "@/components/content-shell";
 import type { BlogPost } from "@/lib/blog";
+import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
 import { resolveSiteUrl } from "@/lib/site";
 
 export function BlogPostShell({
@@ -25,11 +26,20 @@ export function BlogPostShell({
     publisher: { "@type": "Organization", name: "IdxBeaver" },
   };
 
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: "Blog", path: "/blog" },
+    { name: post.title, path: `/blog/${post.slug}` },
+  ]);
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <ContentShell
         eyebrow={`${formatDate(post.publishedOn)} · ${post.readingMinutes} min read`}

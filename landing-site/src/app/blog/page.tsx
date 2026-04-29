@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { ContentShell } from "@/components/content-shell";
 import { BLOG_POSTS } from "@/lib/blog";
+import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
 
 const TITLE = "Blog — IdxBeaver";
 const DESCRIPTION =
@@ -16,7 +17,13 @@ export const metadata: Metadata = {
 };
 
 export default function BlogIndexPage() {
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([{ name: "Blog", path: "/blog" }]);
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
     <ContentShell
       eyebrow="Writing"
       title="Notes on browser storage."
@@ -53,6 +60,7 @@ export default function BlogIndexPage() {
         ))}
       </ul>
     </ContentShell>
+    </>
   );
 }
 

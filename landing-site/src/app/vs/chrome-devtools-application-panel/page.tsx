@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ContentSection, ContentShell } from "@/components/content-shell";
 import { Button } from "@/components/ui/button";
 import { CHROME_WEB_STORE_URL } from "@/lib/brand";
+import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
 import { resolveSiteUrl } from "@/lib/site";
 
 const TITLE = "IdxBeaver vs Chrome DevTools Application panel";
@@ -40,11 +41,19 @@ export default function VsApplicationPanelPage() {
     dateModified: "2026-04-29",
   };
 
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: "vs Chrome DevTools Application panel", path: "/vs/chrome-devtools-application-panel" },
+  ]);
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <ContentShell
         eyebrow="Comparison"
