@@ -2,6 +2,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+html {
+  zoom: 1.1;
+}
+
 :root {
   /* Surfaces — TablePlus light: pure whites + cool greys */
   --background: #FFFFFF;
@@ -274,6 +278,10 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
   }
   body {
     @apply bg-background text-foreground;
