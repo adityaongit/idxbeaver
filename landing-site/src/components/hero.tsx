@@ -1,4 +1,4 @@
-import { CHROME_WEB_STORE_URL } from "@/lib/brand";
+import { CwsInstallButton } from "@/components/cws-install-button";
 
 function HeroMark() {
   return (
@@ -73,37 +73,10 @@ export function Hero() {
           </p>
 
           <div className="r-init ri4 mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center lg:justify-start">
-            <a
-              href={CHROME_WEB_STORE_URL}
-              target="_blank"
-              rel="noopener"
-              aria-label="Available in the Chrome Web Store — install IdxBeaver"
-              className="group inline-flex h-[52px] items-center gap-3 rounded-[8px] border border-[#dadce0] bg-white px-4 text-[#3c4043] transition-colors hover:bg-[#f8f9fa] active:translate-y-px"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/chrome-web-store-icon.svg"
-                alt=""
-                width={32}
-                height={32}
-                className="h-8 w-8 shrink-0 select-none"
-                draggable={false}
-              />
-              <span
-                className="flex flex-col items-start gap-[2px] leading-none text-[#3c4043]"
-                style={{ fontFamily: '"Google Sans", "Helvetica Neue", Arial, sans-serif' }}
-              >
-                <span className="text-[11px] font-normal">
-                  Available in the
-                </span>
-                <span className="text-[15px] font-medium tracking-[-0.005em]">
-                  Chrome Web Store
-                </span>
-              </span>
-            </a>
+            <CwsInstallButton />
             <a
               href="#product"
-              className="inline-flex h-[52px] items-center justify-center rounded-[12px] border border-[var(--color-hair-2)] bg-white/[0.02] px-5 text-[15px] font-medium text-[var(--color-ink)] transition-colors hover:bg-white/[0.05] hover:border-[var(--color-hair-3)] active:translate-y-px"
+              className="inline-flex h-[52px] items-center justify-center rounded-[8px] border border-[var(--color-hair-2)] bg-white/[0.02] px-5 text-[15px] font-medium text-[var(--color-ink)] transition-colors hover:bg-white/[0.05] hover:border-[var(--color-hair-3)] active:translate-y-px"
             >
               See the product
             </a>
