@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { CHROME_WEB_STORE_URL } from "@/lib/brand";
+import { CwsBadge } from "@/components/cws-badge";
 
 function HeroMark() {
   return (
@@ -73,27 +73,8 @@ export function Hero() {
             . Dense grid, Mongo-style queries, row inspector, schema inference.
           </p>
 
-          <div className="r-init ri4 mt-9 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center lg:justify-start">
-            <Button
-              as="a"
-              href={CHROME_WEB_STORE_URL}
-              target="_blank"
-              rel="noopener"
-              variant="primary"
-              size="lg"
-              className="w-full sm:w-auto"
-            >
-              Add to Chrome
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <path
-                  d="M3 6h6M6 3l3 3-3 3"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </Button>
+          <div className="r-init ri4 mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start">
+            <CwsBadge size="medium" height={56} className="shrink-0" />
             <Button as="a" href="#product" variant="outline" size="lg" className="w-full sm:w-auto">
               See the product
             </Button>
