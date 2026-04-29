@@ -69,38 +69,63 @@ Copy/paste directly into the Dev Console fields.
 
 ## Store listing tab
 
-### Name
+### Name (≤45 chars)
 ```
-IdxBeaver — Browser Storage Client
+IdxBeaver — IndexedDB & Storage Inspector
 ```
-(32 chars max; "IdxBeaver" alone is fine if you prefer a tighter brand.)
+(41 chars. The store allows up to 45; clear-and-descriptive beats clever. Drop to "IdxBeaver" alone if the brand becomes recognizable.)
 
-### Summary (short description, ≤132 chars)
+### Summary (≤132 chars, plain text, no superlatives)
 ```
-A TablePlus-style client for IndexedDB, LocalStorage, cookies, and cache — with MongoDB-style queries, exports, and diffs.
+Inspect, query, edit, and export IndexedDB, LocalStorage, SessionStorage, cookies, and Cache Storage from Chrome DevTools.
 ```
+(122 chars. States the function in concrete terms; no "best", "fastest", or competitor names.)
 
 ### Description (detailed, supports line breaks)
-```
-IdxBeaver turns Chrome's Application panel into a real database client for browser storage.
 
-FEATURES
-• IndexedDB browser — discover every database and object store on every frame of the origin. Inspect records in a zebra-striped grid with column pinning, resizing, and sticky headers.
-• MongoDB-style queries — filter, project, sort, limit. Index-aware plan selection with an in-memory fallback for compound operators. The plan is shown in the UI.
-• Row inspector — per-field editor with type indicators, inline NULL handling, and syntax-highlighted nested JSON.
-• Query history and saved queries — auto-recorded per origin (last 100). Save the ones worth keeping.
-• LocalStorage, SessionStorage, Cookies, and Cache Storage — browse, add, edit, delete, clear.
-• Import and export — NDJSON, CSV, SQL INSERT, and ZIP snapshots. Round-trips non-JSON types (Date, BigInt, Map, Set, Blob, ArrayBuffer).
-• Schema inference — samples rows per store to drive autocomplete and a Structure view. One-click TypeScript / Dexie schema export.
-• Snapshots and diffs — snapshot a store or database, restore or diff against it later.
-• Command palette (⌘K) — jump between stores, tabs, saved queries, and actions.
+Opening paragraph + bulleted feature list, per Chrome's listing guide. Keywords appear naturally in feature names; do not repeat them to game search rankings.
+
+```
+IdxBeaver is a database-style client for browser storage, built into Chrome DevTools. Open DevTools on any page and you get a proper data grid, a query editor, row inspector, schema inference, and import/export for IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache Storage — without leaving the browser.
+
+Chrome's built-in Application panel treats browser storage as an afterthought: no filtering, no schema awareness, no bulk edits, no query history, no exports that survive a page refresh. IdxBeaver turns it into the workflow you already use with a real database client.
+
+Features
+
+• IndexedDB browser — discover every database and object store across every frame of the origin. Inspect records in a zebra-striped grid with column pinning, resizing, sticky headers, and inline editing.
+
+• Query editor with MongoDB-style filters — filter, project, sort, and limit your data with a JSON query language. Index-aware plan selection, with an in-memory fallback for compound operators. The chosen plan is shown alongside results.
+
+• Multi-tab query workspace — keep several queries open at once, each with its own editor and results pane. Save queries you reuse and reopen them in a click.
+
+• Row inspector — per-field editor with type indicators, inline NULL handling, and syntax-highlighted nested JSON. Edit values without writing console code.
+
+• LocalStorage, SessionStorage, Cookies, and Cache Storage browsers — view, add, edit, delete, and clear entries with the same grid UI.
+
+• Import and export — read and write NDJSON, CSV, SQL INSERT statements, and ZIP snapshots. Round-trips non-JSON types including Date, BigInt, Map, Set, Blob, and ArrayBuffer.
+
+• Schema inference — samples rows from a store to power autocomplete and a Structure view. Export the inferred schema as TypeScript types or a Dexie schema definition with one click.
+
+• Snapshots and diffs — snapshot a store or whole database, then restore or diff against it later. Useful for verifying migrations and reproducing bugs.
+
+• Command palette (⌘K) and keyboard shortcuts — jump between stores, tabs, and saved queries without touching the mouse.
+
 • Dark and light themes — configurable UI font, table font (mono or sans), and font size.
 
-PRIVACY
-Everything runs locally. IdxBeaver does not send any of the data it reads to a server. Query history and saved queries are stored inside the extension using chrome.storage.local.
+Built for
 
-OPEN SOURCE
-https://github.com/adityaongit/idxbeaver
+• Frontend developers debugging IndexedDB-backed applications
+• Teams working on offline-first or PWA codebases
+• Anyone who needs to inspect, edit, or migrate data sitting in browser storage
+• Engineers tired of writing one-off console snippets to read or modify storage
+
+Privacy
+
+Everything runs locally on your machine. IdxBeaver makes no network requests: no analytics, no telemetry, no remote configuration. Your preferences, query history, and saved queries are stored using chrome.storage.local and never leave your browser.
+
+Open source
+
+Source code, issue tracker, and changelog: https://github.com/adityaongit/idxbeaver
 ```
 
 ### Category
@@ -193,7 +218,7 @@ No, I am not using remote code.
 ### Privacy policy URL
 Make sure the URL is live before submitting:
 
-- Preferred: `https://idxbeaver.netlify.app/privacy/` (rendered from `landing-site/src/app/privacy/page.tsx`)
+- Preferred: `https://indexbeaver.vercel.app/privacy/` (rendered from `landing-site/src/app/privacy/page.tsx`)
 - Fallback: `https://github.com/adityaongit/idxbeaver/blob/main/docs/PRIVACY.md`
 
 ---
