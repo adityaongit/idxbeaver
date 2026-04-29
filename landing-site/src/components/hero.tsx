@@ -89,11 +89,14 @@ export function Hero() {
                 className="h-8 w-8 shrink-0 select-none"
                 draggable={false}
               />
-              <span className="flex flex-col items-start gap-[2px] leading-none">
-                <span className="text-[10.5px] font-normal text-[#5f6368]">
+              <span
+                className="flex flex-col items-start gap-[2px] leading-none text-[#3c4043]"
+                style={{ fontFamily: '"Google Sans", "Helvetica Neue", Arial, sans-serif' }}
+              >
+                <span className="text-[11px] font-normal">
                   Available in the
                 </span>
-                <span className="text-[15px] font-medium tracking-[-0.005em] text-[#3c4043]">
+                <span className="text-[15px] font-medium tracking-[-0.005em]">
                   Chrome Web Store
                 </span>
               </span>
