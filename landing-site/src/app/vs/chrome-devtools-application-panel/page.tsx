@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
+import { CodeBlock } from "@/components/code-block";
 import { ContentSection, ContentShell } from "@/components/content-shell";
+import { CwsInstallButton } from "@/components/cws-install-button";
 import { Button } from "@/components/ui/button";
-import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
 import { resolveSiteUrl } from "@/lib/site";
 
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function VsApplicationPanelPage() {
+export default async function VsApplicationPanelPage() {
   const base = resolveSiteUrl();
   const jsonLd = {
     "@context": "https://schema.org",
@@ -107,8 +108,9 @@ export default function VsApplicationPanelPage() {
             squinting stops working. IdxBeaver lets you write filters
             directly:
           </p>
-          <pre>
-            <code>{`{
+          <CodeBlock
+            lang="json"
+            code={`{
   "store": "orders",
   "filter": {
     "status": "delivered",
@@ -117,8 +119,8 @@ export default function VsApplicationPanelPage() {
   },
   "sort":  { "createdAt": -1 },
   "limit": 50
-}`}</code>
-          </pre>
+}`}
+          />
           <p>
             The planner inspects the filter for single-field equality/range
             expressions and uses an <code>IDBIndex</code> when one matches.
@@ -224,17 +226,7 @@ export default function VsApplicationPanelPage() {
         </ContentSection>
 
         <div className="mt-16 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <Button
-            as="a"
-            href={CHROME_WEB_STORE_URL}
-            target="_blank"
-            rel="noopener"
-            variant="primary"
-            size="lg"
-            className="w-full sm:w-auto"
-          >
-            Add IdxBeaver to Chrome
-          </Button>
+          <CwsInstallButton className="w-full sm:w-auto" />
           <Button
             as="a"
             href="https://github.com/adityaongit/idxbeaver"
@@ -242,7 +234,7 @@ export default function VsApplicationPanelPage() {
             rel="noopener"
             variant="outline"
             size="lg"
-            className="w-full sm:w-auto"
+            className="h-[52px] w-full rounded-[8px] px-5 text-[15px] sm:w-auto"
           >
             View source on GitHub
           </Button>
@@ -257,14 +249,14 @@ type Cell = string;
 function ComparisonTable({ rows }: { rows: Array<[string, Cell, Cell]> }) {
   return (
     <div className="-mx-2 overflow-x-auto">
-      <table className="w-full border-collapse text-left text-[14px]">
+      <table className="w-full border-collapse rounded-lg text-left text-[14px] [&_td]:border [&_td]:border-[var(--color-hair)] [&_th]:border [&_th]:border-[var(--color-hair)]">
         <colgroup>
           <col className="w-[32%]" />
           <col className="w-[34%]" />
           <col className="w-[34%]" />
         </colgroup>
         <thead>
-          <tr className="border-b border-[var(--color-hair)] text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-ink-mute)]">
+          <tr className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-ink-mute)]">
             <th className="px-3 py-4 align-bottom">Capability</th>
             <th className="px-3 py-4 align-bottom text-[var(--color-ink)]">IdxBeaver</th>
             <th className="px-3 py-4 align-bottom">Application panel</th>
@@ -275,7 +267,7 @@ function ComparisonTable({ rows }: { rows: Array<[string, Cell, Cell]> }) {
             <tr
               key={cap}
               className={[
-                "border-b border-[var(--color-hair)] align-top",
+                "align-top",
                 i % 2 === 1 ? "bg-white/[.015]" : "",
               ].join(" ")}
             >
