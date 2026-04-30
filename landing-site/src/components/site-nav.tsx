@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 import { cn } from "@/lib/utils";
+import { APP_VERSION } from "@/lib/version";
 
 function Logo() {
   return (
@@ -54,7 +55,7 @@ function Brand() {
       </span>
       <span className="mx-1 hidden h-4 w-px bg-[var(--color-hair-3)] sm:block" />
       <span className="mono hidden text-[11.5px] font-normal text-[var(--color-ink-mute)] sm:block">
-        v1.0
+        v{APP_VERSION}
       </span>
     </a>
   );
