@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { BlogPostShell } from "@/components/blog-post";
+import { CodeBlock } from "@/components/code-block";
 import { ContentSection } from "@/components/content-shell";
 import { getPostBySlug } from "@/lib/blog";
 
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: post.title, description: post.description },
 };
 
-export default function Page() {
+export default async function Page() {
   return (
     <BlogPostShell post={post}>
       <ContentSection title="Why we need a query language at all">
@@ -49,21 +50,23 @@ export default function Page() {
           objects, arrays of primitives. The full IdxBeaver query is four
           fields:
         </p>
-        <pre>
-          <code>{`{
+        <CodeBlock
+          lang="jsonc"
+          code={`{
   "store":  "orders",                      // required
   "filter": { ...mongo-style filter... },  // required (can be {})
   "project": ["id", "total", "status"],    // optional column projection
   "sort":   { "createdAt": -1 },           // optional, in-memory sort
   "limit":  50                             // optional
-}`}</code>
-        </pre>
+}`}
+        />
         <p>
           The filter is the interesting part. It supports the standard equality
           shorthand, plus operator-prefixed fields:
         </p>
-        <pre>
-          <code>{`// equality
+        <CodeBlock
+          lang="jsonc"
+          code={`// equality
 { "status": "delivered" }
 
 // comparison
@@ -82,8 +85,8 @@ export default function Page() {
 ] }
 
 // nested paths use dotted keys
-{ "shipping.city": "Lisbon" }`}</code>
-        </pre>
+{ "shipping.city": "Lisbon" }`}
+        />
       </ContentSection>
 
       <ContentSection title="How it compiles down">
@@ -111,16 +114,18 @@ export default function Page() {
           The chosen plan is reported alongside the result so you can spot a
           missing index. A typical good plan reads:
         </p>
-        <pre>
-          <code>{`used index "status" · scanned 18 · matched 12 · returned 12`}</code>
-        </pre>
+        <CodeBlock
+          lang="text"
+          code={`used index "status" · scanned 18 · matched 12 · returned 12`}
+        />
         <p>
           And a typical bad plan — full scan because no useful index exists —
           reads:
         </p>
-        <pre>
-          <code>{`full object-store scan · scanned 12,408 · matched 87 · returned 50`}</code>
-        </pre>
+        <CodeBlock
+          lang="text"
+          code={`full object-store scan · scanned 12,408 · matched 87 · returned 50`}
+        />
         <p>
           That&rsquo;s the signal: add an index on the field you&rsquo;re
           filtering by. The query doesn&rsquo;t change; the next run picks up
@@ -130,8 +135,9 @@ export default function Page() {
 
       <ContentSection title="Five examples that map cleanly">
         <h3>1. &ldquo;Find recent refunds&rdquo;</h3>
-        <pre>
-          <code>{`{
+        <CodeBlock
+          lang="json"
+          code={`{
   "store": "orders",
   "filter": {
     "status": "refunded",
@@ -139,24 +145,26 @@ export default function Page() {
   },
   "sort":  { "createdAt": -1 },
   "limit": 100
-}`}</code>
-        </pre>
+}`}
+        />
         <p>
           With an index on <code>status</code> the planner range-scans the
           refunded slice, then in-memory filters by date. No full table scan.
         </p>
 
         <h3>2. &ldquo;Show users with no email&rdquo;</h3>
-        <pre>
-          <code>{`{
+        <CodeBlock
+          lang="json"
+          code={`{
   "store":  "users",
   "filter": { "email": { "$eq": null } }
-}`}</code>
-        </pre>
+}`}
+        />
 
         <h3>3. &ldquo;Find sync queue items pending for over an hour&rdquo;</h3>
-        <pre>
-          <code>{`{
+        <CodeBlock
+          lang="json"
+          code={`{
   "store": "syncQueue",
   "filter": {
     "$and": [
@@ -164,30 +172,32 @@ export default function Page() {
       { "queuedAt": { "$lt": "$NOW - 1h" } }
     ]
   }
-}`}</code>
-        </pre>
+}`}
+        />
 
         <h3>4. &ldquo;Project a subset for export&rdquo;</h3>
-        <pre>
-          <code>{`{
+        <CodeBlock
+          lang="json"
+          code={`{
   "store":   "orders",
   "filter":  { "status": "delivered" },
   "project": ["id", "userId", "total", "shippingCity"],
   "limit":   1000
-}`}</code>
-        </pre>
+}`}
+        />
         <p>
           Combined with a CSV export, this is the fastest way to hand a tester
           or analyst a slice of production-shaped data without writing code.
         </p>
 
         <h3>5. &ldquo;Negate a list&rdquo;</h3>
-        <pre>
-          <code>{`{
+        <CodeBlock
+          lang="json"
+          code={`{
   "store":  "events",
   "filter": { "type": { "$nin": ["heartbeat", "ping"] } }
-}`}</code>
-        </pre>
+}`}
+        />
       </ContentSection>
 
       <ContentSection title="What it doesn't do (yet)">

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { BlogPostShell } from "@/components/blog-post";
+import { CodeBlock } from "@/components/code-block";
 import { ContentSection } from "@/components/content-shell";
 import { getPostBySlug } from "@/lib/blog";
 
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: post.title, description: post.description },
 };
 
-export default function Page() {
+export default async function Page() {
   return (
     <BlogPostShell post={post}>
       <ContentSection title="Why IndexedDB debugging gets painful">
@@ -118,8 +119,9 @@ export default function Page() {
         <p>
           When the panel runs out of road, most people drop into the console:
         </p>
-        <pre>
-          <code>{`const open = indexedDB.open("local_first_app");
+        <CodeBlock
+          lang="js"
+          code={`const open = indexedDB.open("local_first_app");
 open.onsuccess = () => {
   const db = open.result;
   const tx = db.transaction("orders", "readonly");
@@ -132,8 +134,8 @@ open.onsuccess = () => {
     if (cur.value.status === "refunded") out.push(cur.value);
     cur.continue();
   };
-};`}</code>
-        </pre>
+};`}
+        />
         <p>
           Three problems with this:
         </p>

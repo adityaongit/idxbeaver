@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { BlogPostShell } from "@/components/blog-post";
+import { CodeBlock } from "@/components/code-block";
 import { ContentSection } from "@/components/content-shell";
 import { getPostBySlug } from "@/lib/blog";
 
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: post.title, description: post.description },
 };
 
-export default function Page() {
+export default async function Page() {
   return (
     <BlogPostShell post={post}>
       <ContentSection title="The short answer">
@@ -112,14 +113,15 @@ export default function Page() {
           Modern browsers expose the runtime numbers through the{" "}
           <code>navigator.storage.estimate()</code> API:
         </p>
-        <pre>
-          <code>{`const { quota, usage, usageDetails } = await navigator.storage.estimate();
+        <CodeBlock
+          lang="js"
+          code={`const { quota, usage, usageDetails } = await navigator.storage.estimate();
 console.log({
   quotaMB: Math.round(quota / 1_000_000),
   usageMB: Math.round(usage / 1_000_000),
   details: usageDetails, // { indexedDB, caches, serviceWorkerRegistrations, ... }
-});`}</code>
-        </pre>
+});`}
+        />
         <p>
           Run that on the inspected page from DevTools. <code>usageDetails</code>
           is the most actionable field — it splits the consumption between
@@ -135,15 +137,16 @@ console.log({
           aggressive history cleanup, etc.). Persistent storage cannot be
           evicted automatically — only the user can clear it. To request it:
         </p>
-        <pre>
-          <code>{`const isPersisted = await navigator.storage.persisted();
+        <CodeBlock
+          lang="js"
+          code={`const isPersisted = await navigator.storage.persisted();
 if (!isPersisted) {
   const granted = await navigator.storage.persist();
   // \`granted\` is true if the browser decides your origin is "important
   // enough" — heuristics include: installed PWA, frequent visits,
   // bookmarked, granted notifications.
-}`}</code>
-        </pre>
+}`}
+        />
         <p>
           Local-first apps and offline-capable PWAs should ask for persistence
           early. The browser will say no most of the time on first visit; ask
