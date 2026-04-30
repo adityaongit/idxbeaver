@@ -64,8 +64,7 @@ export function SiteFooter() {
               { label: "Privacy", href: "/privacy" },
               {
                 label: "Contact",
-                href: "https://github.com/adityaongit/idxbeaver/issues/new",
-                external: true,
+                href: "mailto:work.adityajindal@gmail.com",
               },
             ]}
           />
