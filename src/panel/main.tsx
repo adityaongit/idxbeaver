@@ -208,6 +208,8 @@ function App() {
   const [selectedRecord, setSelectedRecord] = useState<IndexedDbRecord | KeyValueRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [errorLog, setErrorLog] = useState<Array<{ at: number; message: string }>>([]);
+  const [bottomTab, setBottomTab] = useState<"history" | "errors">("history");
   const [editDraft, setEditDraft] = useState("");
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("{\n  \n}");
@@ -769,7 +771,15 @@ function App() {
   const startDraftRow = (prefill?: Record<string, string>) => {
     if (!selectedStore) return;
     const activeColumn = tableColumns[0] ?? "value";
-    const values: Record<string, string> = prefill ?? {};
+    // Sanitise prefill: a stray click event used to land here, smuggling DOM
+    // refs and React fibers into draftRow.values and breaking JSON.stringify
+    // at commit time. Only accept a plain string-valued record.
+    const values: Record<string, string> = {};
+    if (prefill && typeof prefill === "object" && !Array.isArray(prefill) && !(prefill instanceof Event) && !(prefill as object instanceof Element)) {
+      for (const [k, v] of Object.entries(prefill)) {
+        if (typeof v === "string") values[k] = v;
+      }
+    }
     setDraftRow({ values, outOfLineKey: "", activeColumn });
   };
 
@@ -1357,9 +1367,22 @@ function App() {
 
   useEffect(() => {
     if (!notice) return;
+    // Errors don't flash in the breadcrumb — they're appended to the bottom
+    // panel's error log with a timestamp, persistent until the user clears them.
+    if (notice.tone === "error") {
+      setErrorLog((prev) => [{ at: Date.now(), message: notice.message }, ...prev].slice(0, 100));
+      setNotice(null);
+      // Auto-expand the bottom panel and jump to the Errors tab so the new
+      // error is visible without the user having to hunt for it.
+      setBottomTab("errors");
+      if (bottomPanelCollapsed && canToggleBottomPanel) {
+        bottomPanelRef.current?.expand();
+      }
+      return;
+    }
     const t = setTimeout(() => setNotice(null), 2500);
     return () => clearTimeout(t);
-  }, [notice]);
+  }, [notice, bottomPanelCollapsed, canToggleBottomPanel]);
 
   const breadcrumb = useMemo(() => {
     const hostname = (() => {
@@ -1430,11 +1453,11 @@ function App() {
             aria-label="Open database picker"
             title="Click to open database picker"
           >
-            {notice ? (
+            {notice && notice.tone !== "error" ? (
               <span className="flex min-w-0 items-center gap-1.5 truncate">
                 <span
                   className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                    notice.tone === "error" ? "bg-destructive" : notice.tone === "success" ? "bg-emerald-500" : "bg-muted-foreground"
+                    notice.tone === "success" ? "bg-emerald-500" : "bg-muted-foreground"
                   }`}
                 />
                 <span className="truncate">{notice.message}</span>
@@ -1761,7 +1784,7 @@ function App() {
                       offset={queryOffset}
                       limit={queryLimit}
                       selectedCount={selected.kind === "indexeddb" && selectedRecord && !("parsed" in selectedRecord) ? 1 : 0}
-                      onAddRow={startDraftRow}
+                      onAddRow={() => startDraftRow()}
                       allColumns={tableColumns}
                       hiddenColumns={hiddenColumns}
                       onApplyColumns={setHiddenColumns}
@@ -1796,17 +1819,20 @@ function App() {
                   onResize={(size) => setBottomPanelCollapsed(isCollapsedPanelSize(size))}
                 >
                   <section className="flex h-full min-h-0 flex-col" style={{ backgroundColor: "var(--background)" }}>
-                    {historyEntries.length === 0 ? (
-                      <div className="grid h-full place-items-center p-3 text-center">
-                        <div className="space-y-1 text-[11px] text-muted-foreground">
-                          <p className="section-label">History</p>
-                          <p>Recent queries and mutations will appear here.</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-1.5" style={{ borderBottom: "1px solid var(--hairline)" }}>
-                          <p className="section-label">History</p>
+                    <div className="flex shrink-0 items-center gap-1.5 bg-card/60 px-2 py-1 text-[11px]" style={{ borderBottom: "1px solid var(--hairline)" }}>
+                      <BottomTabButton
+                        active={bottomTab === "history"}
+                        onClick={() => setBottomTab("history")}
+                        label="History"
+                      />
+                      <BottomTabButton
+                        active={bottomTab === "errors"}
+                        onClick={() => setBottomTab("errors")}
+                        label="Errors"
+                        hasUnread={errorLog.length > 0}
+                      />
+                      <div className="ml-auto">
+                        {bottomTab === "history" && historyEntries.length > 0 && (
                           <button
                             type="button"
                             onClick={() => { void clearHistory(discovery?.origin ?? "").then(() => getHistory(discovery?.origin ?? "").then(setHistoryEntries)); }}
@@ -1815,7 +1841,28 @@ function App() {
                           >
                             <X className="size-3.5" />
                           </button>
+                        )}
+                        {bottomTab === "errors" && errorLog.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setErrorLog([])}
+                            className="flex size-6 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Clear errors"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {bottomTab === "history" && (
+                      historyEntries.length === 0 ? (
+                        <div className="grid flex-1 place-items-center p-3 text-center">
+                          <div className="space-y-1 text-[11px] text-muted-foreground">
+                            <p>Recent queries and mutations will appear here.</p>
+                          </div>
                         </div>
+                      ) : (
                         <div className="min-h-0 flex-1 overflow-auto font-mono text-[11px] leading-5">
                           {historyEntries.map((entry, idx) => (
                             <div key={idx} className="px-3 py-1.5" style={{ borderBottom: "1px solid var(--hairline)" }}>
@@ -1839,7 +1886,29 @@ function App() {
                             </div>
                           ))}
                         </div>
-                      </>
+                      )
+                    )}
+
+                    {bottomTab === "errors" && (
+                      errorLog.length === 0 ? (
+                        <div className="grid flex-1 place-items-center p-3 text-center">
+                          <p className="text-[11px] text-muted-foreground">No errors logged.</p>
+                        </div>
+                      ) : (
+                        <div className="min-h-0 flex-1 overflow-auto font-mono text-[11px] leading-5">
+                          {errorLog.map((entry, idx) => (
+                            <div key={idx} className="flex items-start gap-2 px-3 py-1.5" style={{ borderBottom: "1px solid var(--hairline)" }}>
+                              <span className="mt-1.5 inline-block size-1.5 shrink-0 rounded-full bg-destructive" />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[10px] text-muted-foreground">
+                                  -- {new Date(entry.at).toLocaleString()}
+                                </div>
+                                <div className="break-words text-foreground">{entry.message}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
                     )}
                   </section>
                 </ResizablePanel>
@@ -2335,6 +2404,37 @@ function App() {
         </DialogContent>
       </Dialog>
     </main>
+  );
+}
+
+function BottomTabButton({
+  active,
+  onClick,
+  label,
+  hasUnread,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  hasUnread?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "relative rounded-sm border px-2 py-0.5 text-[11px] font-medium",
+        active
+          ? "border-border bg-background text-foreground shadow-sm"
+          : "border-transparent text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {label}
+      {hasUnread && !active && (
+        <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-destructive" aria-hidden="true" />
+      )}
+    </button>
   );
 }
 
@@ -2890,15 +2990,26 @@ async function runViaInspectedWindow(request: StorageRequest): Promise<StorageRe
 }
 
 // Cache the inspected URL so we don't ask DevTools every RPC call. Refreshed
-// when the inspected location changes.
+// when the inspected location changes. The first-fetch promise lets callers
+// await population so the very first discover() doesn't race the eval and
+// silently fall through to chrome.scripting (which refuses extension URLs).
 let cachedInspectedUrl: string | null = null;
+let inspectedUrlReady: Promise<void> | null = null;
 if (extensionRuntime && chrome.devtools.inspectedWindow.eval) {
-  chrome.devtools.inspectedWindow.eval("location.href", (val) => {
-    if (typeof val === "string") cachedInspectedUrl = val;
+  inspectedUrlReady = new Promise<void>((resolve) => {
+    chrome.devtools.inspectedWindow.eval("location.href", (val) => {
+      if (typeof val === "string") cachedInspectedUrl = val;
+      resolve();
+    });
   });
   chrome.devtools.network?.onNavigated?.addListener?.((url) => {
     cachedInspectedUrl = url;
   });
+}
+
+async function ensureInspectedUrl(): Promise<void> {
+  if (cachedInspectedUrl || !inspectedUrlReady) return;
+  await inspectedUrlReady;
 }
 
 function shouldUseInspectedWindowEval(): boolean {
@@ -2921,6 +3032,11 @@ function useStorageRpc() {
   return useCallback(async (request: StorageRequest): Promise<StorageResponse> => {
     const enriched = enrichRequestRouting(request);
     if (!extensionRuntime) return mockStorageResponse(enriched);
+
+    // Make sure we know what the inspected page is before deciding which
+    // execution path to take — otherwise the very first discover() races the
+    // async URL fetch and falls through to chrome.scripting on extension URLs.
+    await ensureInspectedUrl();
 
     // Discover and per-frame IDB ops can run via inspectedWindow.eval when the
     // inspected page is a chrome-extension:// URL — chrome.scripting refuses
@@ -2968,12 +3084,20 @@ function useStorageRpc() {
       const entry: PendingRequest = { resolve, request: enriched, idempotent: isIdempotent(enriched) };
       pendingRef.current.set(id, entry);
       const port = portRef.current ?? openPort(portRef, pendingRef);
+      // Send the request as a JSON string instead of a structured object so we
+      // bypass chrome.runtime's structured-clone quirks (refused payloads with
+      // proxied objects, large strings, or unpaired surrogates). The
+      // background listener parses requestJson on receipt.
       try {
-        port.postMessage({ id, request: enriched });
+        const requestJson = JSON.stringify(enriched);
+        port.postMessage({ id, requestJson });
       } catch (error) {
         portRef.current = null;
         pendingRef.current.delete(id);
-        resolve({ ok: false, error: error instanceof Error ? error.message : String(error) });
+        resolve({
+          ok: false,
+          error: `Failed to send ${enriched.type} request: ${error instanceof Error ? error.message : String(error)}`,
+        });
       }
     });
   }, []);
@@ -3021,7 +3145,7 @@ async function attemptReconnect(
     // Re-send idempotent requests; reject non-idempotent ones immediately.
     for (const [id, entry] of Array.from(pendingRef.current)) {
       if (entry.idempotent) {
-        try { port.postMessage({ id, request: entry.request }); } catch { /* handled by next disconnect */ }
+        try { port.postMessage({ id, requestJson: JSON.stringify(entry.request) }); } catch { /* handled by next disconnect */ }
       } else {
         pendingRef.current.delete(id);
         entry.resolve({ ok: false, error: new PortLostError().message });

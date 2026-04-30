@@ -217,7 +217,13 @@ export type StorageResponse =
 
 export interface PanelMessage {
   id: string;
-  request: StorageRequest;
+  // Preferred wire form: a JSON-encoded request string. Sidesteps Chrome
+  // port.postMessage's structured-clone quirks (e.g., refusing certain large
+  // payloads, proxied objects, or strings with unpaired surrogates).
+  requestJson?: string;
+  // Legacy / unused-on-this-build form. Kept for back-compat in case a stale
+  // panel build is connected to a fresh background.
+  request?: StorageRequest;
 }
 
 export interface PanelReply {

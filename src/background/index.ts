@@ -42,11 +42,48 @@ async function cleanupOrphanedSession(): Promise<void> {
 
 chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener(async (message: PanelMessage) => {
-    sessionSet(message.id, message.request.type, isIdempotent(message.request));
-    const response = await handleStorageRequest(message.request);
+    let request: StorageRequest;
+    if (typeof message.requestJson === "string") {
+      try { request = JSON.parse(message.requestJson) as StorageRequest; }
+      catch (parseErr) {
+        port.postMessage({
+          id: message.id,
+          response: { ok: false, error: `Invalid request JSON: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}` },
+        });
+        return;
+      }
+    } else if (message.request) {
+      request = message.request;
+    } else {
+      port.postMessage({ id: message.id, response: { ok: false, error: "Missing request payload." } });
+      return;
+    }
+
+    sessionSet(message.id, request.type, isIdempotent(request));
+    const response = await handleStorageRequest(request);
     sessionDelete(message.id);
     const reply: PanelReply = { id: message.id, response };
-    port.postMessage(reply);
+    try {
+      port.postMessage(reply);
+    } catch (cloneErr) {
+      // The structured-clone algorithm refused part of the payload (functions,
+      // DOM nodes, Symbols, or — depending on Chrome version — certain proxied
+      // objects). Round-trip through JSON to strip the non-cloneable bits so
+      // the panel still gets a usable response instead of a generic
+      // "Could not serialize message." error.
+      try {
+        const safe = JSON.parse(JSON.stringify(reply));
+        port.postMessage(safe);
+      } catch {
+        port.postMessage({
+          id: message.id,
+          response: {
+            ok: false,
+            error: `Response for ${request.type} contained a value the message channel refused to serialize: ${cloneErr instanceof Error ? cloneErr.message : String(cloneErr)}`,
+          },
+        });
+      }
+    }
   });
 });
 
