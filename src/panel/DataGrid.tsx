@@ -97,9 +97,8 @@ function CellEditor({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
           const mod = e.metaKey || e.ctrlKey;
-          if (e.key === "Enter") { e.preventDefault(); onCommit(); }
-          else if (e.key === "Escape") { e.preventDefault(); onCancel(); }
-          else if (mod && e.key === "Enter") { e.preventDefault(); onCommit(); }
+          if (e.key === "Enter" || (mod && e.key === "s")) { e.preventDefault(); onCommit(); }
+          else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel(); }
           else if (e.key === "Tab") {
             e.preventDefault();
             if (e.shiftKey) onTabPrev?.();
@@ -171,6 +170,9 @@ export function DataGrid({
   // Edit state
   const [editing, setEditing] = useState<{ rowKey: string; column: string } | null>(null);
   const [editDraft, setEditDraft] = useState("");
+
+  // Refs for the draft row inputs so Tab/Shift-Tab can move focus across cells.
+  const draftInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // Bulk selection: Set of JSON.stringify(record.key)
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -513,20 +515,26 @@ export function DataGrid({
           </tr>
         </thead>
         <tbody>
-          {/* Draft row: always visible, not virtualized */}
+          {/* Draft row: always visible, not virtualized. Cells line up 1:1 with
+              the header columns so placeholders sit under their own column. */}
           {draftRow && onDraftChange && onCommitDraft && onCancelDraft && (
             <tr className="border-b border-border bg-primary/10 ring-1 ring-inset ring-primary/30">
-              <td className="border-r border-border px-2 py-0.5 sticky left-0 bg-primary/10 z-[2]">
-                <span className="font-mono text-[10px] text-primary">+</span>
-              </td>
-              {visibleColumns.map((col) => (
+              {visibleColumns.map((col, idx) => (
                 <td key={col} className="border-r border-border p-0 last:border-r-0">
                   <input
+                    ref={(el) => {
+                      if (el) draftInputRefs.current.set(col, el);
+                      else draftInputRefs.current.delete(col);
+                    }}
                     autoFocus={col === visibleColumns[0]}
                     value={draftRow.values[col] ?? ""}
                     onChange={(e) => onDraftChange({ ...draftRow, values: { ...draftRow.values, [col]: e.target.value } })}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); onCommitDraft(); }
+                      const mod = e.metaKey || e.ctrlKey;
+                      if ((mod && e.key === "s") || (mod && e.key === "Enter") || e.key === "Enter") {
+                        e.preventDefault();
+                        onCommitDraft();
+                      }
                       else if (e.key === "Escape") { e.preventDefault(); onCancelDraft(); }
                       else if (e.key === "Tab") {
                         e.preventDefault();
@@ -534,10 +542,14 @@ export function DataGrid({
                         const nextCol = e.shiftKey
                           ? visibleColumns[((colIdx - 1) + visibleColumns.length) % visibleColumns.length]
                           : visibleColumns[(colIdx + 1) % visibleColumns.length];
-                        if (nextCol) onDraftChange({ ...draftRow, activeColumn: nextCol });
+                        if (!nextCol) return;
+                        onDraftChange({ ...draftRow, activeColumn: nextCol });
+                        const nextEl = draftInputRefs.current.get(nextCol);
+                        nextEl?.focus();
+                        nextEl?.select();
                       }
                     }}
-                    placeholder={col}
+                    placeholder={idx === 0 ? `+ ${col}` : col}
                     className="h-5 w-full border-0 bg-transparent px-2 font-mono text-foreground outline-none ring-1 ring-inset ring-primary/40 focus:ring-primary"
                   />
                 </td>
