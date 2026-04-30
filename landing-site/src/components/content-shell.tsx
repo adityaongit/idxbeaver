@@ -18,7 +18,7 @@ export function ContentShell({ eyebrow, title, lede, children }: ContentShellPro
   return (
     <>
       <SiteNav />
-      <main className="mx-auto max-w-[760px] px-5 py-24 sm:px-8 sm:py-32">
+      <main className="mx-auto max-w-[920px] px-5 py-24 sm:px-8 sm:py-32">
         <header className="mb-12">
           {eyebrow ? (
             <p className="mono mb-3 text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-mute)]">
