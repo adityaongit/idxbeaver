@@ -1,4 +1,5 @@
 import { CHROME_WEB_STORE_URL } from "@/lib/brand";
+import { APP_VERSION } from "@/lib/version";
 
 function Logo() {
   return (
@@ -70,7 +71,7 @@ export function SiteFooter() {
           />
         </div>
         <div className="mono flex flex-wrap justify-between gap-4 border-t border-[var(--color-hair)] pt-6 text-[11px] text-[var(--color-ink-faint)]">
-          <div>© 2026 IdxBeaver · v1.0.0</div>
+          <div>© 2026 IdxBeaver · v{APP_VERSION}</div>
           <div>Built with hairlines</div>
         </div>
       </div>

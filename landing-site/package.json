@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/sync-version.mjs",
+    "predev:turbo": "node scripts/sync-version.mjs",
+    "prebuild": "node scripts/sync-version.mjs",
     "dev": "next dev --webpack",
     "dev:turbo": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "sync-version": "node scripts/sync-version.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
