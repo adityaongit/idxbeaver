@@ -71,15 +71,17 @@ Copy/paste directly into the Dev Console fields.
 
 ### Name (≤45 chars)
 ```
-IdxBeaver — IndexedDB & Storage Inspector
+IndexedDB Viewer & Editor — IdxBeaver
 ```
-(41 chars. The store allows up to 45; clear-and-descriptive beats clever. Drop to "IdxBeaver" alone if the brand becomes recognizable.)
+(37 chars.) **Both the name and summary come from `src/manifest.ts`, not from a Dev Console field** — they only change when you bump the version, rebuild, upload, and pass review.
+
+Keyword-first ordering is deliberate. CWS search is heavily title-weighted, and "IdxBeaver" shares no tokens with "indexeddb viewer" — the query users actually type — so a brand-first title never enters the candidate set. Resist adding more keywords ("Browser", "Manager", "LocalStorage"): that crosses into keyword stuffing, which is a rejection reason. Revisit brand-first ordering only once "IdxBeaver" has standalone search volume.
 
 ### Summary (≤132 chars, plain text, no superlatives)
 ```
-Inspect, query, edit, and export IndexedDB, LocalStorage, SessionStorage, cookies, and Cache Storage from Chrome DevTools.
+IndexedDB viewer and editor for DevTools. Browse, query, edit, and export IndexedDB, LocalStorage, Cookies, and Cache Storage.
 ```
-(122 chars. States the function in concrete terms; no "best", "fastest", or competitor names.)
+(126 chars. Count before every edit — the "Chrome DevTools" variant is 133 and silently over.)
 
 ### Description (detailed, supports line breaks)
 
@@ -218,7 +220,7 @@ No, I am not using remote code.
 ### Privacy policy URL
 Make sure the URL is live before submitting:
 
-- Preferred: `https://indexbeaver.vercel.app/privacy/` (rendered from `landing-site/src/app/privacy/page.tsx`)
+- Preferred: `https://idxbeaver.portlabs.in/privacy/` (rendered from `landing-site/src/app/privacy/page.tsx`)
 - Fallback: `https://github.com/adityaongit/idxbeaver/blob/main/docs/PRIVACY.md`
 
 ---

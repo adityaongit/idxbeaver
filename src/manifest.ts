@@ -3,8 +3,13 @@ import pkg from "../package.json" with { type: "json" };
 
 export default defineManifest({
   manifest_version: 3,
-  name: "IdxBeaver",
-  description: "A professional database client for IndexedDB, LocalStorage, and SessionStorage.",
+  // Chrome Web Store search is heavily title-weighted, and the store derives
+  // both the listing title and its summary line from these two fields — not
+  // from any Dev Console form. Keyword-first ordering is deliberate: "IdxBeaver"
+  // shares no tokens with "indexeddb viewer", the query users actually type.
+  // Name limit is 45 chars, description 132.
+  name: "IndexedDB Viewer & Editor — IdxBeaver",
+  description: "IndexedDB viewer and editor for DevTools. Browse, query, edit, and export IndexedDB, LocalStorage, Cookies, and Cache Storage.",
   version: pkg.version,
   minimum_chrome_version: "120",
   devtools_page: "devtools.html",
