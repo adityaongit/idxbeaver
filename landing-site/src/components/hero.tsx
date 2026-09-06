@@ -55,16 +55,15 @@ export function Hero() {
               letterSpacing: "-0.048em",
             }}
           >
-            Browser storage,
+            IndexedDB viewer,
             <br />
-            managed like a <span className="ir">database.</span>
+            built like a database <span className="ir">client.</span>
           </h1>
 
           <p
             className="r-init ri3 mt-6 max-w-[560px] text-[16px] leading-[1.55] tracking-[-.005em] text-[var(--color-ink-dim)] sm:text-[18px] lg:mx-0 mx-auto"
           >
-            A Chrome DevTools extension that gives you a real database client
-            for{" "}
+            A Chrome DevTools extension to browse, query, edit, and export{" "}
             <b className="font-medium text-[var(--color-ink-2)]">
               IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache
               Storage
@@ -83,7 +82,7 @@ export function Hero() {
           </div>
 
           <div className="r-init ri4 mono mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[11px] text-[var(--color-ink-mute)] lg:justify-start">
-            <span>Chromium 110+</span>
+            <span>Chromium 120+</span>
             <span className="h-[3px] w-[3px] rounded-full bg-[var(--color-ink-faint)]" />
             <span>Manifest V3</span>
             <span className="h-[3px] w-[3px] rounded-full bg-[var(--color-ink-faint)]" />

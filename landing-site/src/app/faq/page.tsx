@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import { ContentShell } from "@/components/content-shell";
 import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
 
-const TITLE = "FAQ — IdxBeaver";
+const TITLE = "IndexedDB viewer FAQ — IdxBeaver";
 const DESCRIPTION =
-  "Common questions about IdxBeaver — what it does, how it compares to Chrome's Application panel, privacy, licensing, and browser support.";
+  "How to view, edit, export, and clear IndexedDB data in Chrome — plus how IdxBeaver compares to Chrome's built-in Application panel, privacy, licensing, and browser support.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -15,7 +15,13 @@ export const metadata: Metadata = {
   openGraph: { title: TITLE, description: DESCRIPTION, url: "/faq", type: "website" },
 };
 
-type Faq = { q: string; a: ReactNode };
+/**
+ * `a` is the rendered answer; `plain` is the same answer as a flat string for
+ * the FAQPage JSON-LD. They are kept as separate fields because Google wants
+ * the answer text verbatim and React nodes cannot be reliably flattened.
+ * Keep them in sync when editing either one.
+ */
+type Faq = { q: string; a: ReactNode; plain: string };
 type FaqGroup = { heading: string; items: Faq[] };
 
 const GROUPS: FaqGroup[] = [
@@ -34,17 +40,21 @@ const GROUPS: FaqGroup[] = [
             SessionStorage, Cookies, and Cache Storage.
           </>
         ),
+        plain:
+          "IdxBeaver is a Chrome DevTools extension that turns the Application panel into a real database client for browser storage. You get a dense data grid, MongoDB-style queries with index-aware planning, a row inspector, schema inference, and import/export across JSON, NDJSON, CSV, SQL, and ZIP — for IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache Storage.",
       },
       {
         q: "Which browsers does it support?",
         a: (
           <>
-            Any Chromium-based browser on version 110 or newer with Manifest V3
+            Any Chromium-based browser on version 120 or newer with Manifest V3
             support — Chrome, Edge, Brave, Arc, and Opera all work. Firefox and
             Safari are not currently supported because their devtools
             extension APIs differ.
           </>
         ),
+        plain:
+          "Any Chromium-based browser on version 120 or newer with Manifest V3 support — Chrome, Edge, Brave, Arc, and Opera all work. Firefox and Safari are not currently supported because their devtools extension APIs differ.",
       },
       {
         q: "Where do I install it?",
@@ -70,6 +80,88 @@ const GROUPS: FaqGroup[] = [
             .
           </>
         ),
+        plain:
+          "Install it from the Chrome Web Store. If you prefer to load it unpacked, every release ships a .zip on GitHub Releases.",
+      },
+    ],
+  },
+  {
+    heading: "Working with IndexedDB",
+    items: [
+      {
+        q: "How do I view IndexedDB data in Chrome?",
+        a: (
+          <>
+            Open DevTools (F12), then either use Chrome&rsquo;s built-in
+            Application panel &rarr; Storage &rarr; IndexedDB, or open the
+            IdxBeaver panel for a database-client view. IdxBeaver lists every
+            database and object store for the origin — including those inside
+            iframes — and renders records in a sortable, filterable grid
+            instead of a collapsed tree you have to click through row by row.
+          </>
+        ),
+        plain:
+          "Open DevTools (F12), then either use Chrome's built-in Application panel under Storage → IndexedDB, or open the IdxBeaver panel for a database-client view. IdxBeaver lists every database and object store for the origin — including those inside iframes — and renders records in a sortable, filterable grid instead of a collapsed tree you have to click through row by row.",
+      },
+      {
+        q: "Can I edit IndexedDB values directly?",
+        a: (
+          <>
+            Yes. Chrome&rsquo;s Application panel is read-only for keys and
+            values — editing there means writing console code against the raw
+            IndexedDB API. IdxBeaver lets you edit cells inline in the grid or
+            field-by-field in the row inspector, with type indicators, NULL
+            handling, and undo/redo for every write.
+          </>
+        ),
+        plain:
+          "Yes. Chrome's Application panel is read-only for keys and values — editing there means writing console code against the raw IndexedDB API. IdxBeaver lets you edit cells inline in the grid or field-by-field in the row inspector, with type indicators, NULL handling, and undo/redo for every write.",
+      },
+      {
+        q: "How do I export IndexedDB data to JSON or CSV?",
+        a: (
+          <>
+            Select a store and export it as JSON, NDJSON, CSV, SQL{" "}
+            <code>INSERT</code> statements, or a ZIP snapshot. Exports
+            round-trip non-JSON types that a naive{" "}
+            <code>JSON.stringify</code> would destroy — <code>Date</code>,{" "}
+            <code>BigInt</code>, <code>Map</code>, <code>Set</code>,{" "}
+            <code>Blob</code>, <code>ArrayBuffer</code>, and circular
+            references. The same formats import back in.
+          </>
+        ),
+        plain:
+          "Select a store and export it as JSON, NDJSON, CSV, SQL INSERT statements, or a ZIP snapshot. Exports round-trip non-JSON types that a naive JSON.stringify would destroy — Date, BigInt, Map, Set, Blob, ArrayBuffer, and circular references. The same formats import back in.",
+      },
+      {
+        q: "How do I clear or delete an IndexedDB database?",
+        a: (
+          <>
+            IdxBeaver can clear an object store or delete a whole database from
+            the panel, without reloading the page. Because deletes are
+            destructive and IndexedDB has no built-in undo, take a snapshot
+            first — you can restore or diff against it afterwards, which is
+            also the fastest way to verify a schema migration did what you
+            expected.
+          </>
+        ),
+        plain:
+          "IdxBeaver can clear an object store or delete a whole database from the panel, without reloading the page. Because deletes are destructive and IndexedDB has no built-in undo, take a snapshot first — you can restore or diff against it afterwards, which is also the fastest way to verify a schema migration did what you expected.",
+      },
+      {
+        q: "Does it work with Dexie, idb, PouchDB, and other wrappers?",
+        a: (
+          <>
+            Yes. Those libraries all store data in plain IndexedDB, so
+            IdxBeaver reads them like any other database — no adapter needed.
+            Schema inference samples rows from a store and can emit the
+            inferred shape as TypeScript types or a Dexie schema definition,
+            which is useful when you are retrofitting types onto a store that
+            grew organically.
+          </>
+        ),
+        plain:
+          "Yes. Those libraries all store data in plain IndexedDB, so IdxBeaver reads them like any other database — no adapter needed. Schema inference samples rows from a store and can emit the inferred shape as TypeScript types or a Dexie schema definition, which is useful when you are retrofitting types onto a store that grew organically.",
       },
     ],
   },
@@ -91,6 +183,8 @@ const GROUPS: FaqGroup[] = [
             .
           </>
         ),
+        plain:
+          "Chrome's panel can list databases and dump records, but it has no filtering, no schema awareness, no bulk edits, no query history, and no exports that survive a refresh. IdxBeaver gives you all of that plus a query language, multi-tab editor, undo/redo for grid edits, and a Structure view that shows the inferred schema for each store.",
       },
       {
         q: "Can I write SQL queries?",
@@ -103,6 +197,8 @@ const GROUPS: FaqGroup[] = [
             compound operators. Plain SQL is on the roadmap.
           </>
         ),
+        plain:
+          "IdxBeaver ships a MongoDB-style JSON query language with $eq, $gte, $in, compound filters, projections, sorts, and limits. The query planner uses an IDB index when one matches, with an in-memory fallback for compound operators. Plain SQL is on the roadmap.",
       },
       {
         q: "Does it support multiple frames?",
@@ -114,6 +210,8 @@ const GROUPS: FaqGroup[] = [
             footprint instead of just the top frame.
           </>
         ),
+        plain:
+          "Yes. IndexedDB is partitioned per frame origin. IdxBeaver scans every scriptable frame on the page in parallel and merges the results, so iframe-heavy apps surface their full storage footprint instead of just the top frame.",
       },
     ],
   },
@@ -131,6 +229,8 @@ const GROUPS: FaqGroup[] = [
             <a href="/privacy">privacy policy</a> for the full list.
           </>
         ),
+        plain:
+          "No. IdxBeaver runs entirely in your browser. There is no telemetry, no auth, no servers — and no account to create. Inspected storage is read on demand only on the page you have DevTools open against.",
       },
       {
         q: "Is it free? What's the license?",
@@ -155,6 +255,8 @@ const GROUPS: FaqGroup[] = [
             — fork it, audit it, run a build of your own.
           </>
         ),
+        plain:
+          "Free, and MIT-licensed. The full source is on GitHub — fork it, audit it, run a build of your own.",
       },
       {
         q: "Where can I report bugs or request features?",
@@ -171,6 +273,8 @@ const GROUPS: FaqGroup[] = [
             . Reproductions with the affected origin and store name help most.
           </>
         ),
+        plain:
+          "Open an issue on GitHub. Reproductions with the affected origin and store name help most.",
       },
     ],
   },
@@ -178,6 +282,17 @@ const GROUPS: FaqGroup[] = [
 
 export default function FaqPage() {
   const breadcrumbJsonLd = buildBreadcrumbJsonLd([{ name: "FAQ", path: "/faq" }]);
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: GROUPS.flatMap((group) =>
+      group.items.map((item) => ({
+        "@type": "Question",
+        name: item.q,
+        acceptedAnswer: { "@type": "Answer", text: item.plain },
+      })),
+    ),
+  };
 
   return (
     <>
@@ -185,10 +300,14 @@ export default function FaqPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <ContentShell
         eyebrow="FAQ"
-        title="Common questions."
-        lede="The short version: it runs locally, it's free, and the source is on GitHub. The longer version is grouped below — click to expand."
+        title="IndexedDB questions, answered."
+        lede="How to view, edit, export, and clear IndexedDB data in Chrome — plus the short version on IdxBeaver itself: it runs locally, it's free, and the source is on GitHub."
       >
         <div className="mt-4 space-y-14">
           {GROUPS.map((group) => (

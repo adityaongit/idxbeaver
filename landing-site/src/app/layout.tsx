@@ -4,6 +4,7 @@ import "./globals.css";
 import { DemoSeeder } from "@/components/demo-seeder";
 import { BRAND_PURPLE, CHROME_WEB_STORE_URL } from "@/lib/brand";
 import { resolveSiteUrl } from "@/lib/site";
+import { APP_VERSION } from "@/lib/version";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,13 +19,18 @@ const geistMono = Geist_Mono({
 });
 
 const SITE_URL = resolveSiteUrl();
-const TITLE = "IdxBeaver — IndexedDB & storage client for Chrome DevTools";
+// Keyword-first ordering: "IndexedDB viewer" is the query users actually
+// search; "IdxBeaver" has no standalone search volume yet.
+const TITLE = "IndexedDB Viewer & Editor for Chrome DevTools — IdxBeaver";
 const DESCRIPTION =
-  "Chrome DevTools extension that turns IndexedDB, LocalStorage, Cookies, and Cache Storage into a real database client — TablePlus-style grid, Mongo queries, schema inference.";
+  "Free IndexedDB viewer and editor for Chrome DevTools. Browse, query, edit, and export IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache Storage from a database-style data grid.";
 const KEYWORDS = [
-  "IndexedDB Chrome extension",
   "IndexedDB viewer",
   "IndexedDB editor",
+  "IndexedDB Chrome extension",
+  "view IndexedDB data",
+  "edit IndexedDB",
+  "export IndexedDB",
   "browser storage inspector",
   "Chrome DevTools extension",
   "LocalStorage editor",
@@ -83,16 +89,30 @@ export default function RootLayout({
               "@context": "https://schema.org",
               "@type": "SoftwareApplication",
               name: "IdxBeaver",
-              alternateName: "IdxBeaver — IndexedDB & Storage Inspector",
+              alternateName: "IdxBeaver — IndexedDB Viewer & Editor",
               applicationCategory: "DeveloperApplication",
-              operatingSystem: "Chromium 110+",
+              applicationSubCategory: "Browser Extension",
+              operatingSystem: "Chromium 120+",
+              browserRequirements: "Requires a Chromium-based browser, version 120 or newer",
               description: DESCRIPTION,
               url: SITE_URL,
               downloadUrl: CHROME_WEB_STORE_URL,
               installUrl: CHROME_WEB_STORE_URL,
-              softwareVersion: "1.0",
+              softwareVersion: APP_VERSION,
+              softwareHelp: `${SITE_URL}/faq/`,
               license: "https://github.com/adityaongit/idxbeaver/blob/main/LICENSE",
+              isAccessibleForFree: true,
               offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+              // Sourced from the public Chrome Web Store listing. Keep in sync
+              // with the live rating — stale values here are a structured-data
+              // violation, not just a cosmetic drift.
+              aggregateRating: {
+                "@type": "AggregateRating",
+                ratingValue: "5",
+                bestRating: "5",
+                worstRating: "1",
+                ratingCount: 7,
+              },
               author: {
                 "@type": "Person",
                 name: "Aditya Jindal",

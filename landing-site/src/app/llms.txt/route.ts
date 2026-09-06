@@ -5,9 +5,9 @@ export const dynamic = "force-static";
 
 export function GET() {
   const base = resolveSiteUrl();
-  const body = `# IdxBeaver
+  const body = `# IdxBeaver — IndexedDB Viewer & Editor
 
-> Chrome DevTools extension that turns the Application panel into a database client for browser storage. Inspect, query, edit, and export IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache Storage with a TablePlus-style data grid.
+> Free IndexedDB viewer and editor for Chrome DevTools. Turns the Application panel into a database client for browser storage: browse, query, edit, and export IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache Storage from a TablePlus-style data grid.
 
 ## What it is
 
@@ -32,7 +32,7 @@ export function GET() {
 
 ## Compatibility
 
-- Chromium 110+ (Chrome, Edge, Brave, Arc, Opera). Manifest V3.
+- Chromium 120+ (Chrome, Edge, Brave, Arc, Opera). Manifest V3.
 - License: MIT. Author: Aditya Jindal.
 
 ## Project links
