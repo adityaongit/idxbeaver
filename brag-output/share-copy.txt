@@ -1,0 +1,1 @@
+Chrome's Application panel treats browser storage as an afterthought. IdxBeaver turns it into a real database client, one tab over in the same DevTools window: dense grid, Mongo-style queries with index plans, row inspector, schema inference. Free and open source, in the Chrome Web Store.

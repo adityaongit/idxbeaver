@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "Geist";
+        src: url("assets/fonts/geist.woff2") format("woff2-variations");
+        font-weight: 100 900;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Geist Mono";
+        src: url("assets/fonts/geist-mono.woff2") format("woff2-variations");
+        font-weight: 100 900;
+        font-display: block;
+      }
+
+      :root {
+        --bg: #08090a;
+        --ink: #f7f8f8;
+        --muted: #a8aeb4;
+        --brand: #a78bfa;
+        --hair: rgba(255, 255, 255, 0.09);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      body {
+        font-family: "Geist", -apple-system, system-ui, sans-serif;
+        color: var(--ink);
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        background: var(--bg);
+      }
+
+      .glow {
+        position: absolute;
+        left: 50%;
+        top: 46%;
+        width: 1700px;
+        height: 1100px;
+        margin-left: -850px;
+        margin-top: -550px;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(167, 139, 250, 0.16) 0%,
+          rgba(167, 139, 250, 0.05) 42%,
+          rgba(8, 9, 10, 0) 70%
+        );
+        pointer-events: none;
+      }
+
+      .chrome {
+        position: absolute;
+        left: 80px;
+        right: 80px;
+        top: 26px;
+        display: flex;
+        justify-content: space-between;
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 19px;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .chrome .b {
+        color: var(--ink);
+      }
+
+      .window {
+        position: absolute;
+        left: 80px;
+        top: 74px;
+        width: 1760px;
+        height: 882px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid var(--hair);
+        background: #111214;
+        box-shadow: 0 48px 140px rgba(0, 0, 0, 0.7);
+      }
+      .vwrap {
+        position: absolute;
+        inset: 0;
+      }
+      .vwrap video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .strip {
+        position: absolute;
+        left: 80px;
+        right: 80px;
+        top: 986px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 24px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+      }
+      .strip .l {
+        color: var(--ink);
+      }
+      .strip .r {
+        color: var(--brand);
+      }
+
+      .outro {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .mark {
+        display: block;
+        width: 260px;
+        height: 260px;
+      }
+      .word {
+        display: block;
+        margin-top: 30px;
+        font-size: 92px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1;
+      }
+      .word em {
+        font-style: normal;
+        color: var(--brand);
+      }
+      .foot {
+        display: block;
+        margin-top: 34px;
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 26px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.9"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div class="glow" id="glow"></div>
+
+      <div class="chrome" id="chrome">
+        <span class="b">IDXBEAVER</span>
+        <span>RECORDED IN CHROME DEVTOOLS</span>
+      </div>
+
+      <div class="window" id="window">
+        <div class="vwrap" data-layout-allow-overflow id="w1">
+          <video
+            id="v1"
+            class="clip"
+            src="assets/video/c1_open.mp4"
+            data-start="0"
+            data-duration="2.4"
+            data-track-index="0"
+            muted
+            playsinline
+          ></video>
+        </div>
+        <div class="vwrap" data-layout-allow-overflow id="w2">
+          <video
+            id="v2"
+            class="clip"
+            src="assets/video/c2_grid.mp4"
+            data-start="2.05"
+            data-duration="10"
+            data-track-index="1"
+            muted
+            playsinline
+          ></video>
+        </div>
+        <div class="vwrap" data-layout-allow-overflow id="w3">
+          <video
+            id="v3"
+            class="clip"
+            src="assets/video/c4_query.mp4"
+            data-start="11.7"
+            data-duration="5.6"
+            data-track-index="2"
+            muted
+            playsinline
+          ></video>
+        </div>
+        <div class="vwrap" data-layout-allow-overflow id="w4">
+          <video
+            id="v4"
+            class="clip"
+            src="assets/video/c3_inspector.mp4"
+            data-start="16.95"
+            data-duration="2"
+            data-track-index="3"
+            muted
+            playsinline
+          ></video>
+        </div>
+        <div class="vwrap" data-layout-allow-overflow id="w5">
+          <video
+            id="v5"
+            class="clip"
+            src="assets/video/c5_structure.mp4"
+            data-start="18.6"
+            data-duration="2"
+            data-track-index="4"
+            muted
+            playsinline
+          ></video>
+        </div>
+      </div>
+
+      <div
+        class="strip clip"
+        id="s1"
+        data-start="0.9"
+        data-duration="2.3"
+        data-track-index="5"
+      >
+        <span class="l">chrome devtools -&gt; idxbeaver</span>
+        <span class="r">panel</span>
+      </div>
+      <div
+        class="strip clip"
+        id="s2"
+        data-start="3.5"
+        data-duration="8.1"
+        data-track-index="6"
+      >
+        <span class="l">analytics &middot; events</span>
+        <span class="r">220 rows &middot; 55K</span>
+      </div>
+      <div
+        class="strip clip"
+        id="s3"
+        data-start="12.4"
+        data-duration="4.6"
+        data-track-index="7"
+      >
+        <span class="l">mongodb-style query</span>
+        <span class="r">index plan</span>
+      </div>
+      <div
+        class="strip clip"
+        id="s4"
+        data-start="17.2"
+        data-duration="1.6"
+        data-track-index="8"
+      >
+        <span class="l">row inspector</span>
+        <span class="r">typed fields</span>
+      </div>
+      <div
+        class="strip clip"
+        id="s5"
+        data-start="18.9"
+        data-duration="1.5"
+        data-track-index="9"
+      >
+        <span class="l">inferred schema</span>
+        <span class="r">nullable &middot; coverage</span>
+      </div>
+
+      <div
+        class="outro clip"
+        id="outro"
+        data-start="20.1"
+        data-duration="4.8"
+        data-track-index="10"
+      >
+        <img class="mark" id="mark" src="assets/img/logo-mark-512.png" alt="" />
+        <span class="word" id="word">idx<em>beaver</em></span>
+        <span class="foot" id="foot"
+          >chrome web store &middot; open source &middot; idxbeaver.portlabs.in</span
+        >
+      </div>
+
+      <audio
+        id="bgm"
+        src="assets/music/bed.mp3"
+        data-start="0"
+        data-duration="24.9"
+        data-track-index="20"
+        data-volume="1"
+      ></audio>
+
+      <audio id="vo1" src="assets/vo/vo1.wav" data-start="0.2" data-duration="4.12" data-track-index="21" data-volume="1"></audio>
+      <audio id="vo2" src="assets/vo/vo2.wav" data-start="4.47" data-duration="4.38" data-track-index="21" data-volume="1"></audio>
+      <audio id="vo3" src="assets/vo/vo3.wav" data-start="8.99" data-duration="3.63" data-track-index="21" data-volume="1"></audio>
+      <audio id="vo4" src="assets/vo/vo4.wav" data-start="12.77" data-duration="4.44" data-track-index="21" data-volume="1"></audio>
+      <audio id="vo5" src="assets/vo/vo5.wav" data-start="17.36" data-duration="3.7" data-track-index="21" data-volume="1"></audio>
+      <audio id="vo6" src="assets/vo/vo6.wav" data-start="21.2" data-duration="3.61" data-track-index="21" data-volume="1"></audio>
+
+      <audio id="sfxTab" src="assets/sfx/interface/click_002.ogg" data-start="1" data-duration="0.01" data-track-index="22" data-volume="0.3"></audio>
+      <audio id="sfxK1" src="assets/sfx/keyboard/keypress-001.wav" data-start="12.4" data-duration="0.25" data-track-index="23" data-volume="0.18"></audio>
+      <audio id="sfxK2" src="assets/sfx/keyboard/keypress-003.wav" data-start="13.1" data-duration="0.25" data-track-index="23" data-volume="0.18"></audio>
+      <audio id="sfxK3" src="assets/sfx/keyboard/keypress-007.wav" data-start="13.8" data-duration="0.25" data-track-index="23" data-volume="0.18"></audio>
+      <audio id="sfxK4" src="assets/sfx/keyboard/keypress-002.wav" data-start="14.5" data-duration="0.25" data-track-index="23" data-volume="0.18"></audio>
+      <audio id="sfxDrop" src="assets/sfx/interface/drop_002.ogg" data-start="18.6" data-duration="0.19" data-track-index="24" data-volume="0.22"></audio>
+      <audio id="sfxMark" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="20.54" data-duration="0.18" data-track-index="24" data-volume="0.3"></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      gsap.set(["#w2", "#w3", "#w4", "#w5"], { opacity: 0 });
+      gsap.set("#w1", { opacity: 1 });
+      gsap.set(["#mark", "#word", "#foot"], { opacity: 0 });
+      gsap.set("#outro", { opacity: 1 });
+
+      // Scene slots: [wrapper, in, out]
+      const scenes = [
+        ["#w1", 0.0, 2.4],
+        ["#w2", 2.05, 12.05],
+        ["#w3", 11.7, 17.3],
+        ["#w4", 16.95, 18.95],
+        ["#w5", 18.6, 20.6],
+      ];
+
+      scenes.forEach(([sel, start, end], i) => {
+        if (i > 0) tl.to(sel, { opacity: 1, duration: 0.35, ease: "power1.inOut" }, start);
+        // slow push-in across the hold keeps static UI footage alive
+        tl.fromTo(
+          sel,
+          { scale: 1.018 },
+          { scale: 1, duration: end - start, ease: "none" },
+          start
+        );
+        if (i < scenes.length - 1) {
+          const next = scenes[i + 1][1];
+          tl.to(sel, { opacity: 0, duration: 0.35, ease: "power1.inOut" }, next);
+        }
+      });
+
+      ["#s1", "#s2", "#s3", "#s4", "#s5"].forEach((sel) => {
+        const el = document.querySelector(sel);
+        const start = parseFloat(el.dataset.start);
+        const dur = parseFloat(el.dataset.duration);
+        tl.fromTo(
+          sel,
+          { opacity: 0, y: 14 },
+          { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" },
+          start
+        );
+        tl.to(sel, { opacity: 0, duration: 0.3, ease: "power1.in" }, start + dur - 0.3);
+      });
+
+      // hand off to the outro
+      tl.to(["#window", "#chrome"], { opacity: 0, duration: 0.4, ease: "power1.inOut" }, 20.2);
+
+      // beat-locked: mark lands at 20.54s (bed.mp3 beat grid, 114.84 BPM)
+      tl.fromTo(
+        "#mark",
+        { opacity: 0, scale: 0.86 },
+        { opacity: 1, scale: 1, duration: 0.44, ease: "power3.out" },
+        20.1
+      );
+      // beat-locked: 21.07s
+      tl.fromTo(
+        "#word",
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" },
+        20.62
+      );
+      // beat-locked: 21.59s
+      tl.fromTo(
+        "#foot",
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" },
+        21.14
+      );
+
+      // glow: quiet under the footage, opens up for the lockup
+      tl.fromTo("#glow", { opacity: 0.55 }, { opacity: 0.75, duration: 20.1, ease: "none" }, 0);
+      tl.to("#glow", { opacity: 1.35, duration: 0.6, ease: "power2.out" }, 20.1);
+      tl.to("#glow", { opacity: 1.1, duration: 3.2, ease: "sine.inOut" }, 20.75);
+
+      // music: bed under the narration, lift for the lockup, fade out
+      tl.set("#bgm", { volume: 0.1 }, 0);
+      tl.to("#bgm", { volume: 0.22, duration: 0.5, ease: "power1.out" }, 20.2);
+      tl.to("#bgm", { volume: 0, duration: 0.8, ease: "power1.in" }, 24.1);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
