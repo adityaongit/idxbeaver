@@ -8,7 +8,7 @@ import { resolveSiteUrl } from "@/lib/site";
 const TITLE = "About — IdxBeaver";
 const DESCRIPTION =
   "IdxBeaver is built and maintained by Aditya Jindal. The project, the principles, and how to get in touch.";
-const PORTFOLIO_URL = "https://adysfolio.vercel.app";
+const PORTFOLIO_URL = "https://aditya.portlabs.in";
 const GITHUB_URL = "https://github.com/adityaongit";
 
 export const metadata: Metadata = {
@@ -96,7 +96,7 @@ export default function AboutPage() {
             well-built tools. Beyond IdxBeaver, you can see other things
             I&rsquo;ve worked on — design, code, writing — at{" "}
             <a href={PORTFOLIO_URL} target="_blank" rel="noopener">
-              adysfolio.vercel.app
+              aditya.portlabs.in
             </a>
             .
           </p>
@@ -104,7 +104,7 @@ export default function AboutPage() {
             <li>
               <strong>Portfolio:</strong>{" "}
               <a href={PORTFOLIO_URL} target="_blank" rel="noopener">
-                adysfolio.vercel.app
+                aditya.portlabs.in
               </a>
             </li>
             <li>
