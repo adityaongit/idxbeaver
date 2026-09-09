@@ -50,7 +50,7 @@ function Brand() {
       className="flex shrink-0 items-center gap-[10px] text-[15px] font-semibold tracking-[-.02em] text-[var(--color-ink)]"
     >
       <Logo />
-      <span>
+      <span translate="no">
         <span className="text-[var(--color-brand)]">idx</span>beaver
       </span>
       <span className="mx-1 hidden h-4 w-px bg-[var(--color-hair-3)] sm:block" />
@@ -64,9 +64,10 @@ function Brand() {
 const LINKS = [
   { href: "/#product", label: "Product" },
   { href: "/#query", label: "Query" },
-  { href: "/vs/chrome-devtools-application-panel", label: "Compare" },
-  { href: "/blog", label: "Blog" },
-  { href: "/faq", label: "FAQ" },
+  { href: "/vs/chrome-devtools-application-panel/", label: "Compare" },
+  { href: "/vs/indexeddb-viewer-extensions/", label: "Alternatives" },
+  { href: "/blog/", label: "Blog" },
+  { href: "/faq/", label: "FAQ" },
 ];
 
 export function SiteNav() {
@@ -95,7 +96,7 @@ export function SiteNav() {
   const drawer = (
     <div
       className={cn(
-        "fixed inset-0 z-[60] lg:hidden",
+        "fixed inset-0 z-[var(--z-drawer)] lg:hidden",
         open ? "pointer-events-auto" : "pointer-events-none",
       )}
       aria-hidden={!open}
@@ -109,7 +110,7 @@ export function SiteNav() {
       />
       <div
         className={cn(
-          "absolute right-0 top-0 flex h-full w-[min(86vw,360px)] flex-col border-l border-[var(--color-hair-2)] bg-[var(--color-bg-2)] shadow-2xl transition-transform duration-300",
+          "absolute right-0 top-0 flex h-full w-[min(86vw,360px)] flex-col overscroll-contain border-l border-[var(--color-hair-2)] bg-[var(--color-bg-2)] shadow-2xl transition-transform duration-300",
           open ? "translate-x-0" : "translate-x-full",
         )}
       >
@@ -119,7 +120,7 @@ export function SiteNav() {
             type="button"
             aria-label="Close menu"
             onClick={() => setOpen(false)}
-            className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] text-[var(--color-ink)] hover:bg-white/[.06]"
+            className="flex h-[40px] w-[40px] items-center justify-center rounded-[8px] text-[var(--color-ink)] hover:bg-white/[.06]"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
@@ -139,7 +140,7 @@ export function SiteNav() {
           ))}
           <div className="my-3 h-px bg-[var(--color-hair)]" />
           <a
-            href="/about"
+            href="/about/"
             onClick={() => setOpen(false)}
             className="rounded-[8px] px-3 py-3 text-[14px] text-[var(--color-ink-dim)] transition-colors hover:bg-white/[.04] hover:text-[var(--color-ink)]"
           >
@@ -172,7 +173,7 @@ export function SiteNav() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b border-[var(--color-hair)] bg-[rgba(8,9,10,.85)] nav-glass">
+      <nav className="sticky top-0 z-[var(--z-nav)] border-b border-[var(--color-hair)] bg-[rgba(8,9,10,.85)] nav-glass">
         <div className="mx-auto flex h-[56px] max-w-[1360px] items-center justify-between px-5 sm:px-6">
           <Brand />
 
@@ -242,7 +243,7 @@ export function SiteNav() {
               aria-label={open ? "Close menu" : "Open menu"}
               aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
-              className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] border border-[var(--color-hair-2)] bg-white/[.02] text-[var(--color-ink)] transition-colors hover:bg-white/[.06]"
+              className="flex h-[40px] w-[40px] items-center justify-center rounded-[8px] border border-[var(--color-hair-2)] bg-white/[.02] text-[var(--color-ink)] transition-colors hover:bg-white/[.06]"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 {open ? (

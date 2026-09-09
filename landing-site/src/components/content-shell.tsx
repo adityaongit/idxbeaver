@@ -1,10 +1,15 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+
+import type { Crumb } from "@/lib/breadcrumbs";
+import { withSlash } from "@/lib/seo";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 
 type ContentShellProps = {
-  eyebrow?: string;
+  crumbs: Crumb[];
   title: ReactNode;
+  meta?: ReactNode;
   lede?: ReactNode;
   children: ReactNode;
 };
@@ -14,20 +19,35 @@ type ContentShellProps = {
  * docs. Mirrors the typography rhythm of the privacy page so the site feels
  * coherent across pages.
  */
-export function ContentShell({ eyebrow, title, lede, children }: ContentShellProps) {
+export function ContentShell({ crumbs, title, meta, lede, children }: ContentShellProps) {
+  const trail: Crumb[] = [{ name: "Home", path: "/" }, ...crumbs];
   return (
     <>
       <SiteNav />
-      <main className="mx-auto max-w-[920px] px-5 py-24 sm:px-8 sm:py-32">
+      <main id="main-content" className="mx-auto w-full max-w-[1320px] px-5 py-24 sm:w-[85%] sm:px-8 sm:py-32">
         <header className="mb-12">
-          {eyebrow ? (
-            <p className="mono mb-3 text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-mute)]">
-              {eyebrow}
-            </p>
-          ) : null}
+          <nav aria-label="Breadcrumb" className="mb-4">
+            <ol className="mono flex flex-wrap items-center gap-x-2 text-[12px] text-[var(--color-ink-mute)]">
+              {trail.map((c, i) => (
+                <li key={c.path} className="flex items-center gap-2">
+                  {i > 0 ? <span aria-hidden="true">/</span> : null}
+                  {i === trail.length - 1 ? (
+                    <span aria-current="page" className="text-[var(--color-ink-dim)]">
+                      {c.name}
+                    </span>
+                  ) : (
+                    <Link href={withSlash(c.path)} className="hover:text-[var(--color-ink)]">
+                      {c.name}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </nav>
           <h1 className="text-[40px] font-semibold leading-[1.05] tracking-[-0.02em] text-[var(--color-ink)] sm:text-[48px]">
             {title}
           </h1>
+          {meta ? <div className="mt-4 flex flex-wrap gap-2">{meta}</div> : null}
           {lede ? (
             <p className="mt-5 text-[16px] leading-[1.65] text-[var(--color-ink-dim)] sm:text-[18px]">
               {lede}
@@ -38,6 +58,14 @@ export function ContentShell({ eyebrow, title, lede, children }: ContentShellPro
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+export function MetaChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="mono rounded-[4px] border border-[var(--color-hair)] bg-white/[.03] px-[8px] py-[3px] text-[11px] text-[var(--color-ink-dim)]">
+      {children}
+    </span>
   );
 }
 

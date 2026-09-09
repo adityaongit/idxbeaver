@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { ContentSection, ContentShell } from "@/components/content-shell";
 import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
+import { personEntity } from "@/lib/entities";
+import { pageMetadata } from "@/lib/seo";
 import { resolveSiteUrl } from "@/lib/site";
 
 const TITLE = "About — IdxBeaver";
@@ -11,31 +13,22 @@ const DESCRIPTION =
 const PORTFOLIO_URL = "https://aditya.portlabs.in";
 const GITHUB_URL = "https://github.com/adityaongit";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: "/about" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/about", type: "profile" },
-};
+  path: "/about",
+  type: "profile",
+});
 
 export default function AboutPage() {
   const base = resolveSiteUrl();
   const personJsonLd = {
     "@context": "https://schema.org",
-    "@type": "Person",
-    name: "Aditya Jindal",
-    url: PORTFOLIO_URL,
-    sameAs: [PORTFOLIO_URL, GITHUB_URL, "https://github.com/adityaongit/idxbeaver"],
-    knowsAbout: [
-      "IndexedDB",
-      "Chrome DevTools extensions",
-      "Browser storage",
-      "Local-first software",
-      "Frontend tooling",
-    ],
-    mainEntityOfPage: `${base}/about`,
+    ...personEntity(),
+    mainEntityOfPage: `${base}/about/`,
   };
-  const breadcrumbJsonLd = buildBreadcrumbJsonLd([{ name: "About", path: "/about" }]);
+  const crumbs = [{ name: "About", path: "/about" }];
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(crumbs);
 
   return (
     <>
@@ -48,7 +41,7 @@ export default function AboutPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <ContentShell
-        eyebrow="About"
+        crumbs={crumbs}
         title="One person, one extension."
         lede={
           <>
@@ -65,6 +58,18 @@ export default function AboutPage() {
           </>
         }
       >
+        <ContentSection title="What IdxBeaver is">
+          <p>
+            IdxBeaver is a Chrome DevTools extension that turns the Application
+            panel into a real database client for browser storage. It adds a
+            dense data grid, MongoDB-style queries with index-aware planning, a
+            row inspector, schema inference, and import and export across JSON,
+            NDJSON, CSV, SQL and ZIP, for IndexedDB, LocalStorage,
+            SessionStorage, Cookies and Cache Storage. It is free, MIT-licensed,
+            and makes no network requests.
+          </p>
+        </ContentSection>
+
         <ContentSection title="Why this exists">
           <p>
             I&rsquo;ve worked on local-first apps and offline-capable web

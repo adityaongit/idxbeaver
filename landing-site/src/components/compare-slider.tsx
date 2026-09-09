@@ -1,6 +1,38 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { screenshotFallback, screenshotSrcSet } from "@/lib/screenshots";
+
+// Container caps at 1320px with 32px gutters at sm and up.
+const SIZES =
+  "(min-width: 1320px) 1256px, (min-width: 640px) calc(100vw - 64px), calc(100vw - 40px)";
+
+function ThemeShot({
+  theme,
+  className,
+}: {
+  theme: "dark" | "light";
+  className: string;
+}) {
+  return (
+    <picture>
+      <source srcSet={screenshotSrcSet(theme, "avif")} sizes={SIZES} type="image/avif" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        className={className}
+        src={screenshotFallback(theme)}
+        srcSet={screenshotSrcSet(theme, "webp")}
+        sizes={SIZES}
+        alt={`IdxBeaver ${theme} theme, IndexedDB grid view in Chrome DevTools`}
+        width={2560}
+        height={1505}
+        decoding="async"
+        loading="lazy"
+        draggable={false}
+      />
+    </picture>
+  );
+}
 
 export function CompareSlider() {
   const cmpRef = useRef<HTMLDivElement>(null);
@@ -76,33 +108,8 @@ export function CompareSlider() {
 
   return (
     <div ref={cmpRef} className="compare" id="cmp">
-      <picture>
-        <source srcSet="/screenshots/dark.avif" type="image/avif" />
-        <source srcSet="/screenshots/dark.webp" type="image/webp" />
-        <img
-          className="img-base"
-          src="/screenshots/dark.png"
-          alt="IdxBeaver · dark theme — IndexedDB grid view in Chrome DevTools"
-          width={2940}
-          height={1728}
-          decoding="async"
-          fetchPriority="high"
-          draggable={false}
-        />
-      </picture>
-      <picture>
-        <source srcSet="/screenshots/light.avif" type="image/avif" />
-        <source srcSet="/screenshots/light.webp" type="image/webp" />
-        <img
-          className="img-top"
-          src="/screenshots/light.png"
-          alt="IdxBeaver · light theme — IndexedDB grid view in Chrome DevTools"
-          width={2940}
-          height={1728}
-          decoding="async"
-          draggable={false}
-        />
-      </picture>
+      <ThemeShot theme="dark" className="img-base" />
+      <ThemeShot theme="light" className="img-top" />
       <span className="cmp-tag l">Light</span>
       <span className="cmp-tag d">Dark</span>
       <div className="cmp-line" />

@@ -4,9 +4,8 @@ import { join } from "node:path";
 import { BRAND_PURPLE } from "@/lib/brand";
 
 export const dynamic = "force-static";
-export const alt = "IdxBeaver — A database client for browser storage";
-export const size = { width: 1200, height: 630 };
-export const contentType = "image/png";
+
+const size = { width: 1200, height: 630 };
 
 // Google's CSS endpoint only returns TTF/OTF (Satori-compatible) when the
 // User-Agent is *not* a modern browser. With a modern UA it serves woff2,
@@ -24,7 +23,7 @@ async function loadInter(weight: 500 | 600): Promise<ArrayBuffer> {
   return await fetch(match[1]).then((r) => r.arrayBuffer());
 }
 
-export default async function OpengraphImage() {
+export async function GET() {
   const logo = await readFile(
     join(process.cwd(), "public", "brand", "logo-mark-512.png"),
   );

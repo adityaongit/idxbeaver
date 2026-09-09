@@ -22,7 +22,7 @@ export function SiteFooter() {
           <div>
             <a href="#" className="mb-4 flex items-center gap-[10px] text-[15px] font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
               <Logo />
-              <span>
+              <span translate="no">
                 <span className="text-[var(--color-brand)]">idx</span>beaver
               </span>
             </a>
@@ -35,15 +35,16 @@ export function SiteFooter() {
             links={[
               { label: "Features", href: "/#features" },
               { label: "Query", href: "/#query" },
-              { label: "FAQ", href: "/faq" },
+              { label: "FAQ", href: "/faq/" },
               { label: "Add to Chrome", href: CHROME_WEB_STORE_URL, external: true },
             ]}
           />
           <FooterCol
             heading="Resources"
             links={[
-              { label: "Blog", href: "/blog" },
-              { label: "vs DevTools panel", href: "/vs/chrome-devtools-application-panel" },
+              { label: "Blog", href: "/blog/" },
+              { label: "vs DevTools panel", href: "/vs/chrome-devtools-application-panel/" },
+              { label: "vs other extensions", href: "/vs/indexeddb-viewer-extensions/" },
               { label: "Docs", href: "https://github.com/adityaongit/idxbeaver#readme", external: true },
               { label: "GitHub", href: "https://github.com/adityaongit/idxbeaver", external: true },
               {
@@ -56,13 +57,13 @@ export function SiteFooter() {
           <FooterCol
             heading="Project"
             links={[
-              { label: "About", href: "/about" },
+              { label: "About", href: "/about/" },
               {
                 label: "License · MIT",
                 href: "https://github.com/adityaongit/idxbeaver/blob/main/LICENSE",
                 external: true,
               },
-              { label: "Privacy", href: "/privacy" },
+              { label: "Privacy", href: "/privacy/" },
               {
                 label: "Contact",
                 href: "mailto:work.adityajindal@gmail.com",
@@ -70,8 +71,8 @@ export function SiteFooter() {
             ]}
           />
         </div>
-        <div className="mono flex flex-wrap justify-between gap-4 border-t border-[var(--color-hair)] pt-6 text-[11px] text-[var(--color-ink-faint)]">
-          <div>© 2026 IdxBeaver · v{APP_VERSION}</div>
+        <div className="mono flex flex-wrap justify-between gap-4 border-t border-[var(--color-hair)] pt-6 text-[11px] text-[var(--color-ink-mute)]">
+          <div>© 2026 <span translate="no">IdxBeaver</span> · v{APP_VERSION}</div>
           <div>Built with hairlines</div>
         </div>
       </div>
@@ -84,7 +85,7 @@ type FooterLink = { label: string; href: string; external?: boolean };
 function FooterCol({ heading, links }: { heading: string; links: FooterLink[] }) {
   return (
     <div>
-      <h5 className="mono mb-4 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-ink-mute)]">
+      <h5 className="mb-4 text-[13px] font-medium text-[var(--color-ink-2)]">
         {heading}
       </h5>
       <ul className="list-none">

@@ -11,7 +11,7 @@ function Feature({
 }) {
   return (
     <div className="group flex min-h-[170px] flex-col gap-2 bg-[var(--color-bg)] p-7 transition-colors hover:bg-white/[.012]">
-      <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-[7px] border border-[var(--color-hair-2)] bg-white/[.04] text-[var(--color-ink-2)] transition-all group-hover:-translate-y-[2px] group-hover:border-[var(--color-hair-3)]">
+      <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-[7px] border border-[var(--color-hair-2)] bg-white/[.04] text-[var(--color-ink-2)] transition-[transform,border-color] duration-150 group-hover:-translate-y-[2px] group-hover:border-[var(--color-hair-3)]">
         {icon}
       </div>
       <h4 className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--color-ink)]">{title}</h4>
@@ -25,10 +25,6 @@ export function FeaturesGrid() {
     <section id="features" className="py-20 sm:py-28 lg:py-40">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
         <div className="r mb-16 max-w-[760px] lg:mb-20">
-          <div className="mono mb-5 flex items-center gap-[10px] text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--color-ink-dim)]">
-            <span aria-hidden="true" className="h-px w-6 bg-[var(--color-hair-3)]" />
-            <span>FIG 0.4 · More</span>
-          </div>
           <h2
             className="font-semibold text-[var(--color-ink)]"
             style={{

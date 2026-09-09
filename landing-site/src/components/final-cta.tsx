@@ -13,9 +13,9 @@ export function FinalCta() {
         }}
       />
       <div className="relative mx-auto max-w-[920px] px-5 sm:px-8">
-        <p className="mb-4 text-[12px] font-medium uppercase tracking-[0.18em] text-[var(--color-ink-dim)]">
-          Open source · MIT
-        </p>
+        <span className="mono mb-4 inline-block rounded-[4px] border border-[var(--color-hair)] bg-white/[.03] px-[8px] py-[3px] text-[11px] text-[var(--color-ink-dim)]">
+          Open source, MIT licensed
+        </span>
         <h2
           className="font-semibold text-[var(--color-ink)]"
           style={{
@@ -27,7 +27,7 @@ export function FinalCta() {
           Inspect the <span className="ir">inspector.</span>
         </h2>
         <p className="mx-auto mt-5 max-w-[620px] text-[15px] text-[var(--color-ink-dim)] sm:mt-6 sm:text-[18px]">
-          IdxBeaver runs entirely in your browser — no telemetry, no servers, no
+          IdxBeaver runs entirely in your browser: no telemetry, no servers, no
           account. Read the source, file an issue, or grab the unpacked build to
           run a fork.
         </p>
@@ -42,15 +42,6 @@ export function FinalCta() {
             className="w-full sm:w-auto"
           >
             View on GitHub
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-              <path
-                d="M3 6h6M6 3l3 3-3 3"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
           </Button>
           <Button
             as="a"

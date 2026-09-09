@@ -24,7 +24,7 @@ function HeroMark() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/brand/logo-mark-256.png"
-        alt="IdxBeaver"
+        alt=""
         width={256}
         height={256}
         className="hero-mark relative h-[112px] w-[112px] select-none sm:h-[128px] sm:w-[128px] lg:h-[184px] lg:w-[184px]"
@@ -63,7 +63,8 @@ export function Hero() {
           <p
             className="r-init ri3 mt-6 max-w-[560px] text-[16px] leading-[1.55] tracking-[-.005em] text-[var(--color-ink-dim)] sm:text-[18px] lg:mx-0 mx-auto"
           >
-            A Chrome DevTools extension to browse, query, edit, and export{" "}
+            IdxBeaver is a Chrome DevTools extension to browse, query, edit,
+            and export{" "}
             <b className="font-medium text-[var(--color-ink-2)]">
               IndexedDB, LocalStorage, SessionStorage, Cookies, and Cache
               Storage

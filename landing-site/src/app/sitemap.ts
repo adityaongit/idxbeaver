@@ -1,37 +1,46 @@
 import type { MetadataRoute } from "next";
 
-import { BLOG_POSTS } from "@/lib/blog";
+import { BLOG_POSTS, postLastModified } from "@/lib/blog";
+import { withSlash } from "@/lib/seo";
 import { resolveSiteUrl } from "@/lib/site";
 
 export const dynamic = "force-static";
 
-// next.config.ts sets `trailingSlash: true`, so the non-slashed form of every
-// route 308-redirects. Sitemaps must list the final, non-redirecting URL.
-function url(base: string, path: string): string {
-  return path === "/" ? `${base}/` : `${base}${path}/`;
+// Hand-maintained per route rather than derived from the build, so `lastmod`
+// tracks visible content instead of claiming every page changed on every
+// deploy. Bump the entry when a route's rendered content changes.
+const PAGE_LAST_MODIFIED: Record<string, string> = {
+  "/": "2026-09-09",
+  "/vs/chrome-devtools-application-panel": "2026-09-09",
+  "/vs/indexeddb-viewer-extensions": "2026-09-09",
+  "/blog": "2026-09-09",
+  "/faq": "2026-09-06",
+  "/about": "2026-09-09",
+  "/privacy": "2026-04-30",
+};
+
+function entry(base: string, path: string): MetadataRoute.Sitemap[number] {
+  return {
+    url: `${base}${withSlash(path)}`,
+    lastModified: new Date(PAGE_LAST_MODIFIED[path]),
+  };
 }
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = resolveSiteUrl();
-  const lastModified = new Date();
   const posts: MetadataRoute.Sitemap = BLOG_POSTS.map((post) => ({
-    url: url(base, `/blog/${post.slug}`),
-    lastModified: new Date(post.publishedOn),
-    changeFrequency: "yearly",
-    priority: 0.6,
+    url: `${base}${withSlash(`/blog/${post.slug}`)}`,
+    lastModified: new Date(postLastModified(post)),
   }));
+
   return [
-    { url: url(base, "/"), lastModified, changeFrequency: "weekly", priority: 1 },
-    {
-      url: url(base, "/vs/chrome-devtools-application-panel"),
-      lastModified,
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    { url: url(base, "/blog"), lastModified, changeFrequency: "weekly", priority: 0.7 },
+    entry(base, "/"),
+    entry(base, "/vs/chrome-devtools-application-panel"),
+    entry(base, "/vs/indexeddb-viewer-extensions"),
+    entry(base, "/blog"),
     ...posts,
-    { url: url(base, "/faq"), lastModified, changeFrequency: "monthly", priority: 0.7 },
-    { url: url(base, "/about"), lastModified, changeFrequency: "monthly", priority: 0.5 },
-    { url: url(base, "/privacy"), lastModified, changeFrequency: "yearly", priority: 0.3 },
+    entry(base, "/faq"),
+    entry(base, "/about"),
+    entry(base, "/privacy"),
   ];
 }

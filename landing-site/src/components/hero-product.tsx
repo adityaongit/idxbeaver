@@ -16,15 +16,6 @@ export function HeroProduct() {
   return (
     <div className="r-init ri5 mx-auto max-w-[1240px] px-5 sm:px-8">
       <div ref={wrapRef} className="relative">
-        <div className="mb-5 flex items-center justify-between px-1">
-          <span className="mono text-[11px] tracking-[0.1em] text-[var(--color-ink-mute)]">
-            FIG 0.1
-          </span>
-          <span className="mono hidden text-[11px] tracking-[0.1em] text-[var(--color-ink-mute)] sm:inline">
-            DEVTOOLS PANEL · APP.ACME.COM
-          </span>
-        </div>
-
         <div
           className="tilt-target relative overflow-hidden rounded-[14px] border border-[var(--color-hair-3)]"
           style={{
@@ -46,10 +37,7 @@ export function HeroProduct() {
 
           <MockTitlebar />
 
-          {/* Grid layout:
-              <lg: grid only
-              lg: grid + inspector
-              xl: sidebar + grid + inspector */}
+          {/* Grid layout: <lg grid only, lg grid + inspector, xl sidebar + grid + inspector */}
           <div className="grid min-h-[340px] grid-cols-1 bg-[var(--color-bg-2)] sm:min-h-[400px] lg:min-h-[440px] lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[220px_minmax(0,1fr)_280px]">
             <div className="hidden xl:block">
               <MockSidebar />

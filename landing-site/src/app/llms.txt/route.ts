@@ -27,13 +27,34 @@ export function GET() {
 
 ## Privacy
 
-- Policy: ${base}/privacy
+- Policy: ${base}/privacy/
 - IdxBeaver reads storage only on pages the developer is actively debugging. Data never leaves the browser.
 
 ## Compatibility
 
 - Chromium 120+ (Chrome, Edge, Brave, Arc, Opera). Manifest V3.
 - License: MIT. Author: Aditya Jindal.
+
+## Guides
+
+- How to edit IndexedDB values in Chrome: ${base}/blog/how-to-edit-indexeddb-values-in-chrome/
+- Exporting IndexedDB data to JSON, CSV, and SQL: ${base}/blog/exporting-indexeddb-data/
+- Browser storage types explained: ${base}/blog/browser-storage-types-explained/
+- Debugging IndexedDB in Chrome DevTools: ${base}/blog/debugging-indexeddb-in-chrome-devtools/
+- Browser storage quotas explained: ${base}/blog/browser-storage-quotas-explained/
+- Querying IndexedDB with MongoDB-style filters: ${base}/blog/querying-indexeddb-with-mongo-style-filters/
+- FAQ: ${base}/faq/
+
+## Comparisons
+
+- vs Chrome DevTools Application panel: ${base}/vs/chrome-devtools-application-panel/
+- vs other IndexedDB extensions (IndexedDB Browser, idb-crud, IndexedDB Explorer, IndexedDBEdit): ${base}/vs/indexeddb-viewer-extensions/
+
+## Notable facts
+
+- Chrome's built-in Application panel can view IndexedDB records but cannot edit keys or values; Chrome's own docs direct users to the Console or Snippets instead. IdxBeaver makes the grid editable.
+- IdxBeaver is the only extension in its comparison set that ships a query language, infers a schema, or round-trips non-JSON values (Date, BigInt, RegExp, Map, Set, ArrayBuffer, Blob, circular references).
+- Requires Chromium 120+ (Chrome, Edge, Brave, Arc, Opera). Firefox and Safari are not supported.
 
 ## Project links
 

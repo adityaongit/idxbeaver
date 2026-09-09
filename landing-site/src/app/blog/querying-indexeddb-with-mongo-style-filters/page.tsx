@@ -3,28 +3,92 @@ import type { Metadata } from "next";
 import { BlogPostShell } from "@/components/blog-post";
 import { CodeBlock } from "@/components/code-block";
 import { ContentSection } from "@/components/content-shell";
-import { getPostBySlug } from "@/lib/blog";
+import { getPostBySlug, postLastModified } from "@/lib/blog";
+import { pageMetadata } from "@/lib/seo";
 
 const SLUG = "querying-indexeddb-with-mongo-style-filters";
 const post = getPostBySlug(SLUG)!;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: `${post.title} — IdxBeaver`,
+  socialTitle: post.title,
   description: post.description,
-  alternates: { canonical: `/blog/${SLUG}` },
-  openGraph: {
-    title: post.title,
-    description: post.description,
-    url: `/blog/${SLUG}`,
-    type: "article",
-    publishedTime: post.publishedOn,
-  },
-  twitter: { card: "summary_large_image", title: post.title, description: post.description },
-};
+  path: `/blog/${SLUG}`,
+  type: "article",
+  publishedTime: post.publishedOn,
+  modifiedTime: postLastModified(post),
+});
 
 export default async function Page() {
   return (
     <BlogPostShell post={post}>
+      <ContentSection title="First, querying IndexedDB natively">
+        <p>
+          Before any of this, it is worth being precise about what IndexedDB
+          gives you out of the box, because the native primitives are the thing
+          a filter language compiles down to.
+        </p>
+        <p>
+          There are three ways to read: get a single record by key, get many
+          records matching a key range, or walk a cursor.
+        </p>
+        <CodeBlock
+          lang="js"
+          code={`const tx = db.transaction("orders", "readonly");
+const store = tx.objectStore("orders");
+
+// 1. One record by primary key
+store.get("ord_1042");
+
+// 2. Many records, optionally bounded by a key range
+store.getAll();                                  // everything
+store.getAll(IDBKeyRange.bound("ord_1", "ord_2")); // a slice
+store.count(IDBKeyRange.lowerBound("ord_5"));      // just the count
+
+// 3. A cursor, when you need to inspect or edit as you go
+store.openCursor().onsuccess = (event) => {
+  const cursor = event.target.result;
+  if (!cursor) return;
+  console.log(cursor.key, cursor.value);
+  cursor.continue();
+};`}
+        />
+        <p>
+          Ranges are built with <code translate="no">IDBKeyRange</code>:{" "}
+          <code translate="no">only</code>, <code translate="no">bound</code>, <code translate="no">lowerBound</code> and{" "}
+          <code translate="no">upperBound</code>, each taking an optional flag to make the
+          endpoint exclusive. Anything more selective than a key range needs an
+          index:
+        </p>
+        <CodeBlock
+          lang="js"
+          code={`// Query by a non-key field, via an index declared in onupgradeneeded
+const byStatus = store.index("by_status");
+byStatus.getAll("pending");
+
+// Descending walk over an index
+byStatus.openCursor(null, "prev").onsuccess = (event) => {
+  const cursor = event.target.result;
+  if (!cursor) return;
+  console.log(cursor.value);
+  cursor.continue();
+};`}
+        />
+        <p>
+          That is the whole query surface. Notice what is missing: there is no
+          way to express &ldquo;status is pending <em>and</em> total is over
+          20000&rdquo; in one call. IndexedDB has no compound predicate, no
+          sorting beyond index order, and no projection. You get one index per
+          query, and everything else is a loop you write yourself.
+        </p>
+        <p>
+          So in practice every non-trivial IndexedDB query becomes: pick the
+          most selective index, range-scan it, then filter the results in
+          memory. A filter language is a way of not hand-writing that every
+          time.
+        </p>
+      </ContentSection>
+
       <ContentSection title="Why we need a query language at all">
         <p>
           IndexedDB&rsquo;s native API is verbose by design — it predates
@@ -98,9 +162,9 @@ export default async function Page() {
           <li>
             <strong>Index-hint scan.</strong> Walk the filter looking for
             single-field equality or range expressions where an{" "}
-            <code>IDBIndex</code> exists with a matching{" "}
-            <code>keyPath</code>. If it finds one, the cursor opens against
-            that index with an <code>IDBKeyRange</code> derived from the
+            <code translate="no">IDBIndex</code> exists with a matching{" "}
+            <code translate="no">keyPath</code>. If it finds one, the cursor opens against
+            that index with an <code translate="no">IDBKeyRange</code> derived from the
             filter — bounded scan, not full-store.
           </li>
           <li>
@@ -148,7 +212,7 @@ export default async function Page() {
 }`}
         />
         <p>
-          With an index on <code>status</code> the planner range-scans the
+          With an index on <code translate="no">status</code> the planner range-scans the
           refunded slice, then in-memory filters by date. No full table scan.
         </p>
 
@@ -210,8 +274,8 @@ export default async function Page() {
             larger workloads.
           </li>
           <li>
-            <strong>Aggregations.</strong> No <code>$group</code> /{" "}
-            <code>$sum</code> yet — the project view gives you the rows; you
+            <strong>Aggregations.</strong> No <code translate="no">$group</code> /{" "}
+            <code translate="no">$sum</code> yet — the project view gives you the rows; you
             do the math in your head or in a spreadsheet.
           </li>
           <li>
@@ -241,10 +305,37 @@ export default async function Page() {
           >
             the IdxBeaver source
           </a>
-          {" "}— the planner is in <code>src/background/index.ts</code>,
-          inside the injected <code>executeStorageRequest</code> function;
-          the parser lives in <code>src/shared/query.ts</code>.
+          {" "}— the planner is in <code translate="no">src/background/index.ts</code>,
+          inside the injected <code translate="no">executeStorageRequest</code> function;
+          the parser lives in <code translate="no">src/shared/query.ts</code>.
         </p>
+      </ContentSection>
+
+      <ContentSection title="Related reading">
+        <ul>
+          <li>
+            <a href="/">IdxBeaver</a> ships this query language as a Chrome
+            DevTools panel, with the plan shown next to every result.
+          </li>
+          <li>
+            <a href="/blog/debugging-indexeddb-in-chrome-devtools/">
+              Debugging IndexedDB in Chrome DevTools
+            </a>{" "}
+            — the inspection workflow these queries run inside.
+          </li>
+          <li>
+            <a href="/blog/how-to-edit-indexeddb-values-in-chrome/">
+              How to edit IndexedDB values in Chrome
+            </a>{" "}
+            — once a filter has found the rows, changing them.
+          </li>
+          <li>
+            <a href="/blog/exporting-indexeddb-data/">
+              Exporting IndexedDB data
+            </a>{" "}
+            — exporting a filtered slice rather than a whole store.
+          </li>
+        </ul>
       </ContentSection>
     </BlogPostShell>
   );

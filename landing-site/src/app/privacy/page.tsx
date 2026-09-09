@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
-import { ContentSection, ContentShell } from "@/components/content-shell";
+import { ContentSection, ContentShell, MetaChip } from "@/components/content-shell";
 import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Privacy Policy — IdxBeaver",
   description:
     "IdxBeaver is a Chrome DevTools extension that runs entirely on your machine. It does not collect, transmit, or share any data.",
-  alternates: { canonical: "/privacy" },
-};
+  path: "/privacy",
+});
 
 export default function PrivacyPage() {
-  const breadcrumbJsonLd = buildBreadcrumbJsonLd([{ name: "Privacy", path: "/privacy" }]);
+  const crumbs = [{ name: "Privacy", path: "/privacy" }];
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(crumbs);
   return (
     <>
       <script
@@ -18,8 +20,9 @@ export default function PrivacyPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <ContentShell
-        eyebrow="Last updated · 2026-04-27"
+        crumbs={crumbs}
         title="Privacy Policy"
+        meta={<MetaChip>Last updated Apr 27, 2026</MetaChip>}
         lede="IdxBeaver is a Chrome DevTools extension for inspecting and editing browser storage on pages the developer is actively debugging."
       >
         <ContentSection title="What data IdxBeaver accesses">
@@ -42,7 +45,7 @@ export default function PrivacyPage() {
         <ContentSection title="What data IdxBeaver stores">
           <p>
             The extension stores the following on your machine only, using
-            <code> chrome.storage.local</code>:
+            <code translate="no"> chrome.storage.local</code>:
           </p>
           <ul>
             <li>Your preferences (theme, fonts, sizes, panel layout)</li>
@@ -51,7 +54,7 @@ export default function PrivacyPage() {
           </ul>
           <p>
             It also writes to its own private IndexedDB database
-            (<code>idxbeaver</code>) on the extension&apos;s origin to persist
+            (<code translate="no">idxbeaver</code>) on the extension&apos;s origin to persist
             history and saved queries across DevTools sessions.
           </p>
         </ContentSection>

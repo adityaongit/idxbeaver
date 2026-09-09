@@ -14,8 +14,8 @@ export function Quote() {
           <br className="hidden sm:block" />
           So we built the tool <span className="ir">we wanted.</span>
         </blockquote>
-        <cite className="mono mt-8 block text-[11.5px] not-italic tracking-[0.06em] text-[var(--color-ink-mute)]">
-          — Notes from the authors
+        <cite className="mono mt-8 block text-[11.5px] not-italic text-[var(--color-ink-mute)]">
+          Notes from the maintainer
         </cite>
       </div>
     </section>

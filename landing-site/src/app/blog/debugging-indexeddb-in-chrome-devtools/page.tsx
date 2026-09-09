@@ -3,24 +3,21 @@ import type { Metadata } from "next";
 import { BlogPostShell } from "@/components/blog-post";
 import { CodeBlock } from "@/components/code-block";
 import { ContentSection } from "@/components/content-shell";
-import { getPostBySlug } from "@/lib/blog";
+import { getPostBySlug, postLastModified } from "@/lib/blog";
+import { pageMetadata } from "@/lib/seo";
 
 const SLUG = "debugging-indexeddb-in-chrome-devtools";
 const post = getPostBySlug(SLUG)!;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: `${post.title} — IdxBeaver`,
+  socialTitle: post.title,
   description: post.description,
-  alternates: { canonical: `/blog/${SLUG}` },
-  openGraph: {
-    title: post.title,
-    description: post.description,
-    url: `/blog/${SLUG}`,
-    type: "article",
-    publishedTime: post.publishedOn,
-  },
-  twitter: { card: "summary_large_image", title: post.title, description: post.description },
-};
+  path: `/blog/${SLUG}`,
+  type: "article",
+  publishedTime: post.publishedOn,
+  modifiedTime: postLastModified(post),
+});
 
 export default async function Page() {
   return (
@@ -78,7 +75,7 @@ export default async function Page() {
         <p>
           There&rsquo;s a <em>Start from key</em> input that scrolls the cursor
           to a primary key, but no &ldquo;show me only the rows where{" "}
-          <code>status === &quot;refunded&quot;</code>.&rdquo; If your store
+          <code translate="no">status === &quot;refunded&quot;</code>.&rdquo; If your store
           is meaningful, you&rsquo;re scrolling.
         </p>
 
@@ -87,14 +84,14 @@ export default async function Page() {
           Each row renders as a JSON tree. Comparing the same field across many
           rows means clicking through them one at a time. There&rsquo;s no
           tabular projection like &ldquo;just show me{" "}
-          <code>{`{id, status, total}`}</code> across these 200 rows.&rdquo;
+          <code translate="no">{`{id, status, total}`}</code> across these 200 rows.&rdquo;
         </p>
 
         <h3>3. Round-trip non-JSON types</h3>
         <p>
-          IndexedDB stores arbitrary structured-clone values: <code>Date</code>,{" "}
-          <code>Map</code>, <code>Set</code>, <code>BigInt</code>,{" "}
-          <code>ArrayBuffer</code>, <code>Blob</code>, even circular references.
+          IndexedDB stores arbitrary structured-clone values: <code translate="no">Date</code>,{" "}
+          <code translate="no">Map</code>, <code translate="no">Set</code>, <code translate="no">BigInt</code>,{" "}
+          <code translate="no">ArrayBuffer</code>, <code translate="no">Blob</code>, even circular references.
           Copying out of the panel stringifies most of these — by the time
           they hit your clipboard they&rsquo;re lossy.
         </p>
@@ -109,7 +106,7 @@ export default async function Page() {
         <p>
           The panel never tells you &ldquo;these 1,200 rows have these 14
           fields, with these types, and{" "}
-          <code>shippingCity</code> is missing on 38% of them.&rdquo; That&rsquo;s
+          <code translate="no">shippingCity</code> is missing on 38% of them.&rdquo; That&rsquo;s
           a schema-inference problem, and it&rsquo;s where most non-trivial
           IndexedDB debugging actually starts.
         </p>
@@ -145,7 +142,7 @@ open.onsuccess = () => {
             artifact.
           </li>
           <li>
-            <code>console.table</code> truncates nested fields and gives you
+            <code translate="no">console.table</code> truncates nested fields and gives you
             no way to round-trip the result back into the database or out to
             CSV.
           </li>
@@ -171,11 +168,40 @@ open.onsuccess = () => {
         <p>
           If you&rsquo;re curious how the query language compiles down, the
           companion post on{" "}
-          <a href="/blog/querying-indexeddb-with-mongo-style-filters">
+          <a href="/blog/querying-indexeddb-with-mongo-style-filters/">
             MongoDB-style filters over IndexedDB
           </a>{" "}
           walks through the planner.
         </p>
+      </ContentSection>
+
+      <ContentSection title="Related reading">
+        <ul>
+          <li>
+            <a href="/blog/how-to-edit-indexeddb-values-in-chrome/">
+              How to edit IndexedDB values in Chrome
+            </a>{" "}
+            — the three ways around the panel&rsquo;s read-only grid.
+          </li>
+          <li>
+            <a href="/blog/exporting-indexeddb-data/">
+              Exporting IndexedDB data
+            </a>{" "}
+            — getting a store out to JSON, NDJSON, CSV or SQL.
+          </li>
+          <li>
+            <a href="/blog/browser-storage-types-explained/">
+              Browser storage types explained
+            </a>{" "}
+            — when IndexedDB is the wrong place for the data.
+          </li>
+          <li>
+            <a href="/vs/indexeddb-viewer-extensions/">
+              IndexedDB viewer extensions compared
+            </a>{" "}
+            — the third-party tools in this space, side by side.
+          </li>
+        </ul>
       </ContentSection>
     </BlogPostShell>
   );

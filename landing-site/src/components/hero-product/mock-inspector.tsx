@@ -34,7 +34,7 @@ export function MockInspector() {
         </div>
       ))}
 
-      <pre className="mono mt-[12px] rounded-[6px] border border-[var(--color-hair)] bg-black/30 p-[10px] text-[11px] leading-[1.7]">
+      <pre translate="no" className="mono mt-[12px] rounded-[6px] border border-[var(--color-hair)] bg-black/30 p-[10px] text-[11px] leading-[1.7]">
         <span className="text-[var(--color-ink-mute)]">{"{"}</span>
         {"\n  "}
         <span className="font-medium text-[#A5C2E8]">{'"attendees"'}</span>

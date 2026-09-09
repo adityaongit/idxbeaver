@@ -3,24 +3,21 @@ import type { Metadata } from "next";
 import { BlogPostShell } from "@/components/blog-post";
 import { CodeBlock } from "@/components/code-block";
 import { ContentSection } from "@/components/content-shell";
-import { getPostBySlug } from "@/lib/blog";
+import { getPostBySlug, postLastModified } from "@/lib/blog";
+import { pageMetadata } from "@/lib/seo";
 
 const SLUG = "browser-storage-quotas-explained";
 const post = getPostBySlug(SLUG)!;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: `${post.title} — IdxBeaver`,
+  socialTitle: post.title,
   description: post.description,
-  alternates: { canonical: `/blog/${SLUG}` },
-  openGraph: {
-    title: post.title,
-    description: post.description,
-    url: `/blog/${SLUG}`,
-    type: "article",
-    publishedTime: post.publishedOn,
-  },
-  twitter: { card: "summary_large_image", title: post.title, description: post.description },
-};
+  path: `/blog/${SLUG}`,
+  type: "article",
+  publishedTime: post.publishedOn,
+  modifiedTime: postLastModified(post),
+});
 
 export default async function Page() {
   return (
@@ -78,7 +75,7 @@ export default async function Page() {
                 <td className="px-2 py-3 font-medium text-[var(--color-ink)]">LocalStorage</td>
                 <td className="px-2 py-3">~5 MB (string keys + values)</td>
                 <td className="px-2 py-3">Until origin data is cleared</td>
-                <td className="px-2 py-3">Throws <code>QuotaExceededError</code> when full</td>
+                <td className="px-2 py-3">Throws <code translate="no">QuotaExceededError</code> when full</td>
               </tr>
               <tr className="border-b border-[var(--color-hair)] align-top">
                 <td className="px-2 py-3 font-medium text-[var(--color-ink)]">SessionStorage</td>
@@ -89,7 +86,7 @@ export default async function Page() {
               <tr className="border-b border-[var(--color-hair)] align-top">
                 <td className="px-2 py-3 font-medium text-[var(--color-ink)]">Cookies</td>
                 <td className="px-2 py-3">~180 cookies/origin, each up to 4 KB</td>
-                <td className="px-2 py-3">By <code>Expires</code> / <code>Max-Age</code></td>
+                <td className="px-2 py-3">By <code translate="no">Expires</code> / <code translate="no">Max-Age</code></td>
                 <td className="px-2 py-3">By expiry or browser cleanup</td>
               </tr>
               <tr className="border-b border-[var(--color-hair)] align-top">
@@ -111,7 +108,7 @@ export default async function Page() {
       <ContentSection title="How to actually measure it">
         <p>
           Modern browsers expose the runtime numbers through the{" "}
-          <code>navigator.storage.estimate()</code> API:
+          <code translate="no">navigator.storage.estimate()</code> API:
         </p>
         <CodeBlock
           lang="js"
@@ -123,7 +120,7 @@ console.log({
 });`}
         />
         <p>
-          Run that on the inspected page from DevTools. <code>usageDetails</code>
+          Run that on the inspected page from DevTools. <code translate="no">usageDetails</code>
           is the most actionable field — it splits the consumption between
           IndexedDB, Cache Storage, and a few smaller buckets so you can see
           where a leak is actually accumulating.
@@ -158,7 +155,7 @@ if (!isPersisted) {
       <ContentSection title="The five gotchas that bite local-first apps">
         <h3>1. LocalStorage is synchronous</h3>
         <p>
-          Every <code>localStorage.setItem</code> call blocks the main thread.
+          Every <code translate="no">localStorage.setItem</code> call blocks the main thread.
           Apps that fan out lots of small writes (config, preferences, recent
           items) feel snappy until the value crosses ~100 KB; then frame
           drops appear. If you find yourself writing JSON-stringified objects
@@ -199,7 +196,7 @@ if (!isPersisted) {
 
       <ContentSection title="Inspecting all of it at once">
         <p>
-          The numbers from <code>navigator.storage.estimate()</code> are
+          The numbers from <code translate="no">navigator.storage.estimate()</code> are
           aggregate. To break them down by store and quickly spot
           out-of-control growth, you want a tool that surfaces per-store sizes
           and lets you query each surface in one place.
@@ -211,6 +208,29 @@ if (!isPersisted) {
           alongside the same Mongo-style query interface that lets you find
           the row that&rsquo;s probably leaking.
         </p>
+      </ContentSection>
+
+      <ContentSection title="Related reading">
+        <ul>
+          <li>
+            <a href="/blog/browser-storage-types-explained/">
+              Browser storage types explained
+            </a>{" "}
+            — which API each of these quotas applies to, and what to use when.
+          </li>
+          <li>
+            <a href="/blog/exporting-indexeddb-data/">
+              Exporting IndexedDB data
+            </a>{" "}
+            — take a snapshot before eviction does it for you.
+          </li>
+          <li>
+            <a href="/blog/debugging-indexeddb-in-chrome-devtools/">
+              Debugging IndexedDB in Chrome DevTools
+            </a>{" "}
+            — finding the store that grew.
+          </li>
+        </ul>
       </ContentSection>
     </BlogPostShell>
   );

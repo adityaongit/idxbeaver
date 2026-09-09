@@ -1,7 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 import { CHROME_WEB_STORE_URL } from "@/lib/brand";
 
-const FONT_STACK = '"Google Sans", "Helvetica Neue", Arial, sans-serif';
+const FONT_STACK =
+  'var(--font-google-sans), "Helvetica Neue", Arial, sans-serif';
 
 /**
  * Hero install CTA, modeled on Google's official "Available in the Chrome

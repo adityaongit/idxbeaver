@@ -5,11 +5,6 @@ export function ProductSection() {
     <section id="product" className="py-20 sm:py-28 lg:py-40">
       <div className="mx-auto max-w-[1320px] px-5 sm:px-8">
         <div className="r mx-auto mb-12 max-w-[760px] text-center sm:mb-16 lg:mb-20">
-          <div className="mono mb-5 flex items-center justify-center gap-[10px] text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--color-ink-mute)]">
-            <span aria-hidden="true" className="h-px w-6 bg-[var(--color-hair-3)]" />
-            <span>FIG 0.2 · Product</span>
-            <span aria-hidden="true" className="h-px w-6 bg-[var(--color-hair-3)]" />
-          </div>
           <h3
             className="font-semibold text-[var(--color-ink)]"
             style={{

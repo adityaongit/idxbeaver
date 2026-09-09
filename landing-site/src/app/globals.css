@@ -16,7 +16,9 @@
   --color-ink: #F7F8F8;
   --color-ink-2: #D0D6DD;
   --color-ink-dim: #8A8F98;
-  --color-ink-mute: #62666D;
+  --color-ink-mute: #747881;
+  /* Decorative only (dots, mock-UI chrome): 1.94:1 on --color-bg, so it must
+     never carry real text. Use --color-ink-mute for small copy. */
   --color-ink-faint: #3E4146;
 
   /* Hairlines */
@@ -41,6 +43,16 @@
   --ease-slow: cubic-bezier(.16, 1, .3, 1);
 }
 
+/* Named stacking order, lowest to highest. Every z-index on the site comes from
+   here so a new layer cannot be slotted in by guessing a bigger number. */
+:root {
+  --z-atmos: -2;
+  --z-nav: 50;
+  --z-drawer: 60;
+  --z-grain: 70;
+  --z-skip: 80;
+}
+
 /* ──────────────────────────────────────────────────────────────
    Base
    ────────────────────────────────────────────────────────────── */
@@ -48,6 +60,12 @@
   html {
     font-family: var(--font-sans);
     scroll-behavior: smooth;
+    /* Tells the UA to render native scrollbars, form controls and select
+       popups dark. Without it they render light against a dark page. */
+    color-scheme: dark;
+    /* The nav is sticky top-0, so an anchor jump would otherwise land the
+       target heading underneath it. */
+    scroll-padding-top: 76px;
   }
   body {
     background: var(--color-bg);
@@ -60,6 +78,19 @@
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
     min-height: 100vh;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  /* Keyboard focus needs to be visible against a dark ground; the UA default
+     ring is nearly invisible here. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 3px;
   }
   ::selection {
     background: rgba(244, 114, 182, .3);
@@ -78,7 +109,7 @@
 .atmos {
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: var(--z-atmos);
   overflow: hidden;
   pointer-events: none;
   background: var(--color-bg);
@@ -121,7 +152,7 @@
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-grain);
   pointer-events: none;
   opacity: .035;
   mix-blend-mode: overlay;
@@ -192,98 +223,8 @@
   to { opacity: 1; transform: none; }
 }
 
-/* ──────────────────────────────────────────────────────────────
-   Isometric figures — stroke draw-in + hover transforms + idle float
-   ────────────────────────────────────────────────────────────── */
-.iso {
-  stroke: rgba(255, 255, 255, .22);
-  stroke-width: 1;
-  fill: none;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-.iso-dim { stroke: rgba(255, 255, 255, .1); }
-.iso-accent { stroke: var(--color-ir-2); stroke-width: 1.2; }
-.iso-dot { fill: rgba(255, 255, 255, .5); stroke: none; }
-.iso-accent-dot { fill: var(--color-ir-2); stroke: none; }
-.iso-label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  fill: rgba(255, 255, 255, .35);
-  stroke: none;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.iso-label-active { fill: var(--color-ir-2); opacity: .9; }
-
-.iso-draw {
-  stroke-dasharray: var(--dash, 400);
-  stroke-dashoffset: var(--dash, 400);
-  transition: stroke-dashoffset 1.4s var(--ease-slow);
-}
-.fig-col.in .iso-draw {
-  stroke-dashoffset: 0;
-  transition-delay: var(--delay, 0s);
-}
-.iso-fade {
-  opacity: 0;
-  transition: opacity .6s var(--ease);
-}
-.fig-col.in .iso-fade {
-  opacity: 1;
-  transition-delay: var(--delay, 0s);
-}
-
-/* FIG 0.2 — storage plates hover explode */
-.plate { transition: transform .9s var(--ease-slow); }
-.disc-cap { transition: transform .9s var(--ease-slow); }
-.fig-col:hover .plate.p1 { transform: translateY(-18px); }
-.fig-col:hover .plate.p2 { transform: translateY(-9px); }
-.fig-col:hover .plate.p3 { transform: translateY(0); }
-.fig-col:hover .plate.p4 { transform: translateY(9px); }
-.fig-col:hover .plate.p5 { transform: translateY(18px); }
-.fig-col:hover .disc-cap { transform: translateY(-26px); }
-
-@keyframes plate-breathe {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
-}
-.fig-col.in .illus-group-1 {
-  animation: plate-breathe 7s var(--ease) infinite;
-}
-
-/* FIG 0.3 — cubes hover shift */
-.cube { transition: transform .9s var(--ease-slow); transform-origin: center; }
-.fig-col:hover .cube.cA { transform: translate(0, -6px); }
-.fig-col:hover .cube.cB { transform: translate(-4px, -3px); }
-.fig-col:hover .cube.cC { transform: translate(6px, -10px); }
-.fig-col:hover .cube.cD { transform: translate(-2px, 4px); }
-
-@keyframes cube-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-.fig-col.in .illus-group-2 {
-  animation: cube-float 6s var(--ease) infinite;
-}
-
-/* FIG 0.4 — command palette row cascade + caret blink */
-.palette-row-bg {
-  transition: opacity .4s var(--ease);
-  opacity: 0;
-}
-.fig-col:hover .palette-row-bg.pr1 { opacity: .9; transition-delay: 0s; }
-.fig-col:hover .palette-row-bg.pr2 { opacity: .5; transition-delay: .1s; }
-.fig-col:hover .palette-row-bg.pr3 { opacity: .3; transition-delay: .2s; }
-.cmd-key { transition: transform .4s var(--ease); }
-.fig-col:hover .cmd-key { transform: translate(0, -4px); }
-
 @keyframes blink {
   50% { opacity: 0; }
-}
-.fig-col.in .cmd-caret {
-  animation: blink 1.2s steps(2) infinite;
 }
 .hero-cursor {
   display: inline-block;

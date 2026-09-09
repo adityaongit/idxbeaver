@@ -1,0 +1,414 @@
+{
+  "summary": {
+    "health_score": 67,
+    "business_type": "SaaS / developer tool (free MIT Chrome DevTools extension, no signup)",
+    "top_findings": [
+      "aggregateRating (5.0, n=7) injected sitewide in layout.tsx:109-115 with no visible rating content on any page: structured-data policy risk",
+      "Render-blocking Google Fonts stylesheet costs a measured 907-1050ms on every page to style two labels in one button; drives homepage LCP to 4.38s",
+      "No og:image on any inner page: pages overriding openGraph without images drop the root file-convention image, so /vs/ shares with no preview",
+      "No security headers beyond HSTS on any route (no CSP, X-Content-Type-Options, Referrer-Policy, X-Frame-Options)",
+      "No page targets 'edit indexeddb chrome devtools', whose SERP is entirely workarounds for the limitation this product removes"
+    ],
+    "quick_wins": [
+      "Move Google Sans to next/font/google: one file, recovers roughly 1s of LCP",
+      "Delete the aggregateRating block: one deletion removes the only manual-action risk",
+      "Add twitter + openGraph.images to the 4 page metadata exports missing them: one pass fixes three reported symptoms",
+      "Add security headers via next.config.ts headers(): one block",
+      "Add contextual internal links from /vs/ and the query post to the homepage: two hrefs"
+    ],
+    "data_limitations": [
+      "No Google API credentials: no CrUX field data, no Search Console indexation or query data, no GA4. All performance numbers are Lighthouse lab.",
+      "Backlinks limited to Common Crawl plus a link verifier: no DA/PA, no spam scoring, no discovery of unknown inbound links.",
+      "4 of 8 target queries SERP-checked; 4 not checked.",
+      "Performance measured on 3 of 9 URLs; desktop strategy not measured."
+    ]
+  },
+  "categories": [
+    {
+      "name": "Technical SEO",
+      "score": 65,
+      "what_works": [
+        "Fully server-rendered on every URL (is_spa false)",
+        "Valid robots.txt declaring sitemap, open to all crawlers",
+        "Canonicals match sitemap entries",
+        "HTTPS with HSTS max-age 63072000",
+        "Correct mobile viewport, no horizontal overflow at 390px",
+        "No hreflang needed for single-market site",
+        "Sitemap covers all 9 live pages, valid XML, no orphans"
+      ],
+      "findings": [
+        {
+          "title": "No CSP, X-Content-Type-Options, Referrer-Policy or X-Frame-Options on any route",
+          "severity": "High",
+          "description": "Verified via curl -D- on /, /privacy/, /blog/ and the 404 page: only strict-transport-security is present.",
+          "recommendation": "Add all four via next.config.ts headers(). Falsifiable: curl -D- must show them post-deploy. Gate it in CI."
+        },
+        {
+          "title": "/privacy/ inherits homepage OG wholesale including wrong og:url",
+          "severity": "High",
+          "description": "src/app/privacy/page.tsx defines no openGraph or twitter metadata, so og:url renders as https://idxbeaver.portlabs.in/ instead of /privacy/.",
+          "recommendation": "Add openGraph + twitter blocks with url /privacy/. Ship with the twitter merge fix, same root cause."
+        },
+        {
+          "title": "twitter:* metadata wrong on /blog/, /faq/, /about/",
+          "severity": "High",
+          "description": "These pages override metadata.openGraph but never metadata.twitter. Next.js merges per top-level key, so the root layout's whole twitter object is inherited. Confirmed: /faq/ og:title is page-correct while twitter:title is the homepage's.",
+          "recommendation": "Add a twitter block mirroring openGraph on each, the pattern /vs/ and the blog posts already use correctly."
+        },
+        {
+          "title": "Six internal hrefs lack trailing slashes, forcing avoidable 308s",
+          "severity": "Medium",
+          "description": "site-footer.tsx, site-nav.tsx:142, faq/page.tsx:182 and :229, blog-post.tsx:53, blog/debugging-indexeddb-in-chrome-devtools/page.tsx:174. next.config.ts trailingSlash true means each 308-redirects.",
+          "recommendation": "Append trailing slashes. Falsifiable: grep -rn 'href=\"/[a-z-]*\"' src returns zero excluding bare /."
+        },
+        {
+          "title": "Render-blocking Google Fonts stylesheet loaded sitewide",
+          "severity": "Medium",
+          "description": "layout.tsx:77-81 adds preconnect, preload and a blocking stylesheet for Google Sans, used only in cws-install-button.tsx:4. See Performance for the measured cost.",
+          "recommendation": "Move to next/font/google or drop the brand font for that button."
+        },
+        {
+          "title": "Two titles over 60 chars, one meta description at 218 chars",
+          "severity": "Medium",
+          "description": "/blog/debugging-indexeddb-in-chrome-devtools/ title 72 chars; /blog/browser-storage-quotas-explained/ title 89 chars and description 218 chars.",
+          "recommendation": "Shorten below ~60 and ~160 respectively, keeping the lead keyword phrase."
+        },
+        {
+          "title": "/changelog/ and /docs/ 404s are not defects",
+          "severity": "Info",
+          "description": "Both strings appear only in src/lib/demo-seed.ts:47-48 as fixture route names for the extension's own IndexedDB demo data. Nothing on the site links to them.",
+          "recommendation": "No action. Monitor 404 hit rate only if external links to these paths appear."
+        }
+      ]
+    },
+    {
+      "name": "Content Quality",
+      "score": 65,
+      "what_works": [
+        "Zero-telemetry claim verified true: no fetch, XHR or analytics in extension source, no remote endpoints in manifest",
+        "Privacy page permission list matches manifest exactly",
+        "MIT license and SQL/ZIP export claims verified against LICENSE and export.ts/import.ts",
+        "E-E-A-T: Experience 85, Expertise 80, Trustworthiness 85",
+        "Readability appropriate for a developer audience"
+      ],
+      "findings": [
+        {
+          "title": "All three blog posts fall well short of the word floor for their type",
+          "severity": "Medium",
+          "description": "Posts measure 641-777 words against a 1,500-word floor, 40-65% of target, while framed as practical guides.",
+          "recommendation": "Add worked examples, edge cases and troubleshooting to close coverage gaps. Do not pad to a number."
+        },
+        {
+          "title": "sitemap.ts stamps build-time lastmod on 6 of 9 pages",
+          "severity": "Medium",
+          "description": "sitemap.ts:16 sets const lastModified = new Date() once and reuses it for /, /vs/, /blog/, /faq/, /about/, /privacy/. Only blog posts use real dates. /privacy/ shows users 'Last updated 2026-04-27' while the sitemap claims the build time.",
+          "recommendation": "Use a per-route date, the pattern the blog posts already follow. Falsifiable: change one page, only its lastmod should move."
+        },
+        {
+          "title": "JSON-LD dateModified hardcoded equal to datePublished",
+          "severity": "Low",
+          "description": "The /vs/ page and blog-post.tsx set dateModified = datePublished statically, so real edits never register.",
+          "recommendation": "Derive both from the same per-route constant as the sitemap fix."
+        },
+        {
+          "title": "Batch-publish pattern with no subsequent revision",
+          "severity": "Low",
+          "description": "/vs/ and all three posts share a 2026-04-29 date, five days after launch, and dateModified has never moved.",
+          "recommendation": "Stagger future posts and make genuinely dated revisions."
+        },
+        {
+          "title": "Authoritativeness is the weak E-E-A-T axis",
+          "severity": "Medium",
+          "description": "Scored 55 of 100. Solo author, no external validation, no third-party citations or named adopters surfaced on-page.",
+          "recommendation": "Address via the backlink and off-site plan rather than on-page copy."
+        },
+        {
+          "title": "Legacy keywords meta array present",
+          "severity": "Low",
+          "description": "Inert for ranking purposes, hygiene only.",
+          "recommendation": "Drop it."
+        }
+      ]
+    },
+    {
+      "name": "On-Page SEO",
+      "score": 82,
+      "what_works": [
+        "Titles and meta descriptions unique per page",
+        "Single H1 per page with sensible hierarchy",
+        "Canonicals correct and matching sitemap",
+        "Keyword targeting sensible per page",
+        "Sitemap covers all 9 live pages with no orphans"
+      ],
+      "findings": [
+        {
+          "title": "Internal linking depth is thin on key pages",
+          "severity": "High",
+          "description": "/vs/ and the query post each contain exactly one href, an external GitHub link. Neither links to the homepage or a topical sibling.",
+          "recommendation": "Add a body link to / and one sibling on each. Two hrefs, and it makes later content investment compound."
+        },
+        {
+          "title": "Home, /vs/ and /faq/ overlap not fully assessed",
+          "severity": "Info",
+          "description": "The duplication check did not complete within the pass. Neither confirmed nor ruled out.",
+          "recommendation": "Re-run a duplicate-content pass before treating overlap as a known issue."
+        },
+        {
+          "title": "Correction: the earlier 'sitemap omits /privacy/' claim was wrong",
+          "severity": "Info",
+          "description": "This audit's initial recon used a truncated fetch that cut the 9th sitemap entry. The live sitemap contains all 9 URLs including /privacy/, confirmed by direct count, and sitemap.ts:35 includes it. A 10-point deduction based on this was removed, raising this category from 72 to 82.",
+          "recommendation": "No action. Recorded so a future pass does not re-flag it."
+        }
+      ]
+    },
+    {
+      "name": "Schema / Structured Data",
+      "score": 30,
+      "what_works": [
+        "No deprecated or banned types present (no HowTo, SpecialAnnouncement, CourseInfo, EstimatedSalary)",
+        "SoftwareApplication is otherwise well specified: applicationCategory, operatingSystem, browserRequirements, offers price 0, license, softwareHelp",
+        "BreadcrumbList present",
+        "BlogPosting blocks carry author with url"
+      ],
+      "findings": [
+        {
+          "title": "aggregateRating sitewide with no visible rating content on any page",
+          "severity": "Critical",
+          "description": "layout.tsx:109-115 injects ratingValue 5, ratingCount 7 into the SoftwareApplication JSON-LD on every page. Confirmed live in rendered HTML. No page renders any rating, review or testimonial; the only 'review' strings in the HTML are demo-grid fixture data. The source comment at :106-108 says the values come from the Chrome Web Store and warns about staleness, but the problem is more basic: Google requires rating markup to reflect rating content visible on the page carrying it.",
+          "recommendation": "Delete the block, or render the Chrome Web Store rating on-page with a visible link to its source and then keep it. Falsifiable: if aggregateRating is in the JSON-LD, a visible sourced rating must be in the rendered body."
+        },
+        {
+          "title": "All four Article/BlogPosting blocks missing required image",
+          "severity": "High",
+          "description": "None of the four blocks include image, and no per-post opengraph-image route exists. image is required for Article rich-result eligibility.",
+          "recommendation": "Point at the root opengraph-image as a stopgap, then build per-post routes. Shares a root cause with the missing og:image finding."
+        },
+        {
+          "title": "No WebSite entity and no @id graph",
+          "severity": "High",
+          "description": "No WebSite type anywhere. SoftwareApplication, Article/BlogPosting, Person, the Organization stub and BreadcrumbList are all disconnected inline objects with no @id, so nothing identifies them as the same entities across pages.",
+          "recommendation": "Add a WebSite entity (no potentialAction, there is no site search) and @id every Person, Organization and WebSite mention, referencing by @id."
+        },
+        {
+          "title": "publisher is a bare Organization stub",
+          "severity": "Medium",
+          "description": "publisher on all four content blocks is only {'@type':'Organization','name':'IdxBeaver'}, with no url, logo or sameAs. src/app/icon.png already exists and is unused for this.",
+          "recommendation": "Define Organization once with url, logo, sameAs to GitHub and the Chrome Web Store, and an @id referenced from every publisher field."
+        },
+        {
+          "title": "BreadcrumbList item URLs lack trailing slashes",
+          "severity": "Medium",
+          "description": "Items point at non-canonical URLs that 308-redirect. Root cause is each page's alternates.canonical omitting the slash; correctness today depends implicitly on next.config.ts trailingSlash true.",
+          "recommendation": "Add explicit trailing slashes to canonicals and breadcrumb item URLs."
+        },
+        {
+          "title": "author.url inconsistent between blocks",
+          "severity": "Low",
+          "description": "The three BlogPosting blocks include author.url; the /vs/ Article omits it.",
+          "recommendation": "Reference one Person @id from every author field so it cannot drift."
+        },
+        {
+          "title": "FAQPage present on /faq/",
+          "severity": "Info",
+          "description": "Valid FAQPage JSON-LD with authored product Q&A. Google retired FAQ rich results for all sites on 2026-05-07, so it has no SERP benefit, and any AI citation benefit is unconfirmed. Correctly typed: it is authored product FAQ, not user-submitted, so QAPage does not apply.",
+          "recommendation": "No action. Do not remove, and do not add new FAQPage for SERP benefit."
+        }
+      ]
+    },
+    {
+      "name": "Performance (CWV)",
+      "score": 80,
+      "what_works": [
+        "CLS is 0 on all three measured pages",
+        "TBT 19.5ms / 10.5ms / 0ms, far under the 200ms threshold",
+        "TTFB 56-186ms, all good",
+        "Body font correctly self-hosted via next/font",
+        "Images already ship AVIF"
+      ],
+      "findings": [
+        {
+          "title": "Render-blocking font is the dominant LCP cost",
+          "severity": "Critical",
+          "description": "Measured render-blocking cost 965ms on /, 907ms on /vs/, 1050ms on the blog post, from the fonts.googleapis.com stylesheet in layout.tsx. Used only for two labels in cws-install-button.tsx.",
+          "recommendation": "Move to next/font/google. Falsifiable: no fonts.googleapis.com link in raw HTML and homepage LCP below ~3.4s on re-measure."
+        },
+        {
+          "title": "LCP fails good on the homepage and misses on inner pages",
+          "severity": "Critical",
+          "description": "Lighthouse mobile lab: / 4.38s (poor), /vs/ 3.42s, blog post 2.94s, all text LCP elements. Element render delay measured at 1195ms / 1495ms / 539ms. With CLS 0 and TBT under 20ms, the deficit is isolated to render-blocking resources.",
+          "recommendation": "Fix the font first; everything else is small by comparison. No CrUX baseline exists, so compare against this audit's lab run."
+        },
+        {
+          "title": "Hero screenshot oversampled about 8x its display size",
+          "severity": "Medium",
+          "description": "dark.avif served at 2940x1728 into a 370x217 box; 71.1KB of 72.3KB measured as waste. Already AVIF and not the LCP element.",
+          "recommendation": "Add responsive sizes/srcset, or next/image with a sizes prop."
+        },
+        {
+          "title": "Nav logo ships an oversized PNG on every page",
+          "severity": "Medium",
+          "description": "logo-mark-128.png is 21.5KB served at 128x128 and displayed at 28x28. Loads sitewide via the shared nav.",
+          "recommendation": "Convert to SVG, or export a correctly sized WebP/AVIF."
+        },
+        {
+          "title": "14KB of unnecessary core-js polyfills",
+          "severity": "Low",
+          "description": "Array.prototype.at/flat/flatMap and Object.fromEntries shims ship on all three measured pages, all natively supported by Next.js's default browser target.",
+          "recommendation": "Check for a browserslist or build-target override. Low priority given TBT is near zero."
+        },
+        {
+          "title": "Six of nine URLs and desktop strategy not measured",
+          "severity": "Info",
+          "description": "/blog/, two of three posts, /faq/, /about/ and /privacy/ were not measured, nor was desktop.",
+          "recommendation": "Treat inner-page numbers as representative, not complete."
+        }
+      ]
+    },
+    {
+      "name": "AI Search Readiness",
+      "score": 77,
+      "what_works": [
+        "robots.txt returns byte-identical 200s for GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot, Applebot-Extended and anthropic-ai, with no CDN or WAF cloaking",
+        "Every URL fully server-rendered, so no JS-dependency for AI crawlers",
+        "llms.txt present, detailed and accurate against both the live product and the repo",
+        "FAQ, /vs/ and blog content genuinely well shaped for direct-answer extraction"
+      ],
+      "findings": [
+        {
+          "title": "No Organization entity and no Wikidata or Wikipedia anchor for the brand",
+          "severity": "Medium",
+          "description": "publisher is a bare name string; no Organization with sameAs, logo or url exists anywhere, so 'IdxBeaver' is not defined as a machine-readable entity.",
+          "recommendation": "Add the Organization entity with sameAs to GitHub and the Chrome Web Store. Same fix as the schema finding."
+        },
+        {
+          "title": "Sitewide AggregateRating has no on-page corroboration",
+          "severity": "Medium",
+          "description": "Every page asserts a 5.0 rating from 7 ratings with no visible source, which is a citability liability as well as a policy one.",
+          "recommendation": "Surface the source on-page or drop the markup."
+        },
+        {
+          "title": "No confirmed Reddit or YouTube presence",
+          "severity": "Medium",
+          "description": "These are the strongest citation-correlated off-site surfaces for developer tools. Neither was found in the checks available this pass, and no search tool was available to the specialist to confirm.",
+          "recommendation": "Publish one short demo video and one genuine subreddit contribution tied to a real milestone. Falsifiable by direct search for the brand name."
+        },
+        {
+          "title": "/about/ leads with narrative before any direct definition",
+          "severity": "Low",
+          "description": "The crisp definition, that IdxBeaver is a Chrome DevTools extension turning the Application panel into a real database client, exists only on /faq/. That is the sentence an AI engine would lift.",
+          "recommendation": "Move a one-sentence definition to the top of /about/ and the homepage."
+        },
+        {
+          "title": "No RSL 1.0 licensing declaration",
+          "severity": "Low",
+          "description": "/rsl.xml and /.well-known/rsl.xml both 404; licensing is stated in prose only, though the product is already MIT.",
+          "recommendation": "Add a minimal RSL file. Falsifiable: 200 with valid syntax at /rsl.xml."
+        }
+      ]
+    },
+    {
+      "name": "Images",
+      "score": 60,
+      "what_works": [
+        "Full AVIF/WebP/PNG fallback chain on product images",
+        "Descriptive, appropriate alt text throughout",
+        "Explicit width and height on every image",
+        "Homepage above-the-fold solid at both 1440px and 390px, no horizontal overflow"
+      ],
+      "findings": [
+        {
+          "title": "No og:image on any inner page",
+          "severity": "High",
+          "description": "Verified live: / renders og:image, while /vs/chrome-devtools-application-panel/, /faq/ and /blog/debugging-indexeddb-in-chrome-devtools/ render neither og:image nor twitter:image. Any page setting its own openGraph block without images drops the root file-convention image. /vs/, the high-intent comparison page, shares with no preview image at all.",
+          "recommendation": "Add openGraph.images to every page that overrides openGraph, then build per-page images. Falsifiable: all 9 URLs must render a non-empty og:image."
+        },
+        {
+          "title": "No install CTA above the fold on /vs/ at 390px",
+          "severity": "Medium",
+          "description": "The mobile fold shows H1, intro and the start of the comparison table, with only an unopened hamburger. This is the page most likely to catch high-intent comparison traffic.",
+          "recommendation": "Add a compact or sticky install CTA above or beside the comparison table."
+        },
+        {
+          "title": "/vs/ and blog pages contain no product screenshots at all",
+          "severity": "Medium",
+          "description": "All five images on /vs/ are brand logo and icon assets. An evaluator has to leave the page to see what the tool looks like. All three blog posts contain zero images.",
+          "recommendation": "Embed the existing dark/light screenshots on /vs/ and at least one visual per post."
+        },
+        {
+          "title": "Product screenshots eager-loaded despite sitting far below the fold",
+          "severity": "Low",
+          "description": "compare-slider.tsx dark.png/light.png have no loading attribute and one carries fetchPriority high, yet they render roughly 900px below the homepage fold. Neither is the LCP element.",
+          "recommendation": "Add loading lazy and drop fetchPriority high."
+        },
+        {
+          "title": "Product screenshots about 3x oversized for rendered width",
+          "severity": "Low",
+          "description": "Intrinsic 2940x1728 against a rendered width of roughly 900-940px CSS, with no srcset or sizes. The WebP fallback is 220KB and the PNG fallback 708KB.",
+          "recommendation": "Add responsive srcset/sizes or switch to next/image with a sizes prop."
+        },
+        {
+          "title": "Hero logo alt text unreachable to assistive tech",
+          "severity": "Low",
+          "description": "hero.tsx img carries alt 'IdxBeaver' but its parent div has aria-hidden true, stripping it from the accessibility tree. Other logo instances correctly use empty alt as decorative.",
+          "recommendation": "Remove aria-hidden from the wrapper, or set this instance's alt empty for consistency."
+        },
+        {
+          "title": "Orphaned unused image assets",
+          "severity": "Info",
+          "description": "public/screenshots/query.{png,webp,avif} exist on disk at 48-436KB with no reference anywhere in src/. The nav has a Query link with no corresponding section.",
+          "recommendation": "Wire them into a Query feature section, or delete them."
+        }
+      ]
+    }
+  ],
+  "action_plan": {
+    "phases": [
+      {
+        "name": "Phase 1: Critical Fixes",
+        "timeframe": "Week 1",
+        "items": [
+          "Remove or substantiate the aggregateRating block in layout.tsx:109-115",
+          "Self-host Google Sans via next/font/google, replacing the render-blocking stylesheet in layout.tsx:77-81"
+        ]
+      },
+      {
+        "name": "Phase 2: High-Impact Improvements",
+        "timeframe": "Weeks 2-3",
+        "items": [
+          "Fix the Next.js metadata merge bug in one pass: add twitter blocks and openGraph.images to the 4 pages missing them, and give /privacy/ its own blocks",
+          "Add CSP, X-Content-Type-Options, Referrer-Policy and X-Frame-Options via next.config.ts headers()",
+          "Add image to all four Article/BlogPosting schema blocks",
+          "Add contextual internal links from /vs/ and the query post to the homepage and a sibling",
+          "Fix the 6 non-canonical internal hrefs and the BreadcrumbList item URLs"
+        ]
+      },
+      {
+        "name": "Phase 3: Content & Authority",
+        "timeframe": "Month 2",
+        "items": [
+          "Write the page targeting 'edit indexeddb chrome devtools', the highest-value content gap found",
+          "Re-angle the query post to lead with the native IndexedDB API before the Mongo-style layer",
+          "Deepen all three blog posts from 641-777 words and add at least one visual each",
+          "Ship the export post, then a single consolidated storage-types post",
+          "Fix lastmod in sitemap.ts:16 and derive dateModified from the same per-route constant",
+          "Add an install CTA and product screenshots to /vs/",
+          "Add Organization and WebSite entities with @id linking",
+          "Earn the first independent backlinks: awesome-lists and roundups, then StackOverflow answers"
+        ]
+      },
+      {
+        "name": "Phase 4: Monitoring & Iteration",
+        "timeframe": "Ongoing",
+        "items": [
+          "Verify Search Console and add a CrUX/PageSpeed API key to replace lab data with field data",
+          "Diff each deploy against the drift baselines captured 2026-09-09 for /, /vs/ and /faq/",
+          "Batch the remaining small items: title and description lengths, image sizing, lazy-loading, hero alt, orphaned assets, product definition placement, blog secondary CTA, inert keywords and changefreq/priority, browserslist polyfills"
+        ]
+      }
+    ]
+  },
+  "artifacts": {
+    "findings_dir": "findings/",
+    "screenshots_dir": "screenshots/"
+  }
+}

@@ -3,17 +3,17 @@ import type { ReactNode } from "react";
 
 import { ContentShell } from "@/components/content-shell";
 import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
+import { pageMetadata } from "@/lib/seo";
 
 const TITLE = "IndexedDB viewer FAQ — IdxBeaver";
 const DESCRIPTION =
-  "How to view, edit, export, and clear IndexedDB data in Chrome — plus how IdxBeaver compares to Chrome's built-in Application panel, privacy, licensing, and browser support.";
+  "How to view, edit, export and clear IndexedDB data in Chrome, plus IdxBeaver's privacy, licensing and browser support answered in one place.";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: "/faq" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/faq", type: "website" },
-};
+  path: "/faq",
+});
 
 /**
  * `a` is the rendered answer; `plain` is the same answer as a flat string for
@@ -122,11 +122,11 @@ const GROUPS: FaqGroup[] = [
         a: (
           <>
             Select a store and export it as JSON, NDJSON, CSV, SQL{" "}
-            <code>INSERT</code> statements, or a ZIP snapshot. Exports
+            <code translate="no">INSERT</code> statements, or a ZIP snapshot. Exports
             round-trip non-JSON types that a naive{" "}
-            <code>JSON.stringify</code> would destroy — <code>Date</code>,{" "}
-            <code>BigInt</code>, <code>Map</code>, <code>Set</code>,{" "}
-            <code>Blob</code>, <code>ArrayBuffer</code>, and circular
+            <code translate="no">JSON.stringify</code> would destroy — <code translate="no">Date</code>,{" "}
+            <code translate="no">BigInt</code>, <code translate="no">Map</code>, <code translate="no">Set</code>,{" "}
+            <code translate="no">Blob</code>, <code translate="no">ArrayBuffer</code>, and circular
             references. The same formats import back in.
           </>
         ),
@@ -179,7 +179,7 @@ const GROUPS: FaqGroup[] = [
             undo/redo for grid edits, and a Structure view that shows the
             inferred schema for each store. There&rsquo;s a full breakdown
             on the{" "}
-            <a href="/vs/chrome-devtools-application-panel">comparison page</a>
+            <a href="/vs/chrome-devtools-application-panel/">comparison page</a>
             .
           </>
         ),
@@ -191,7 +191,7 @@ const GROUPS: FaqGroup[] = [
         a: (
           <>
             IdxBeaver ships a MongoDB-style JSON query language with{" "}
-            <code>$eq</code>, <code>$gte</code>, <code>$in</code>, compound
+            <code translate="no">$eq</code>, <code translate="no">$gte</code>, <code translate="no">$in</code>, compound
             filters, projections, sorts, and limits. The query planner uses
             an IDB index when one matches, with an in-memory fallback for
             compound operators. Plain SQL is on the roadmap.
@@ -226,7 +226,7 @@ const GROUPS: FaqGroup[] = [
             telemetry, no auth, no servers — and no account to create.
             Inspected storage is read on demand only on the page you have
             DevTools open against. See the{" "}
-            <a href="/privacy">privacy policy</a> for the full list.
+            <a href="/privacy/">privacy policy</a> for the full list.
           </>
         ),
         plain:
@@ -281,7 +281,8 @@ const GROUPS: FaqGroup[] = [
 ];
 
 export default function FaqPage() {
-  const breadcrumbJsonLd = buildBreadcrumbJsonLd([{ name: "FAQ", path: "/faq" }]);
+  const crumbs = [{ name: "FAQ", path: "/faq" }];
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(crumbs);
   const faqJsonLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -305,7 +306,7 @@ export default function FaqPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
       <ContentShell
-        eyebrow="FAQ"
+        crumbs={crumbs}
         title="IndexedDB questions, answered."
         lede="How to view, edit, export, and clear IndexedDB data in Chrome — plus the short version on IdxBeaver itself: it runs locally, it's free, and the source is on GitHub."
       >

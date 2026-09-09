@@ -11,7 +11,7 @@ import { useEffect } from "react";
 export function useReveal() {
   useEffect(() => {
     const targets = Array.from(
-      document.querySelectorAll<HTMLElement>(".r, .divider, .fig-col")
+      document.querySelectorAll<HTMLElement>(".r, .divider")
     );
 
     if (!targets.length) return;

@@ -1,3 +1,4 @@
+import { withSlash } from "@/lib/seo";
 import { resolveSiteUrl } from "@/lib/site";
 
 export type Crumb = { name: string; path: string };
@@ -19,7 +20,7 @@ export function buildBreadcrumbJsonLd(crumbs: Crumb[]): Record<string, unknown> 
       "@type": "ListItem",
       position: i + 1,
       name: c.name,
-      item: `${base}${c.path}`,
+      item: `${base}${withSlash(c.path)}`,
     })),
   };
 }

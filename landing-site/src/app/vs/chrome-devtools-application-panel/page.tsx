@@ -1,32 +1,29 @@
 import type { Metadata } from "next";
 
 import { CodeBlock } from "@/components/code-block";
+import { ComparisonTable } from "@/components/comparison-table";
 import { ContentSection, ContentShell } from "@/components/content-shell";
 import { CwsInstallButton } from "@/components/cws-install-button";
+import { ProductFigure } from "@/components/product-figure";
 import { Button } from "@/components/ui/button";
 import { buildBreadcrumbJsonLd } from "@/lib/breadcrumbs";
+import { entityRef, ORG_ID, PERSON_ID } from "@/lib/entities";
+import { OG_IMAGE_PATH, pageMetadata } from "@/lib/seo";
 import { resolveSiteUrl } from "@/lib/site";
 
 const TITLE = "IdxBeaver vs Chrome DevTools Application panel";
 const DESCRIPTION =
-  "An honest comparison of IdxBeaver and Chrome's built-in Application panel for IndexedDB, LocalStorage, Cookies, and Cache Storage — features, queries, schema, exports, performance.";
+  "IdxBeaver and Chrome's built-in Application panel compared for IndexedDB and browser storage: queries, editing, schema, exports, and when to use which.";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: `${TITLE} — IdxBeaver`,
+  socialTitle: TITLE,
   description: DESCRIPTION,
-  alternates: { canonical: "/vs/chrome-devtools-application-panel" },
-  openGraph: {
-    title: TITLE,
-    description: DESCRIPTION,
-    url: "/vs/chrome-devtools-application-panel",
-    type: "article",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: TITLE,
-    description: DESCRIPTION,
-  },
-};
+  path: "/vs/chrome-devtools-application-panel",
+  type: "article",
+  publishedTime: "2026-04-29",
+  modifiedTime: "2026-09-09",
+});
 
 export default async function VsApplicationPanelPage() {
   const base = resolveSiteUrl();
@@ -35,16 +32,20 @@ export default async function VsApplicationPanelPage() {
     "@type": "Article",
     headline: TITLE,
     description: DESCRIPTION,
-    mainEntityOfPage: `${base}/vs/chrome-devtools-application-panel`,
-    author: { "@type": "Person", name: "Aditya Jindal" },
-    publisher: { "@type": "Organization", name: "IdxBeaver" },
+    mainEntityOfPage: `${base}/vs/chrome-devtools-application-panel/`,
+    url: `${base}/vs/chrome-devtools-application-panel/`,
+    image: [`${base}${OG_IMAGE_PATH}`],
+    author: entityRef(PERSON_ID),
+    publisher: entityRef(ORG_ID),
     datePublished: "2026-04-29",
-    dateModified: "2026-04-29",
+    dateModified: "2026-09-09",
+    isAccessibleForFree: true,
   };
 
-  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+  const crumbs = [
     { name: "vs Chrome DevTools Application panel", path: "/vs/chrome-devtools-application-panel" },
-  ]);
+  ];
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd(crumbs);
 
   return (
     <>
@@ -57,12 +58,13 @@ export default async function VsApplicationPanelPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <ContentShell
-        eyebrow="Comparison"
+        crumbs={crumbs}
         title="IdxBeaver vs Chrome DevTools Application panel"
         lede="Chrome's built-in Application panel can list IndexedDB databases and dump records. IdxBeaver gives you a real database client over the same data — queries, filters, schema awareness, bulk edits, exports. Here's the side-by-side."
       >
         <ContentSection title="At a glance">
           <ComparisonTable
+            products={["IdxBeaver", "Application panel"]}
             rows={[
               ["Storage surfaces", "IndexedDB, LocalStorage, SessionStorage, Cookies, Cache Storage", "Same set, plus Service Workers and Web SQL (deprecated)"],
               ["Inline grid editing", "Type a value, hit enter, undo/redo per cell", "no"],
@@ -102,6 +104,11 @@ export default async function VsApplicationPanelPage() {
         </ContentSection>
 
         <ContentSection title="Where IdxBeaver pays off">
+          <ProductFigure
+            asset="dark"
+            alt="IdxBeaver's IndexedDB data grid open in Chrome DevTools, showing an object store with pinned columns and an inspected row"
+            caption="The same object store the Application panel lists, rendered as a sortable, editable grid with a row inspector."
+          />
           <h3>1. You actually need to query the data</h3>
           <p>
             Once a store has more than a few hundred rows, scrolling and
@@ -123,18 +130,23 @@ export default async function VsApplicationPanelPage() {
           />
           <p>
             The planner inspects the filter for single-field equality/range
-            expressions and uses an <code>IDBIndex</code> when one matches.
+            expressions and uses an <code translate="no">IDBIndex</code> when one matches.
             Compound operators fall back to an in-memory match on the result
             of the index scan. Either way, the chosen plan is reported
             alongside results so you can spot a missing index.
           </p>
+          <ProductFigure
+            asset="query"
+            alt="The IdxBeaver query editor running a MongoDB-style filter against an IndexedDB object store, with the chosen query plan shown beside the results"
+            caption="The query editor reports which plan it used, so a missing index is visible rather than inferred."
+          />
 
           <h3>2. The schema isn&rsquo;t obvious</h3>
           <p>
             On a real app, an object store is rarely a flat shape. IdxBeaver
             samples the rows and shows you what fields exist, their types,
             and their coverage (<em>&ldquo;90% of rows have a
-            <code>shippingCity</code> string&rdquo;</em>). That powers
+            <code translate="no">shippingCity</code> string&rdquo;</em>). That powers
             autocomplete in the query editor and a Structure view you can
             export to a TypeScript interface or a Dexie schema. Useful when
             onboarding new contributors or auditing what your client app
@@ -145,7 +157,7 @@ export default async function VsApplicationPanelPage() {
           <p>
             The Application panel can copy a single record. IdxBeaver exports
             a whole filtered slice — JSON, NDJSON, CSV for spreadsheet
-            handoff, SQL <code>INSERT</code> statements for replays into a
+            handoff, SQL <code translate="no">INSERT</code> statements for replays into a
             seed script, or a ZIP snapshot of the entire database. Imports
             preserve non-JSON types (BigInt, Date, RegExp, Map, Set,
             ArrayBuffer, Blob) by serializing through a versioned wire
@@ -225,6 +237,34 @@ export default async function VsApplicationPanelPage() {
           </ul>
         </ContentSection>
 
+        <ContentSection title="Related reading">
+          <ul>
+            <li>
+              <a href="/">IdxBeaver</a> — what the extension is, and how to
+              install it.
+            </li>
+            <li>
+              <a href="/vs/indexeddb-viewer-extensions/">
+                IndexedDB viewer extensions compared
+              </a>{" "}
+              — how IdxBeaver stacks up against the other third-party options,
+              not just the built-in panel.
+            </li>
+            <li>
+              <a href="/blog/how-to-edit-indexeddb-values-in-chrome/">
+                How to edit IndexedDB values in Chrome
+              </a>{" "}
+              — the Console workarounds for the panel&rsquo;s read-only grid.
+            </li>
+            <li>
+              <a href="/blog/debugging-indexeddb-in-chrome-devtools/">
+                Debugging IndexedDB in Chrome DevTools
+              </a>{" "}
+              — the built-in workflow in more detail.
+            </li>
+          </ul>
+        </ContentSection>
+
         <div className="mt-16 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <CwsInstallButton className="w-full sm:w-auto" />
           <Button
@@ -241,114 +281,5 @@ export default async function VsApplicationPanelPage() {
         </div>
       </ContentShell>
     </>
-  );
-}
-
-type Cell = string;
-
-function ComparisonTable({ rows }: { rows: Array<[string, Cell, Cell]> }) {
-  return (
-    <div className="-mx-2 overflow-x-auto">
-      <table className="w-full border-collapse rounded-lg text-left text-[14px] [&_td]:border [&_td]:border-[var(--color-hair)] [&_th]:border [&_th]:border-[var(--color-hair)]">
-        <colgroup>
-          <col className="w-[32%]" />
-          <col className="w-[34%]" />
-          <col className="w-[34%]" />
-        </colgroup>
-        <thead>
-          <tr className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--color-ink-mute)]">
-            <th className="px-3 py-4 align-bottom">Capability</th>
-            <th className="px-3 py-4 align-bottom text-[var(--color-ink)]">IdxBeaver</th>
-            <th className="px-3 py-4 align-bottom">Application panel</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([cap, idx, app], i) => (
-            <tr
-              key={cap}
-              className={[
-                "align-top",
-                i % 2 === 1 ? "bg-white/[.015]" : "",
-              ].join(" ")}
-            >
-              <td className="px-3 py-4 font-medium text-[var(--color-ink)]">{cap}</td>
-              <td className="px-3 py-4">
-                <ComparisonCell value={idx} positive />
-              </td>
-              <td className="px-3 py-4">
-                <ComparisonCell value={app} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ComparisonCell({ value, positive = false }: { value: Cell; positive?: boolean }) {
-  const trimmed = value.trim().toLowerCase();
-  if (trimmed === "no" || trimmed === "none" || trimmed === "n/a") {
-    return (
-      <span className="flex h-full items-center justify-center">
-        <NoIcon />
-      </span>
-    );
-  }
-  if (trimmed === "yes") {
-    return (
-      <span className="flex h-full items-center justify-center">
-        <YesIcon />
-      </span>
-    );
-  }
-  return (
-    <span
-      className={[
-        "leading-[1.55]",
-        positive ? "text-[var(--color-ink)]" : "text-[var(--color-ink-dim)]",
-      ].join(" ")}
-    >
-      {value}
-    </span>
-  );
-}
-
-function NoIcon() {
-  return (
-    <span
-      role="img"
-      aria-label="not supported"
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgba(244,114,182,.12)] text-[#f472b6] ring-1 ring-inset ring-[rgba(244,114,182,.35)]"
-    >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path
-          d="M3 3l6 6M9 3l-6 6"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-        />
-      </svg>
-    </span>
-  );
-}
-
-function YesIcon() {
-  return (
-    <span
-      role="img"
-      aria-label="supported"
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgba(167,139,250,.14)] text-[var(--color-brand)] ring-1 ring-inset ring-[rgba(167,139,250,.35)]"
-    >
-      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-        <path
-          d="M2.5 6.8l2.6 2.6 5.4-5.6"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </span>
   );
 }

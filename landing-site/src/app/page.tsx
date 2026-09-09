@@ -18,7 +18,7 @@ export default function Home() {
   return (
     <>
       <SiteNav />
-      <main>
+      <main id="main-content">
         <section className="relative">
           <Hero />
           <div className="mt-10 sm:mt-14 lg:mt-20">
