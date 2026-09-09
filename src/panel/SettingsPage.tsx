@@ -265,7 +265,7 @@ export function SettingsPage({ prefs, onClose, onPrefsChange }: SettingsPageProp
                 />
                 <ToggleRow
                   label="Sound effects"
-                  description="Play a short sound on success and error notices."
+                  description="Play a short sound for query results, saved changes, deletions, and errors."
                   checked={prefs.soundEffects}
                   onChange={(v) => void patch({ soundEffects: v })}
                   last

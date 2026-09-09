@@ -23,7 +23,7 @@ export const DEFAULTS: Prefs = {
   showHiddenSystemDbs: false,
   confirmDestructive: true,
   showStoreSizes: true,
-  soundEffects: false,
+  soundEffects: true,
 };
 
 const STORAGE_KEY = "prefs.v1";

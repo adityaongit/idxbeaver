@@ -27,7 +27,7 @@ import { executeStorageRequest } from "../shared/executeStorageRequest";
 import { applyFilters, activeRuleCount, type FilterState, EMPTY_FILTER_STATE } from "../shared/filters";
 import { keyStrategy } from "../shared/indexed";
 import { getPrefs, setPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
-import { play as playSound, setEnabled as setSoundEnabled } from "cuelume";
+import { play as playSound, setEnabled as setSoundEnabled, type SoundName } from "cuelume";
 import { inferSchema } from "../shared/schemaInfer";
 import type { InferredColumn } from "../shared/schemaInfer";
 import { appendHistory, getHistory, saveQuery, getSavedQueries, clearHistory } from "../shared/persisted";
@@ -80,7 +80,7 @@ type SelectedNode =
   | { kind: "cache"; cacheName: string; frameId: number }
   | { kind: "cookies" };
 
-type Notice = { tone: "success" | "error" | "info"; message: string } | null;
+type Notice = { tone: "success" | "error" | "info"; message: string; sound?: SoundName | false } | null;
 type PendingAction = DestructivePlan | null;
 
 type WorkspaceTab =
@@ -273,7 +273,7 @@ function App() {
     setDiscovery(data);
     registerDiscoveredDatabases(data.indexedDb);
     setStoreSummaries(new Map());
-    setNotice({ tone: "success", message: "Storage refreshed." });
+    setNotice({ tone: "success", message: "Storage refreshed.", sound: false });
   }, [rpc]);
 
   useEffect(() => {
@@ -290,8 +290,9 @@ function App() {
   }, [prefs.soundEffects]);
 
   useEffect(() => {
-    if (notice?.tone === "success") playSound("success");
-    else if (notice?.tone === "error") playSound("error");
+    if (!notice || notice.sound === false) return;
+    const name = notice.sound ?? (notice.tone === "success" ? "success" : notice.tone === "error" ? "error" : undefined);
+    if (name) playSound(name);
   }, [notice]);
 
   // Resolve prefs.theme → actual dark/light value.
@@ -889,7 +890,7 @@ function App() {
         setBusy(false);
         await loadIndexedStore(sel.frameId, sel.dbName, sel.dbVersion, sel.storeName);
         await refreshDiscovery();
-        setNotice({ tone: "success", message: `Deleted ${records.length} records.` });
+        setNotice({ tone: "success", message: `Deleted ${records.length} records.`, sound: "droplet" });
       },
     });
   };
@@ -987,7 +988,7 @@ function App() {
         }
         await loadIndexedStore(sel.frameId, sel.dbName, sel.dbVersion, sel.storeName);
         await refreshDiscovery();
-        setNotice({ tone: "success", message: "Record deleted." });
+        setNotice({ tone: "success", message: "Record deleted.", sound: "droplet" });
       }
     });
   };
@@ -1052,7 +1053,7 @@ function App() {
         }
         await loadKv(selected.surface);
         await refreshDiscovery();
-        setNotice({ tone: "success", message: "Key deleted." });
+        setNotice({ tone: "success", message: "Key deleted.", sound: "droplet" });
       }
     });
   };
@@ -1075,7 +1076,7 @@ function App() {
         }
         await loadKv(selected.surface);
         await refreshDiscovery();
-        setNotice({ tone: "success", message: `${selected.surface} cleared.` });
+        setNotice({ tone: "success", message: `${selected.surface} cleared.`, sound: "droplet" });
       }
     });
   };
@@ -1103,7 +1104,7 @@ function App() {
         }
         setVisibleDbKeys((current) => current.filter((key) => key !== dbKey(db)));
         await refreshDiscovery();
-        setNotice({ tone: "success", message: `Deleted database "${db.name}".` });
+        setNotice({ tone: "success", message: `Deleted database "${db.name}".`, sound: "droplet" });
       }
     });
   };
@@ -1153,7 +1154,7 @@ function App() {
           openNode({ kind: "overview" });
         }
         await refreshDiscovery();
-        setNotice({ tone: "success", message: `Deleted store "${storeName}".` });
+        setNotice({ tone: "success", message: `Deleted store "${storeName}".`, sound: "droplet" });
       }
     });
   };
@@ -1205,7 +1206,7 @@ function App() {
           await loadIndexedStore(db.frameId, db.name, db.version, storeName);
         }
         await refreshDiscovery();
-        setNotice({ tone: "success", message: `Cleared store "${storeName}".` });
+        setNotice({ tone: "success", message: `Cleared store "${storeName}".`, sound: "droplet" });
       }
     });
   };
@@ -1993,7 +1994,7 @@ function App() {
                     if (!resp.ok) { setNotice({ tone: "error", message: resp.error }); return; }
                     await loadCookies(url);
                     await refreshDiscovery();
-                    setNotice({ tone: "success", message: `Deleted cookie "${record.name}".` });
+                    setNotice({ tone: "success", message: `Deleted cookie "${record.name}".`, sound: "droplet" });
                   }}
                   onAddRow={async (draft) => {
                     const url = discovery?.url ?? discovery?.origin ?? "";
@@ -2140,7 +2141,7 @@ function App() {
               if (!selectedRecord) return;
               const value = recordValue(selectedRecord);
               void navigator.clipboard.writeText(JSON.stringify(value, null, 2));
-              setNotice({ tone: "success", message: "Copied document JSON." });
+              setNotice({ tone: "success", message: "Copied document JSON.", sound: false });
             }}
             busy={busy}
           />
