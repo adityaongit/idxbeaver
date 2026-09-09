@@ -27,6 +27,7 @@ import { executeStorageRequest } from "../shared/executeStorageRequest";
 import { applyFilters, activeRuleCount, type FilterState, EMPTY_FILTER_STATE } from "../shared/filters";
 import { keyStrategy } from "../shared/indexed";
 import { getPrefs, setPrefs, watchPrefs, DEFAULTS as PREF_DEFAULTS, type Prefs } from "../shared/prefs";
+import { play as playSound, setEnabled as setSoundEnabled } from "cuelume";
 import { inferSchema } from "../shared/schemaInfer";
 import type { InferredColumn } from "../shared/schemaInfer";
 import { appendHistory, getHistory, saveQuery, getSavedQueries, clearHistory } from "../shared/persisted";
@@ -283,6 +284,15 @@ function App() {
     void getPrefs().then(setPrefsState);
     return watchPrefs(setPrefsState);
   }, []);
+
+  useEffect(() => {
+    setSoundEnabled(prefs.soundEffects);
+  }, [prefs.soundEffects]);
+
+  useEffect(() => {
+    if (notice?.tone === "success") playSound("success");
+    else if (notice?.tone === "error") playSound("error");
+  }, [notice]);
 
   // Resolve prefs.theme → actual dark/light value.
   // "system" defers to chrome.devtools.panels.themeName ("dark" → dark, anything else → light).

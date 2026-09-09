@@ -262,6 +262,12 @@ export function SettingsPage({ prefs, onClose, onPrefsChange }: SettingsPageProp
                   description="Include internal browser databases (e.g. IndexedDB created by extensions)."
                   checked={prefs.showHiddenSystemDbs}
                   onChange={(v) => void patch({ showHiddenSystemDbs: v })}
+                />
+                <ToggleRow
+                  label="Sound effects"
+                  description="Play a short sound on success and error notices."
+                  checked={prefs.soundEffects}
+                  onChange={(v) => void patch({ soundEffects: v })}
                   last
                 />
               </>

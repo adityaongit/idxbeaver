@@ -123,7 +123,8 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
       return undefined;
     }, value);
 
-  // Inline MongoDB-style filter matcher.
+  // Inline MongoDB-style filter matcher. Keep in sync with the tested copy
+  // in src/shared/matchValue.ts.
   const matchFilter = (doc: unknown, filter: unknown): boolean => {
     if (!filter || typeof filter !== "object" || Array.isArray(filter)) return true;
     for (const [key, raw] of Object.entries(filter as Record<string, unknown>)) {
@@ -133,6 +134,10 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
       }
       if (key === "$or") {
         if (!Array.isArray(raw) || !raw.some((sub) => matchFilter(doc, sub))) return false;
+        continue;
+      }
+      if (key === "$nor") {
+        if (!Array.isArray(raw) || raw.some((sub) => matchFilter(doc, sub))) return false;
         continue;
       }
       if (key === "$not") {
@@ -149,14 +154,14 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
     if (expr && typeof expr === "object" && !Array.isArray(expr) && !(expr instanceof RegExp) && Object.keys(expr).some((k) => k.startsWith("$"))) {
       for (const [op, val] of Object.entries(expr as Record<string, unknown>)) {
         switch (op) {
-          case "$eq": if (!deepEqual(actual, val)) return false; break;
-          case "$ne": if (deepEqual(actual, val)) return false; break;
+          case "$eq": if (!valuesMatch(actual, val)) return false; break;
+          case "$ne": if (valuesMatch(actual, val)) return false; break;
           case "$gt": if (!(compareScalars(actual, val) > 0)) return false; break;
           case "$gte": if (!(compareScalars(actual, val) >= 0)) return false; break;
           case "$lt": if (!(compareScalars(actual, val) < 0)) return false; break;
           case "$lte": if (!(compareScalars(actual, val) <= 0)) return false; break;
-          case "$in": if (!Array.isArray(val) || !val.some((v) => deepEqual(actual, v))) return false; break;
-          case "$nin": if (!Array.isArray(val) || val.some((v) => deepEqual(actual, v))) return false; break;
+          case "$in": if (!Array.isArray(val) || !val.some((v) => valuesMatch(actual, v))) return false; break;
+          case "$nin": if (!Array.isArray(val) || val.some((v) => valuesMatch(actual, v))) return false; break;
           case "$exists": if (Boolean(val) !== (actual !== undefined)) return false; break;
           case "$regex": {
             const flags = typeof (expr as Record<string, unknown>).$options === "string" ? (expr as Record<string, string>).$options : "";
@@ -171,7 +176,7 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
       }
       return true;
     }
-    return deepEqual(actual, expr);
+    return valuesMatch(actual, expr);
   };
 
   const deepEqual = (a: unknown, b: unknown): boolean => {
@@ -187,6 +192,29 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
     const bKeys = Object.keys(b as Record<string, unknown>);
     if (aKeys.length !== bKeys.length) return false;
     return aKeys.every((key) => deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]));
+  };
+
+  const valuesMatch = (actual: unknown, expected: unknown): boolean => {
+    if (deepEqual(actual, expected)) return true;
+    if (Array.isArray(actual) && !Array.isArray(expected)) {
+      return actual.some((item) => deepEqual(item, expected));
+    }
+    return false;
+  };
+
+  // Keep in sync with compareForSort in src/shared/matchValue.ts.
+  const compareForSort = (a: unknown, b: unknown): number => {
+    const aNil = a === null || a === undefined;
+    const bNil = b === null || b === undefined;
+    if (aNil && bNil) return 0;
+    if (aNil) return 1;
+    if (bNil) return -1;
+    if (typeof a === "boolean" && typeof b === "boolean") return a === b ? 0 : a ? 1 : -1;
+    const cmp = compareScalars(a, b);
+    if (!Number.isNaN(cmp)) return cmp;
+    const as = String(a);
+    const bs = String(b);
+    return as < bs ? -1 : as > bs ? 1 : 0;
   };
 
   const compareScalars = (a: unknown, b: unknown): number => {
@@ -474,11 +502,10 @@ async function executeStorageRequest(request: StorageRequest): Promise<any> {
         const entries = Object.entries(sort);
         rows.sort((left, right) => {
           for (const [field, dir] of entries) {
-            const a = getPathValue(left.value.value, field) as string | number | boolean | null | undefined;
-            const b = getPathValue(right.value.value, field) as string | number | boolean | null | undefined;
-            if (a === b) continue;
-            const cmp = String(a ?? "") > String(b ?? "") ? 1 : -1;
-            return dir === -1 ? -cmp : cmp;
+            const a = getPathValue(left.value.value, field);
+            const b = getPathValue(right.value.value, field);
+            const cmp = compareForSort(a, b);
+            if (cmp !== 0) return dir === -1 ? -cmp : cmp;
           }
           return 0;
         });

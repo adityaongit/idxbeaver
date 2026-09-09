@@ -10,6 +10,7 @@ export type Prefs = {
   showHiddenSystemDbs: boolean;
   confirmDestructive: boolean;
   showStoreSizes: boolean;
+  soundEffects: boolean;
 };
 
 export const DEFAULTS: Prefs = {
@@ -22,6 +23,7 @@ export const DEFAULTS: Prefs = {
   showHiddenSystemDbs: false,
   confirmDestructive: true,
   showStoreSizes: true,
+  soundEffects: false,
 };
 
 const STORAGE_KEY = "prefs.v1";

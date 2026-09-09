@@ -1,4 +1,5 @@
 import type { IndexedDbRecord, SerializableValue } from "./types";
+import { valuesMatch } from "./matchValue";
 
 export type FilterOperator =
   | "eq" | "ne"
@@ -37,6 +38,14 @@ function getCellValue(record: IndexedDbRecord, column: string): SerializableValu
   return (v as Record<string, SerializableValue>)[column] ?? null;
 }
 
+// Distinct from getCellValue: a field explicitly set to null still "exists".
+function hasCellValue(record: IndexedDbRecord, column: string): boolean {
+  if (column === "key" || column === "value") return true;
+  const v = record.value.value;
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  return column in (v as Record<string, SerializableValue>);
+}
+
 function coerce(raw: string): SerializableValue {
   try {
     return JSON.parse(raw) as SerializableValue;
@@ -60,23 +69,30 @@ function asNumber(v: SerializableValue): number {
   return Number.NaN;
 }
 
+// Falls back to string comparison only for cross-type scalars (e.g. cell "42"
+// vs typed 42); arrays/objects always go through valuesMatch.
+function filterEq(cellValue: SerializableValue, parsedRule: SerializableValue, cellStr: string, ruleStr: string): boolean {
+  if (valuesMatch(cellValue, parsedRule)) return true;
+  if (Array.isArray(cellValue) || Array.isArray(parsedRule)) return false;
+  return cellStr === ruleStr;
+}
+
 function evalRule(rule: FilterRule, record: IndexedDbRecord): boolean {
-  const cellValue = getCellValue(record, rule.column);
-  const exists = cellValue !== null;
   const op = rule.operator;
 
-  if (op === "exists") return exists;
-  if (op === "notExists") return !exists;
+  if (op === "exists") return hasCellValue(record, rule.column);
+  if (op === "notExists") return !hasCellValue(record, rule.column);
 
+  const cellValue = getCellValue(record, rule.column);
   const parsedRule = coerce(rule.value);
   const cellStr = asString(cellValue);
   const ruleStr = asString(parsedRule);
 
   switch (op) {
     case "eq":
-      return typeof parsedRule === typeof cellValue ? cellValue === parsedRule : cellStr === ruleStr;
+      return filterEq(cellValue, parsedRule, cellStr, ruleStr);
     case "ne":
-      return typeof parsedRule === typeof cellValue ? cellValue !== parsedRule : cellStr !== ruleStr;
+      return !filterEq(cellValue, parsedRule, cellStr, ruleStr);
     case "lt": {
       const cn = asNumber(cellValue);
       const rn = asNumber(parsedRule);
@@ -116,14 +132,14 @@ function evalRule(rule: FilterRule, record: IndexedDbRecord): boolean {
       const parts = rule.value.split(",").map((s) => s.trim());
       return parts.some((part) => {
         const parsed = coerce(part);
-        return cellValue === parsed || cellStr === asString(parsed);
+        return filterEq(cellValue, parsed, cellStr, asString(parsed));
       });
     }
     case "notIn": {
       const parts = rule.value.split(",").map((s) => s.trim());
       return !parts.some((part) => {
         const parsed = coerce(part);
-        return cellValue === parsed || cellStr === asString(parsed);
+        return filterEq(cellValue, parsed, cellStr, asString(parsed));
       });
     }
     default:
