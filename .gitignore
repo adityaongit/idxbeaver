@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-firefox/
 releases/
 .playwright-mcp/
 .DS_Store

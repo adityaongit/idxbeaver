@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Zip dist/ into releases/idxbeaver-<version>.zip for Chrome Web Store upload.
+// Zip dist/ into releases/idxbeaver-<version>.zip for Chrome Web Store upload,
+// or with --target=firefox into idxbeaver-<version>-firefox.zip for AMO.
 // Assumes `npm run build` has already produced dist/.
 //
 // The archive is written by hand rather than shelling out to `zip` or
@@ -13,14 +14,22 @@
 // The store wants the *contents* of dist/ at the archive root — a zip with
 // everything nested under a dist/ folder is rejected for a missing manifest.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateRawSync } from "node:zlib";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
+const firefoxDist = join(root, "dist-firefox");
 const releasesDir = join(root, "releases");
+
+const TARGETS = ["chrome", "firefox"];
+const target = process.argv.find((a) => a.startsWith("--target="))?.split("=")[1] ?? "chrome";
+if (!TARGETS.includes(target)) {
+  console.error(`Unknown --target=${target}. Use one of: ${TARGETS.join(", ")}.`);
+  process.exit(1);
+}
 
 if (!existsSync(dist)) {
   console.error("dist/ not found — run `npm run build` first.");
@@ -32,8 +41,53 @@ if (typeof crc32 !== "function") {
 }
 
 const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-const zipName = `idxbeaver-${version}.zip`;
+const zipName = target === "firefox" ? `idxbeaver-${version}-firefox.zip` : `idxbeaver-${version}.zip`;
 const zipPath = join(releasesDir, zipName);
+
+// Firefox will not load the Chrome build as-is, so re-stamp a copy rather than
+// branching src/manifest.ts — @crxjs owns manifest emission and hashes the
+// asset names, so the only stable place to diverge is after the build.
+//
+//   - background.service_worker is unimplemented in Firefox; it needs an event
+//     page (`scripts`). The crxjs loader is already an ES module, so type stays
+//     "module" (Firefox 112+).
+//   - world: "MAIN" injection, which every storage read depends on, landed in
+//     Firefox 128, so that is the real floor. strict_min_version is 140 anyway
+//     because data_collection_permissions below is unknown before it, and 140
+//     is the current ESR — claiming 128 only earns two lint warnings.
+//   - use_dynamic_url is Chromium-only and unrecognised keys make AMO's linter
+//     noisy.
+//   - data_collection_permissions is mandatory for new AMO listings. We read
+//     page storage but never transmit it, hence "none".
+function stampFirefoxDist() {
+  rmSync(firefoxDist, { recursive: true, force: true });
+  cpSync(dist, firefoxDist, { recursive: true });
+
+  const manifestPath = join(firefoxDist, "manifest.json");
+  const { minimum_chrome_version: _chromeOnly, ...manifest } = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+  const worker = manifest.background?.service_worker;
+  if (!worker) {
+    console.error("dist/manifest.json has no background.service_worker to convert — did the build change?");
+    process.exit(1);
+  }
+  manifest.background = { scripts: [worker], type: manifest.background.type ?? "module" };
+  manifest.browser_specific_settings = {
+    gecko: {
+      id: "idxbeaver@portlabs.in",
+      strict_min_version: "140.0",
+      data_collection_permissions: { required: ["none"] }
+    }
+  };
+  manifest.web_accessible_resources = manifest.web_accessible_resources?.map(
+    ({ use_dynamic_url: _chromeOnlyToo, ...entry }) => entry
+  );
+
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return firefoxDist;
+}
+
+const source = target === "firefox" ? stampFirefoxDist() : dist;
 
 function walk(dir) {
   const out = [];
@@ -45,12 +99,12 @@ function walk(dir) {
   return out;
 }
 
-const files = walk(dist)
-  .map((abs) => ({ abs, name: relative(dist, abs).split("\\").join("/") }))
+const files = walk(source)
+  .map((abs) => ({ abs, name: relative(source, abs).split("\\").join("/") }))
   .sort((a, b) => (a.name < b.name ? -1 : 1));
 
 if (!files.some((f) => f.name === "manifest.json")) {
-  console.error("No manifest.json at dist/ root — the store would reject this build.");
+  console.error("No manifest.json at the build root — the store would reject this build.");
   process.exit(1);
 }
 
@@ -133,4 +187,10 @@ const biggest = files
   .sort((a, b) => b.size - a.size)
   .slice(0, 3);
 console.log(`  largest: ${biggest.map((f) => `${f.name} ${kb(f.size)}`).join(", ")}`);
-console.log(`  Upload at: https://chrome.google.com/webstore/devconsole`);
+if (target === "firefox") {
+  console.log(`  Lint first: npx web-ext lint --source-dir dist-firefox`);
+  console.log(`  Load unpacked: about:debugging → This Firefox → Load Temporary Add-on → dist-firefox/manifest.json`);
+  console.log(`  Upload at: https://addons.mozilla.org/developers/addon/submit/distribution`);
+} else {
+  console.log(`  Upload at: https://chrome.google.com/webstore/devconsole`);
+}

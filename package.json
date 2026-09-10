@@ -12,7 +12,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:watch": "vitest",
-    "release:zip": "npm run build && node scripts/release-zip.mjs"
+    "release:zip": "npm run build && node scripts/release-zip.mjs",
+    "release:zip:firefox": "npm run build && node scripts/release-zip.mjs --target=firefox"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
