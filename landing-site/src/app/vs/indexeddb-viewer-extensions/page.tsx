@@ -12,9 +12,9 @@ import { resolveSiteUrl } from "@/lib/site";
 
 const TITLE = "IndexedDB viewer extensions compared";
 const DESCRIPTION =
-  "IdxBeaver, IndexedDB Browser, idb-crud, IndexedDB Explorer and IndexedDBEdit compared: storage surfaces, queries, exports, type support, and which to pick.";
+  "IdxBeaver, Kahuna, IndexedDB Browser, idb-crud, IndexedDB Explorer and IndexedDBEdit compared: storage surfaces, queries, schema editing, exports, type support, and which to pick.";
 
-const VERIFIED_ON = "9 September 2026";
+const VERIFIED_ON = "10 September 2026";
 
 export const metadata: Metadata = pageMetadata({
   title: `${TITLE} — IdxBeaver`,
@@ -23,11 +23,12 @@ export const metadata: Metadata = pageMetadata({
   path: "/vs/indexeddb-viewer-extensions",
   type: "article",
   publishedTime: "2026-09-09",
-  modifiedTime: "2026-09-09",
+  modifiedTime: "2026-09-10",
 });
 
 const PRODUCTS = [
   "IdxBeaver",
+  "Kahuna",
   "IndexedDB Browser",
   "idb-crud",
   "IndexedDB Explorer",
@@ -48,7 +49,7 @@ export default async function VsIndexedDbExtensionsPage() {
     author: entityRef(PERSON_ID),
     publisher: entityRef(ORG_ID),
     datePublished: "2026-09-09",
-    dateModified: "2026-09-09",
+    dateModified: "2026-09-10",
     isAccessibleForFree: true,
   };
 
@@ -83,17 +84,20 @@ export default async function VsIndexedDbExtensionsPage() {
             a database client stop being the same category of thing.
           </p>
           <p>
-            IdxBeaver is the only one of the five that ships a query language,
-            infers a schema, or round-trips non-JSON values. It is also the
-            only one that covers Cookies and Cache Storage alongside
-            IndexedDB. If you want the honest counter-argument, skip to{" "}
+            IdxBeaver is the only one of the six that ships a query language
+            or infers a schema, and the only one that covers Cookies and Cache
+            Storage alongside IndexedDB. Kahuna is the closest thing to a peer:
+            it also handles the awkward structured-clone types, exports in
+            Dexie&rsquo;s format, runs on Firefox, and can edit a schema, which
+            IdxBeaver cannot. If you want the honest counter-argument, skip
+            to{" "}
             <a href="#when-not-idxbeaver">when not to use IdxBeaver</a>.
           </p>
         </ContentSection>
 
         <ContentSection title="Capability matrix">
           <p>
-            Claims for the other four tools were taken from their public
+            Claims for the other five tools were taken from their public
             READMEs and Chrome Web Store listings, checked on {VERIFIED_ON}.
             &ldquo;Not documented&rdquo; means the capability is absent from
             those sources, not that it has been tested and found missing. If
@@ -114,6 +118,7 @@ export default async function VsIndexedDbExtensionsPage() {
                 "Storage surfaces",
                 "IndexedDB, LocalStorage, SessionStorage, Cookies, Cache Storage",
                 "IndexedDB only",
+                "IndexedDB only",
                 "IndexedDB, LocalStorage, SessionStorage",
                 "IndexedDB only",
                 "IndexedDB only",
@@ -121,6 +126,7 @@ export default async function VsIndexedDbExtensionsPage() {
               [
                 "Where it runs",
                 "DevTools panel",
+                "Overlay on the page, outside DevTools",
                 "DevTools panel",
                 "Drawer UI, outside DevTools",
                 "Not stated on listing",
@@ -129,6 +135,7 @@ export default async function VsIndexedDbExtensionsPage() {
               [
                 "Query language",
                 "MongoDB-style filter, projection, sort, limit",
+                "A JavaScript console over Dexie's API; no declarative query",
                 "Not documented",
                 "Not documented",
                 "Not documented",
@@ -141,10 +148,12 @@ export default async function VsIndexedDbExtensionsPage() {
                 "Not documented",
                 "Not documented",
                 "Not documented",
+                "Not documented",
               ],
               [
                 "Saved queries and history",
                 "Per origin, auto-trimmed to the 100 most recent",
+                "Not documented",
                 "Not documented",
                 "Not documented",
                 "Not documented",
@@ -157,6 +166,7 @@ export default async function VsIndexedDbExtensionsPage() {
                 "Not documented",
                 "Not documented",
                 "Not documented",
+                "Not documented",
               ],
               [
                 "Schema export to code",
@@ -165,10 +175,12 @@ export default async function VsIndexedDbExtensionsPage() {
                 "Not documented",
                 "Not documented",
                 "Not documented",
+                "Not documented",
               ],
               [
                 "Data export formats",
                 "JSON, NDJSON, CSV, SQL INSERT, ZIP snapshot",
+                "Dexie, JSON, CSV",
                 "Not documented",
                 "Export and import, formats unspecified",
                 "Not documented",
@@ -177,6 +189,7 @@ export default async function VsIndexedDbExtensionsPage() {
               [
                 "Non-JSON value round-trip",
                 "Date, BigInt, RegExp, Map, Set, ArrayBuffer, Blob, circular refs",
+                "Documents editing Dates, Maps, Sets, RegExps, typed arrays, Blobs, Files and ImageData",
                 "Documents sets, maps and typed arrays as unsupported",
                 "Not documented",
                 "Not documented",
@@ -185,6 +198,7 @@ export default async function VsIndexedDbExtensionsPage() {
               [
                 "Large object stores",
                 "Virtualized grid; rows render on demand",
+                "Paginated grid, page size not stated",
                 "Documents slower loads for stores with hundreds of thousands of objects",
                 "Not documented",
                 "Paged, up to 5,000 records per page",
@@ -197,10 +211,30 @@ export default async function VsIndexedDbExtensionsPage() {
                 "Not documented",
                 "Not documented",
                 "Not documented",
+                "Not documented",
+              ],
+              [
+                "Schema editing",
+                "Delete a database or store; no create, add or alter",
+                "Create and delete databases, add and remove object stores and indexes",
+                "Not documented",
+                "Not documented",
+                "Not documented",
+                "Not documented",
+              ],
+              [
+                "Browsers",
+                "Chromium 120 or newer",
+                "Chromium and Firefox",
+                "Chrome Web Store only",
+                "Chrome Web Store only",
+                "Chrome Web Store only",
+                "Chrome Web Store only",
               ],
               [
                 "Editing model",
                 "Inline grid edits with per-cell undo and redo",
+                "Full create, read, update, delete",
                 "Add, edit and delete in a table",
                 "Full create, read, update, delete",
                 "Add or delete records",
@@ -209,6 +243,7 @@ export default async function VsIndexedDbExtensionsPage() {
               [
                 "Search, sort, column control",
                 "Filter bar, sort, column pin and resize, sticky headers",
+                "Filters with regex, sortable grid, configurable, reorderable and hideable columns",
                 "Table search, per-column filter, drag-to-reorder columns",
                 "Advanced sorting and filtering, customizable columns",
                 "Real-time record search",
@@ -217,6 +252,7 @@ export default async function VsIndexedDbExtensionsPage() {
               [
                 "Source available",
                 "Yes, MIT",
+                "Yes, on GitHub",
                 "Yes, on GitHub",
                 "Described as open source",
                 "Not stated on listing",
@@ -229,7 +265,7 @@ export default async function VsIndexedDbExtensionsPage() {
         <ContentSection title="What the differences look like in practice">
           <h3>A table viewer answers &ldquo;what is in here&rdquo;</h3>
           <p>
-            Four of these five tools are built around one interaction: pick a
+            Five of these six tools are built around one interaction: pick a
             store, render it as a table, click a cell to change it. That is
             genuinely the right shape for most debugging. You have twelve rows
             of app settings and one of them is wrong.
@@ -278,7 +314,9 @@ export default async function VsIndexedDbExtensionsPage() {
             inferred: IndexedDB Browser states plainly that sets, maps and
             typed arrays are not supported. IdxBeaver serializes through a
             versioned wire format specifically so these survive a round trip
-            through an export and back.
+            through an export and back. Kahuna documents the same care here,
+            and goes further than we do on <code translate="no">File</code> and{" "}
+            <code translate="no">ImageData</code> values.
           </p>
 
           <h3>IndexedDB is not the only storage you are debugging</h3>
@@ -286,7 +324,7 @@ export default async function VsIndexedDbExtensionsPage() {
             A session bug is rarely confined to one storage API. The token is
             in a cookie, the feature flag is in LocalStorage, the cached
             response is in Cache Storage, and the user data is in IndexedDB.
-            Three of these tools are IndexedDB-only; idb-crud adds LocalStorage
+            Four of these tools are IndexedDB-only; idb-crud adds LocalStorage
             and SessionStorage. IdxBeaver covers all five surfaces in one
             panel, so you are not switching tools mid-investigation.
           </p>
@@ -306,8 +344,16 @@ export default async function VsIndexedDbExtensionsPage() {
             <li>
               <strong>You want storage inspection without opening DevTools.</strong>{" "}
               IdxBeaver is a DevTools panel, so it only exists while DevTools
-              is open. idb-crud&rsquo;s drawer UI works outside DevTools, which
-              is a genuinely nicer fit for a quick look at a flag.
+              is open. Kahuna&rsquo;s overlay and idb-crud&rsquo;s drawer both
+              work outside DevTools, which is a genuinely nicer fit for a quick
+              look at a flag. Kahuna additionally shows the database count for
+              the current site on its toolbar icon, so you can tell a site uses
+              IndexedDB without opening anything at all.
+            </li>
+            <li>
+              <strong>You need to create a database, or add a store or index.</strong>{" "}
+              IdxBeaver can delete a database or an object store but cannot
+              create or alter one. Kahuna has a schema editor for exactly this.
             </li>
             <li>
               <strong>You want charts or store size breakdowns.</strong>{" "}
@@ -315,9 +361,9 @@ export default async function VsIndexedDbExtensionsPage() {
               generation. IdxBeaver does neither.
             </li>
             <li>
-              <strong>You are on Firefox or Safari.</strong> IdxBeaver needs
-              Chromium 120 or newer, because it depends on Manifest V3 DevTools
-              APIs that differ across those browsers.
+              <strong>You are on Firefox or Safari.</strong> IdxBeaver is
+              Chromium 120 or newer today. Kahuna ships on both Chromium and
+              Firefox, so it is the answer for a mixed-browser team.
             </li>
             <li>
               <strong>You need Service Worker debugging.</strong> That belongs
@@ -348,7 +394,10 @@ export default async function VsIndexedDbExtensionsPage() {
               that job well.
             </li>
             <li>
-              <strong>Quick look without DevTools.</strong> idb-crud.
+              <strong>Quick look without DevTools.</strong> Kahuna or idb-crud.
+            </li>
+            <li>
+              <strong>Editing a schema, or working on Firefox.</strong> Kahuna.
             </li>
             <li>
               <strong>Large stores, real queries, exports, unusual types, or

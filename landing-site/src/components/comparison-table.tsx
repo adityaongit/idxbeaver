@@ -21,7 +21,7 @@ export function ComparisonTable({
     <div className="-mx-2 overflow-x-auto">
       <table
         className="w-full border-collapse rounded-lg text-left text-[14px] [&_td]:border [&_td]:border-[var(--color-hair)] [&_th]:border [&_th]:border-[var(--color-hair)]"
-        style={{ minWidth: products.length > 2 ? 820 : 560 }}
+        style={{ minWidth: products.length > 5 ? 1100 : products.length > 2 ? 820 : 560 }}
       >
         <colgroup>
           <col style={{ width: `${capWidth}%` }} />
