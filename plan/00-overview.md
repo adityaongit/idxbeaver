@@ -56,6 +56,15 @@ roughly two engineers.
 - 19 Serialization fidelity
 - 20 Theme inheritance, a11y, CSP
 
+### Phase G — Growth bets (post-PRD)
+
+- 22 Growth features: Edge/Firefox listings, OPFS surface, framework decoders,
+  Playwright `storageState`, live watch, extension storage, competitor parity
+  wins, a toolbar entry that signposts the DevTools panel, and a guided tour
+  split between a side panel and in-panel coach marks. Ranked bundle, each bet
+  independently shippable. DevTools stays the only host for browsing data; the
+  side panel exists to teach, never to show rows.
+
 ## Shared infra that shows up in multiple plans
 
 - **Preferences store** — new `src/shared/prefs.ts` wrapping `chrome.storage.local`
